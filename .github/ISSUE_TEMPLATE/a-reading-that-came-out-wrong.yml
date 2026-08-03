@@ -1,0 +1,57 @@
+name: A reading that came out wrong
+description: A document read into the wrong rows, columns or verdict
+labels: [reading]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not attach the document. It is somebody's money, health or
+        working life, and this repository refuses to hold one.
+
+        What is needed instead is what the reading **decided**, which carries no
+        content of its own:
+
+        ```sh
+        npx truecopy your-document.pdf
+        ```
+
+  - type: textarea
+    id: explained
+    attributes:
+      label: What the reading decided
+      description: The output of `npx truecopy` or of `explainDocument`. Redact the cells if you need to — the cut, the kinds and the fill rates are what matter.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What it should have decided
+      description: How many columns the table really has, which rows belong to it, what the verdict should have been.
+    validations:
+      required: true
+
+  - type: input
+    id: shape
+    attributes:
+      label: The shape of the document
+      description: Pages, roughly how many rows, and whether it came from a PDF, a paste, a CSV or an OCR pass. A letterhead or an address block above the table is worth saying.
+      placeholder: a 4-page PDF, ~60 rows, letterhead on page 1
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: truecopy 1.0.0, node 20.11, pdfjs-dist 6.2.108
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: silent
+    attributes:
+      label: One more thing
+      options:
+        - label: The reading came back wrong **and `warnings` was empty** — it did not say it could not vouch for this.

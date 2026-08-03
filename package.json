@@ -1,0 +1,151 @@
+{
+	"name": "truecopy",
+	"version": "1.0.0",
+	"type": "module",
+	"description": "Turn a PDF, a paste or a CSV into rows, and refuse the readings you cannot trust. Learns each document's own shape, so a new issuer needs no new configuration.",
+	"keywords": [
+		"pdf",
+		"pdf-parser",
+		"pdf-parsing",
+		"pdf-table",
+		"table-extraction",
+		"extract-tables",
+		"document-parsing",
+		"data-extraction",
+		"bank-statement",
+		"invoice",
+		"ocr",
+		"schema",
+		"validation",
+		"typescript",
+		"browser"
+	],
+	"license": "MIT",
+	"author": "Florian Mousseau <florian.mousseau@gmail.com>",
+	"homepage": "https://truecopy.dev",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/truecopydev/truecopy.git"
+	},
+	"bugs": {
+		"url": "https://github.com/truecopydev/truecopy/issues"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"sideEffects": false,
+	"files": [
+		"dist",
+		"bin",
+		"example",
+		"llms.txt",
+		"README.md",
+		"CHANGELOG.md",
+		"LICENSE",
+		"!**/*.test.ts"
+	],
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./open": {
+			"types": "./dist/open.d.ts",
+			"import": "./dist/open.js"
+		},
+		"./layout": {
+			"types": "./dist/layout.d.ts",
+			"import": "./dist/layout.js"
+		},
+		"./table": {
+			"types": "./dist/table.d.ts",
+			"import": "./dist/table.js"
+		},
+		"./notation": {
+			"types": "./dist/notation.d.ts",
+			"import": "./dist/notation.js"
+		},
+		"./classify": {
+			"types": "./dist/classify.d.ts",
+			"import": "./dist/classify.js"
+		},
+		"./columns": {
+			"types": "./dist/columns.d.ts",
+			"import": "./dist/columns.js"
+		},
+		"./roles": {
+			"types": "./dist/roles.d.ts",
+			"import": "./dist/roles.js"
+		},
+		"./signature": {
+			"types": "./dist/signature.d.ts",
+			"import": "./dist/signature.js"
+		},
+		"./schema": {
+			"types": "./dist/schema.d.ts",
+			"import": "./dist/schema.js"
+		},
+		"./pattern": {
+			"types": "./dist/pattern.d.ts",
+			"import": "./dist/pattern.js"
+		},
+		"./contract": {
+			"types": "./dist/contract.d.ts",
+			"import": "./dist/contract.js"
+		},
+		"./explain": {
+			"types": "./dist/explain.d.ts",
+			"import": "./dist/explain.js"
+		},
+		"./kit": {
+			"types": "./dist/kit.d.ts",
+			"import": "./dist/kit.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"scripts": {
+		"build": "rimraf dist && tsc -p tsconfig.build.json",
+		"lint": "eslint . --max-warnings 0",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"check": "tsc --noEmit",
+		"api": "node scripts/api-surface.mjs",
+		"knip": "knip",
+		"dup": "jscpd src",
+		"test": "vitest run",
+		"test:coverage": "vitest run --coverage",
+		"gate": "npm run format:check && npm run lint && npm run check && npm run build && npm run api && npm run knip && npm run dup && npm run test:coverage",
+		"prepublishOnly": "npm run gate"
+	},
+	"peerDependencies": {
+		"pdfjs-dist": "^6.2.108"
+	},
+	"peerDependenciesMeta": {
+		"pdfjs-dist": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@vitest/coverage-v8": "^4.1.9",
+		"eslint": "^10.4.1",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-regexp": "^3.1.1",
+		"eslint-plugin-sonarjs": "^4.2.0",
+		"jscpd": "^4.0.5",
+		"knip": "^5.66.0",
+		"pdfjs-dist": "^6.2.108",
+		"prettier": "^3.9.6",
+		"rimraf": "^6.0.1",
+		"typescript": "^6.0.3",
+		"typescript-eslint": "^8.60.1",
+		"vitest": "^4.1.9"
+	},
+	"bin": {
+		"truecopy": "./bin/truecopy.mjs"
+	}
+}

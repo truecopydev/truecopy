@@ -1,0 +1,238 @@
+# Public API
+
+Every name this package exports, by entry point. Generated from `dist` by
+`npm run api`, and checked by the gate: a surface that drifts from this file
+fails before it is published.
+
+It is committed because knip cannot see it. The barrel is the entry point, so
+everything it re-exports counts as used and a name nobody imports stays green
+forever. Here, adding one is a line in a diff.
+
+```text
+14 entry points, 57 values, 44 types
+a name reachable through its own entry point and through the barrel is listed twice
+
+truecopy
+  value  assignRoles
+  value  boundariesFromAnchors
+  value  boundariesFromRecurrence
+  value  cellAt
+  value  cellsOf
+  value  checkContract
+  type   CheckResult
+  value  classifyDocument
+  value  columnAt
+  value  columnBoundaries
+  value  columnCount
+  type   ColumnProfile
+  type   CompileOptions
+  value  compilePattern
+  value  compilePatterns
+  value  conforms
+  type   ContractOptions
+  value  contractReport
+  type   CoordinateUnit
+  type   CorpusCase
+  value  countMatches
+  value  DEFAULT_LIMITS
+  value  describeAnomaly
+  type   Discrepancy
+  value  discrepancyOf
+  type   Document
+  value  documentFrom
+  value  documentFromText
+  type   DocumentKind
+  value  documentWithoutSubstance
+  value  dominantKind
+  value  dominantKinds
+  value  explainDocument
+  type   ExplainOptions
+  value  explainRows
+  value  failures
+  type   Field
+  type   FieldFormat
+  value  findNumbers
+  value  findRowAnomalies
+  type   FoundNumber
+  value  gapFor
+  value  isOnlyNumber
+  type   KindThreshold
+  type   LeadingDate
+  type   Limits
+  value  NEVER_MATCHES
+  type   Notation
+  value  numberToken
+  value  openDocument
+  type   OpenOptions
+  value  pageFrom
+  type   PatternSet
+  type   PdfEngine
+  value  pdfWithPages
+  value  pdfWithText
+  type   Place
+  type   PlacedWord
+  value  placeOf
+  value  placesOf
+  type   PositionedItem
+  value  positionedItems
+  value  profileColumns
+  type   ProfileOptions
+  type   RawPattern
+  value  readDate
+  value  readDocument
+  type   Reader
+  type   Reading
+  value  readLeadingDate
+  value  readNumber
+  type   ReadResult
+  value  readTable
+  type   RecordOf
+  type   Refusal
+  type   Requirement
+  value  requirementHolds
+  type   ReviewableRow
+  type   RoleRule
+  type   Row
+  type   RowAnomaly
+  value  rowsFrom
+  value  rowToCells
+  type   Schema
+  value  schemaOf
+  type   SchemaViolation
+  type   SelfCheck
+  value  sharesByKind
+  type   SignatureOptions
+  type   StandardSchema
+  type   Table
+  type   TextPage
+  value  thresholdsFor
+  value  toRawPattern
+  value  toRawPatterns
+  type   Unreadable
+  value  UnreadableDocument
+  value  validate
+  value  validateWith
+  type   Verdict
+  value  withDeadline
+
+truecopy/open
+  value  DEFAULT_LIMITS
+  type   Limits
+  value  openDocument
+  type   OpenOptions
+  type   PdfEngine
+  value  positionedItems
+  type   Unreadable
+  value  UnreadableDocument
+  value  withDeadline
+
+truecopy/layout
+  value  boundariesFromAnchors
+  value  boundariesFromRecurrence
+  value  cellsOf
+  value  columnAt
+  value  columnBoundaries
+  value  documentFrom
+  value  documentFromText
+  value  gapFor
+  value  pageFrom
+  value  placeOf
+  value  placesOf
+  value  rowsFrom
+  value  rowToCells
+
+truecopy/table
+  value  readTable
+  type   Table
+
+truecopy/notation
+  value  findNumbers
+  type   FoundNumber
+  value  isOnlyNumber
+  type   LeadingDate
+  type   Notation
+  value  numberToken
+  value  readDate
+  value  readLeadingDate
+  value  readNumber
+
+truecopy/classify
+  value  classifyDocument
+  type   DocumentKind
+  type   PatternSet
+  type   Requirement
+  value  requirementHolds
+
+truecopy/columns
+  value  cellAt
+  value  columnCount
+  type   ColumnProfile
+  value  dominantKind
+  value  profileColumns
+  type   ProfileOptions
+
+truecopy/roles
+  value  assignRoles
+  value  dominantKinds
+  type   RoleRule
+
+truecopy/signature
+  value  findRowAnomalies
+  type   KindThreshold
+  type   RowAnomaly
+  value  sharesByKind
+  type   SignatureOptions
+  value  thresholdsFor
+
+truecopy/schema
+  value  conforms
+  type   Field
+  type   FieldFormat
+  type   RecordOf
+  type   Schema
+  value  schemaOf
+  type   SchemaViolation
+  type   StandardSchema
+  value  validate
+  value  validateWith
+
+truecopy/pattern
+  type   CompileOptions
+  value  compilePattern
+  value  compilePatterns
+  value  countMatches
+  value  NEVER_MATCHES
+  type   RawPattern
+  value  toRawPattern
+  value  toRawPatterns
+
+truecopy/contract
+  type   Discrepancy
+  value  discrepancyOf
+  value  readDocument
+  type   Reader
+  type   Reading
+  type   ReadResult
+  type   Refusal
+  type   ReviewableRow
+  type   SelfCheck
+  type   Verdict
+
+truecopy/explain
+  value  describeAnomaly
+  value  explainDocument
+  type   ExplainOptions
+  value  explainRows
+
+truecopy/kit
+  value  checkContract
+  type   CheckResult
+  type   ContractOptions
+  value  contractReport
+  type   CorpusCase
+  value  documentWithoutSubstance
+  value  failures
+  value  pdfWithPages
+  value  pdfWithText
+  type   PlacedWord
+```
