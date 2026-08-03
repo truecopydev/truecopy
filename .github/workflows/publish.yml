@@ -1,0 +1,42 @@
+# Publish to npm.
+#
+# Manual, deliberately. A tag must not be able to publish on its own: a release
+# goes out when somebody decides it does, and a tag is often pushed to see what
+# CI says.
+#
+# `--provenance` is what puts the verified badge on the npm page: npm records
+# which workflow, which commit and which repository built the tarball, and a
+# consumer can check it. That is the reason this runs here rather than on a
+# laptop, where nothing can be attested.
+#
+# Needs one secret, NPM_TOKEN — a granular access token with publish rights on
+# this package and nothing else.
+name: publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - run: npm ci
+
+      # The whole gate stands between this and the registry: `prepublishOnly`
+      # runs format, lint, typecheck, build, knip, jscpd, tests and coverage.
+      # A version is never unpublished, so it is checked before, not after.
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

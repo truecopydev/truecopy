@@ -1,0 +1,6 @@
+{
+	"threshold": 1,
+	"minTokens": 60,
+	"reporters": ["console"],
+	"ignore": ["**/*.test.ts"]
+}

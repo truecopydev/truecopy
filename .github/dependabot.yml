@@ -1,0 +1,25 @@
+version: 2
+
+updates:
+  # The runner actions first. A stale action is the update nobody notices,
+  # because nothing it does appears in the package.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore
+
+  # Everything in package.json is a devDependency: the package ships no runtime
+  # dependency at all, and `pdfjs-dist` is an optional peer the caller owns. So
+  # one grouped pull request a month, not fourteen — none of them can reach
+  # anybody who installed truecopy.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      toolchain:
+        patterns: ['*']
+    commit-message:
+      prefix: chore

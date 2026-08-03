@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A security vulnerability
+    url: https://github.com/truecopydev/truecopy/security/advisories/new
+    about: Report it privately. Not in an issue.
+  - name: What the library does, and where it stops
+    url: https://truecopy.dev
+    about: The documentation, the live demo, and the honest limits.
