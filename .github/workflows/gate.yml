@@ -1,0 +1,67 @@
+# The whole gate in one job.
+#
+# Billing counts jobs, each rounded up to the minute, so a matrix of four
+# five-second jobs costs four minutes and tells you no more than one does. The
+# split is worth paying for when the parts genuinely differ; here they do not.
+#
+# Node 20 and not the version this was written on: the package claims
+# `engines: node >=20`, and a claim nothing runs is a wish.
+name: gate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # format, lint, typecheck, build, knip, jscpd, tests, coverage ratchet.
+      - run: npm run gate
+
+      # What would actually be published, installed and imported for real. A
+      # green suite proves the source works; only this proves the PACKAGE does -
+      # the exports map, the file list, and the .js extensions ESM insists on.
+      - name: the published package imports
+        run: |
+          npm pack
+          mkdir -p /tmp/consumer && cd /tmp/consumer
+          npm init -y > /dev/null
+          npm pkg set type=module
+          npm install "$GITHUB_WORKSPACE"/truecopy-*.tgz
+          node --input-type=module -e "
+            import { schemaOf, validate, explainRows } from 'truecopy';
+            import { findRowAnomalies } from 'truecopy/signature';
+            const schema = schemaOf({
+              name: 'y',
+              fields: { year: { format: 'year', required: true } },
+              minimumRecords: 2
+            });
+            if (validate(schema, [{ year: 2018 }, { year: 2019 }]) !== null) {
+              throw new Error('the published package does not read its own schema');
+            }
+            if (typeof findRowAnomalies !== 'function') {
+              throw new Error('the subpath exports do not resolve');
+            }
+            if (!explainRows([['2018']]).includes('1 column(s)')) {
+              throw new Error('explain does not run from the package');
+            }
+          "

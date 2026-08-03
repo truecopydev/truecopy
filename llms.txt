@@ -1,0 +1,90 @@
+# truecopy
+
+> Read tables out of PDFs, and refuse the readings you cannot trust. TypeScript, ESM, no configuration per issuer: the table is learned from the table.
+
+Use it when a program has to turn a document a person dropped - a PDF, a paste, a CSV, an OCR page - into records that something downstream will act upon. It is not a parser: it is the pipeline and the guarantees around whichever reader you write. It never learns what your documents mean.
+
+Install: `npm install truecopy` (Node 20+, ESM only; `pdfjs-dist` is an optional peer, needed only for PDFs).
+
+## Try it with no code at all
+
+```sh
+npx truecopy a-document.pdf
+```
+
+Prints the cut, the columns, and what the reading could NOT vouch for.
+
+## The shortest thing that works
+
+```ts
+import { readTable } from 'truecopy';
+
+// No configuration at all. `warnings` says what could NOT be vouched for, and
+// an empty one is NOT a promise that the reading is right.
+const { rows, warnings } = await readTable(file);
+```
+
+When the rows have to be TRUSTED, the pipeline below is how.
+
+```ts
+import { openDocument, cellsOf, findRowAnomalies, readDocument, thresholdsFor } from 'truecopy';
+
+const document = await openDocument(file);            // caps, deadline, engine released
+const rows = document.pages.flatMap((page) => cellsOf(page));
+
+// You name what a cell IS. The library counts, divides, compares.
+const signature = {
+  kindOf: (cell) => (isDate(cell) ? 'date' : isAmount(cell) ? 'amount' : 'text'),
+  thresholds: { ...thresholdsFor(['amount', 'text'], 0.6), date: { share: 0.6, emptyIsAnomalyAbove: 0.7 } }
+};
+const anomalies = findRowAnomalies(rows, signature);  // the rows that are totals, balances, footers
+```
+
+A full running reader is [`example/read-a-statement.mjs`](https://github.com/truecopydev/truecopy/blob/main/example/read-a-statement.mjs) - one file, one command, no document to supply.
+
+## Writing a Reader
+
+`readDocument(document, reader)` returns `{ verdict, reading, selfCheck, discrepancy, refusal, rowsToReview }` where verdict is `'read' | 'needs-review' | 'refused'`.
+
+THREE methods are required. Do NOT stub them:
+
+- `read(document)` -> `{ records, header }`. `header` carries what the document says about ITSELF - a declared total, a closing balance - and without it there is nothing to check against.
+- `selfCheck(document, reading)` -> `{ declared: number[], read: number, unit: string }` or `{ nothing: 'why this document declares nothing' }`. Saying "nothing" costs a sentence on purpose; returning a bare null hides the oversight.
+- `rowsToReview(document, reading)` -> `ReviewableRow[]`. Takes the DOCUMENT, because a correction screen must show the rows that were DROPPED, and those are not in the reading.
+
+TWO are optional and already have safe defaults - leave them out rather than stub them:
+
+- `repair?` defaults to no repair. An honest gap beats a patch-up.
+- `refuse?` defaults to refusing a reading that produced no record.
+
+The one rule the pipeline enforces: **a reading that contradicts its document never comes back as `read`.**
+
+## Modules
+
+Each is also its own entry point (`truecopy/signature`), and the package is side-effect free.
+
+- `truecopy/table` - `readTable(file)` -> `{ rows, boundaries, warnings, document }`. The two-line path, no configuration.
+- `truecopy/layout` - the pure geometry: `cellsOf`, `placesOf` (WHERE each cell is, laid out identically - a value that cannot be pointed at cannot be checked), `boundariesFromRecurrence` (keep only the x that come back row after row; the page-wide spread counts the letterhead as columns), `boundariesFromAnchors`, `columnBoundaries`, `columnAt`, `gapFor` (the column gap for a page's `CoordinateUnit`), `placeOf`, `rowToCells`, `rowsFrom`, `pageFrom`, `documentFrom`, `documentFromText`. No engine, no bytes, no clock.
+- `truecopy/open` - `openDocument`, `positionedItems`, `withDeadline`, `UnreadableDocument` (carries `reason`: `empty | too-big | no-text | too-slow | not-opened`, so YOUR application writes the sentence, in its own language)
+- `truecopy/notation` - `readNumber`, `findNumbers`, `isOnlyNumber`, `readDate`, `readLeadingDate`. How a page writes a figure, never what it means. `readNumber('27800.50')` is 27800.5, `readNumber('(123,45)')` is -123.45.
+- `truecopy/classify` - is this the KIND of document expected, with precedence (an IBAN settles it before the word "invoice" is looked at)
+- `truecopy/columns` - what each column contains, counted once
+- `truecopy/roles` - what each column IS, deduced from that
+- `truecopy/signature` - which rows break the table's own type signature
+- `truecopy/schema` - `validateWith` takes ANY Standard Schema (zod, valibot, arktype), so a row type declared there is not declared again. `schemaOf` + `RecordOf<typeof schema>`: one declaration yields the check AND the record type. A schema is pure data, so it survives JSON.
+- `truecopy/explain` - `explainDocument(document, { signature, roles })` returns TEXT showing the cut, what each column holds, and which rows were dropped and why. Reach for this first when a reading comes out wrong.
+- `truecopy/kit` - `checkContract` + `contractReport`: six rules a reading must hold, run in your own test suite against a corpus of your own.
+
+## Traps worth knowing
+
+- Column boundaries are read from the spread of x over the WHOLE page, never from the gap between two neighbours on one row - that gap glues cells together as soon as they touch.
+- `findRowAnomalies` returns `null` under `minimumRows` (5 by default): too few rows to learn anything, and saying nothing beats learning from nothing.
+- The pdf.js worker URL is NOT resolved for you (every bundler spells it differently). Pass `workerSrc`, or leave it out and pdf.js runs inline - which is what makes the chain testable in Node.
+- Regular expressions run over whole documents line by line, so every quantifier must be bounded. The library holds itself to that with `eslint-plugin-regexp`; hold your own reader to it too.
+
+## Links
+
+- Source and issues: https://github.com/truecopydev/truecopy
+- npm: https://www.npmjs.com/package/truecopy
+- Changelog: https://github.com/truecopydev/truecopy/blob/main/CHANGELOG.md
+- Licence: MIT

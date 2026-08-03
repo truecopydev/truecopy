@@ -1,0 +1,232 @@
+/*
+ * The contract kit: what makes the contract compulsory.
+ *
+ * An interface is dodged with a `return null`; an assertion is not dodged, it
+ * goes red. `selfCheck() { return null }` compiles, passes review and ships, and
+ * only a check run from the outside catches it.
+ *
+ * A project drops it in its gate with a corpus of its own:
+ *
+ *     const results = await checkContract(myReader, myCorpus, options);
+ *     expect(failures(results)).toEqual([]);
+ */
+
+import { readDocument, type Reader, type Verdict } from './contract.js';
+import type { Document } from './document.js';
+
+export interface CorpusCase {
+	name: string;
+	document: Document;
+	/** The verdict the project announces; the kit is what demands it. */
+	expected: Verdict;
+}
+
+export interface CheckResult {
+	rule: string;
+	passed: boolean;
+	detail: string;
+}
+
+export const failures = (results: CheckResult[]): string[] =>
+	results.filter((result) => !result.passed).map((result) => `${result.rule}: ${result.detail}`);
+
+/**
+ * The run as a file the project can commit, and watch move.
+ *
+ * A green suite says the rules held today; a committed report says what held,
+ * and a pull request that moves a line makes the change argue for itself.
+ *
+ * The counts are in it on purpose. A reading that quietly falls from twenty-six
+ * records to twenty-four still passes every rule, and no assertion anywhere is
+ * going to notice - the diff is.
+ *
+ * Nothing here touches the filesystem. This library runs in a browser, and a
+ * library that imports `fs` stops doing that; the project writes the string
+ * where it wants it.
+ *
+ *     writeFileSync('contract.txt', contractReport(results));
+ */
+export function contractReport(results: CheckResult[]): string {
+	const failed = results.filter((result) => !result.passed).length;
+	const lines = results.map(
+		(result) => `${result.passed ? 'pass' : 'FAIL'} | ${result.rule} | ${result.detail}`
+	);
+	return [
+		`truecopy contract - ${results.length} rule(s), ${results.length - failed} passed, ${failed} failed`,
+		'',
+		...lines,
+		''
+	].join('\n');
+}
+
+/**
+ * Build a real PDF: a real content stream, a real xref table.
+ *
+ * Longer than a stub, and that is the point. What a reader must be able to do is
+ * open the file the person downloaded, and a test that fakes the PDF engine
+ * proves none of it. The PDF produced is pure ASCII, so its byte offsets equal
+ * its character positions and the xref table can be built from string lengths.
+ */
+export const pdfWithText = (words: PlacedWord[]): string => pdfWithPages([words]);
+
+export interface PlacedWord {
+	word: string;
+	x: number;
+	y: number;
+}
+
+/**
+ * The same, over several pages.
+ *
+ * A one-page fixture cannot exercise what only shows up across pages: a blank
+ * page in the middle, or two pages cut into a different number of columns. Both
+ * are ordinary in a real bundle - a statement runs to four pages and the last
+ * one is a footer - and neither can be reproduced by joining single-page files.
+ *
+ * Object numbering: 1 catalog, 2 pages, 3 font, then each page takes two - the
+ * page itself and its content stream.
+ */
+export function pdfWithPages(pages: PlacedWord[][]): string {
+	const streams = pages.map((words) =>
+		words.map(({ word, x, y }) => `BT /F1 10 Tf ${x} ${y} Td (${word}) Tj ET`).join('\n')
+	);
+	const first = 4;
+	const kids = pages.map((_, index) => `${first + index * 2} 0 R`).join(' ');
+	const objects = [
+		'<< /Type /Catalog /Pages 2 0 R >>',
+		`<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`,
+		'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+		...streams.flatMap((content, index) => [
+			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${first + index * 2 + 1} 0 R >>`,
+			`<< /Length ${content.length} >>\nstream\n${content}\nendstream`
+		])
+	];
+
+	let pdf = '%PDF-1.4\n';
+	const offsets: number[] = [];
+	objects.forEach((body, index) => {
+		offsets.push(pdf.length);
+		pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+	});
+
+	const xrefStart = pdf.length;
+	pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+	for (const offset of offsets) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+	pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+	return pdf;
+}
+
+/** A document carrying nothing checkable, for rule 5. A project may hand in one
+ *  of its own. */
+export function documentWithoutSubstance(): Document {
+	return {
+		pages: [
+			{
+				pageNumber: 1,
+				width: 595,
+				height: 842,
+				items: [],
+				rows: [],
+				columnBoundaries: []
+			}
+		],
+		text: 'Terms and conditions. This document carries no figure of any kind.',
+		origin: 'text',
+		name: 'without-substance.txt'
+	};
+}
+
+export interface ContractOptions {
+	/** A real PDF, for rule 4. `pdfWithText` makes one. */
+	referencePdf: string;
+	/**
+	 * How this project opens a file.
+	 *
+	 * The kit does not impose its own door. A kit that imposed one would stop
+	 * measuring the project's reader and start measuring its own, which is the one
+	 * thing a conformance suite must never do.
+	 */
+	open: (file: File) => Promise<Document>;
+	withoutSubstance?: Document;
+	/**
+	 * Documents of another kind, which the reading must refuse.
+	 *
+	 * The rule nobody writes and every reader lacks: a foreign document often
+	 * carries the shape of what is sought - years, numbers, amounts - without
+	 * being it. The corpus comes from the project, because only it knows what it
+	 * has to be told apart from.
+	 */
+	foreign?: { name: string; document: Document }[];
+}
+
+/**
+ * The six rules a corpus is run against. Not one of them knows the domain.
+ *
+ * 1. The verdict the corpus announces is the verdict returned.
+ * 2. A reading that contradicts its document never comes back as sound.
+ * 3. Everything read is reviewable by the person.
+ * 4. The chain from bytes to records really runs, on a real PDF.
+ * 5. A document without substance is refused, not silently returned empty.
+ * 6. A document of another kind is refused.
+ */
+export async function checkContract<Entry, Header>(
+	reader: Reader<Entry, Header>,
+	corpus: CorpusCase[],
+	options: ContractOptions
+): Promise<CheckResult[]> {
+	const results: CheckResult[] = [];
+
+	for (const entry of corpus) {
+		const result = readDocument(entry.document, reader);
+
+		results.push({
+			rule: `1. expected verdict (${entry.name})`,
+			passed: result.verdict === entry.expected,
+			detail: `expected ${entry.expected}, got ${result.verdict}`
+		});
+
+		const gap = result.discrepancy;
+		const contradicts = gap !== null && gap.amount !== 0;
+		results.push({
+			rule: `2. a discrepancy never reads as sound (${entry.name})`,
+			passed: !contradicts || result.verdict !== 'read',
+			detail: contradicts
+				? `off by ${gap.amount} ${gap.unit}, verdict ${result.verdict}`
+				: 'no discrepancy'
+		});
+
+		results.push({
+			rule: `3. everything read is reviewable (${entry.name})`,
+			passed: result.reading.records.length === 0 || result.rowsToReview.length > 0,
+			detail: `${result.reading.records.length} records, ${result.rowsToReview.length} reviewable rows`
+		});
+	}
+
+	const opened = await options.open(
+		new File([options.referencePdf], 'reference.pdf', { type: 'application/pdf' })
+	);
+	const fromPdf = readDocument(opened, reader);
+	results.push({
+		rule: '4. the whole chain runs on a real PDF',
+		passed: fromPdf.reading.records.length > 0,
+		detail: `${opened.pages.length} page(s), ${fromPdf.reading.records.length} records`
+	});
+
+	const empty = readDocument(options.withoutSubstance ?? documentWithoutSubstance(), reader);
+	results.push({
+		rule: '5. a document without substance is refused',
+		passed: empty.verdict === 'refused',
+		detail: `verdict ${empty.verdict}, refusal ${empty.refusal ? 'written' : 'MISSING'}`
+	});
+
+	for (const entry of options.foreign ?? []) {
+		const result = readDocument(entry.document, reader);
+		results.push({
+			rule: `6. a document of another kind is refused (${entry.name})`,
+			passed: result.verdict === 'refused',
+			detail: `verdict ${result.verdict}, ${result.reading.records.length} records kept`
+		});
+	}
+
+	return results;
+}

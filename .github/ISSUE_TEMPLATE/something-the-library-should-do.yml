@@ -1,0 +1,36 @@
+name: Something the library should do
+description: A mechanism, an option or an entry point that is missing
+labels: [proposal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The line this library holds: **the caller names what a document means,
+        this code counts, divides and compares.** A proposal that teaches it
+        what a debit or a value date is will be turned down, however useful —
+        that belongs in the application. Everything on this side of the line is
+        open.
+
+  - type: textarea
+    id: stuck
+    attributes:
+      label: What you are trying to do, and where it stops
+      description: The reading you are writing, and the point at which this library makes you do the work yourself.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today instead
+      description: The code you wrote to get around it. This is the most useful part of the report — it says what the missing piece has to be shaped like.
+      render: ts
+    validations:
+      required: true
+
+  - type: textarea
+    id: shape
+    attributes:
+      label: What it might look like
+      description: Optional. A signature, a name, an option.
+      render: ts

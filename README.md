@@ -1,0 +1,366 @@
+# truecopy
+
+**Turn a document into rows, and refuse the readings you cannot trust.**
+
+A PDF, a paste, a CSV, an OCR page — one engine reads all of them.
+
+[![npm](https://img.shields.io/npm/v/truecopy)](https://www.npmjs.com/package/truecopy)
+[![gate](https://github.com/truecopydev/truecopy/actions/workflows/gate.yml/badge.svg)](https://github.com/truecopydev/truecopy/actions/workflows/gate.yml)
+[![license](https://img.shields.io/npm/l/truecopy)](LICENSE)
+
+A parser that returns a plausible-looking table from a document it misread is worse than one that returns nothing, because nobody checks a table that looks right. truecopy is the pipeline around whichever reader you write: the door bytes come through, the checks that catch a wrong reading, a way to **see** what it decided, and a conformance kit that goes red the day the reading stops being honest.
+
+## Try it on your worst document, right now
+
+```sh
+npx truecopy a-statement.pdf
+```
+
+No install, no project, no line of code. It prints the cut it made, what each column holds, how often it is filled — and then, on its own, **what it could not vouch for**.
+
+```
+page 1 - cut at 68, 229, 356, 411, 490
+
+what this reading cannot vouch for:
+  - column 5 of page 1 is filled on only 2% of its rows - the cut may have invented it
+  - the pages disagree on how many columns there are (6 on 2, 7 on 1)
+```
+
+```sh
+npm install truecopy
+```
+
+## Rows, in two lines
+
+```ts
+import { readTable } from 'truecopy';
+
+const { rows, warnings } = await readTable(file);
+// rows     [['02/05/2026', 'CARTE AMAZON', '12,40'], …]
+// warnings ['column 3 of page 2 is filled on only 8% of its rows — the cut may have invented it']
+```
+
+No `kindOf`, no thresholds, no roles. If you only want the cells, destructure `rows` and go.
+
+`file` is whatever was dropped. **The cut does not care which ruler measured the page**, so the same two lines read a PDF, a table pasted out of one, a CSV and a TSV:
+
+| What was dropped                        | Where a column starts                                     |
+| --------------------------------------- | --------------------------------------------------------- |
+| a PDF                                   | the item's **x**, in points                               |
+| a table pasted with spaces              | the **character** the field starts at                     |
+| a file written with a delimiter         | the field's **index** — a CSV lines nothing up            |
+| prose, or a file that quotes its fields | nowhere: the row comes back whole, and `warnings` says so |
+
+That last line is the rule and not the exception. A quoted CSV field may hold the delimiter itself, so splitting on it anyway would shift every column after it — truecopy hands the rows back uncut instead, because half-parsing is the failure this library exists to prevent.
+
+`explainDocument` names the ruler, so a cut is never a bare list of numbers: `cut at 100, 290` on a page, `cut at characters 7, 22` on a paste, `cut on the delimiter` on a CSV — where the columns _are_ the fields and their indices would tell you nothing.
+
+The second field is why this is not just another extractor. **An empty `warnings` is not a promise that the reading is right** — it means nothing looked wrong from the shape of the page, which is a much smaller claim. Every warning is computed without knowing anything about your document: a page with no columns at all, a column that is almost always empty, pages cut differently from one another, a blank page in the middle.
+
+When the rows have to be **trusted** — when something downstream acts on them — the rest of this page is how.
+
+**A complete reader that runs, in one file and one command:**
+
+```sh
+node example/read-a-statement.mjs
+```
+
+[`example/read-a-statement.mjs`](example/read-a-statement.mjs) builds a real PDF, opens it, prints what the reading decided, and drives it through the contract. Nothing in it is stubbed, and it needs no document from you — it makes its own.
+
+## See what the reading decided
+
+The first thing you need when a reading comes out wrong is not a better parser. It is knowing **which of the three things** broke: the document is odd, the cut into columns is wrong, or your rule is wrong. Each calls for a different fix.
+
+```ts
+import { openDocument, explainDocument } from 'truecopy';
+
+const document = await openDocument(file);
+
+console.log(
+	explainDocument(document, {
+		signature: {
+			kindOf: (cell) => (isDate(cell) ? 'date' : isAmount(cell) ? 'amount' : 'text'),
+			thresholds: {
+				date: { share: 0.6, emptyIsAnomalyAbove: 0.7 },
+				amount: { share: 0.6 },
+				text: { share: 0.6 }
+			}
+		},
+		roles: [
+			{ role: 'when', kind: 'date', minimum: 0.6, take: 'best' },
+			{ role: 'money', kind: 'amount', minimum: 0.6, take: 'each' }
+		]
+	})
+);
+```
+
+```
+truecopy - statement-2026-05.pdf
+pdf, 1 page(s), 6 row(s)
+
+page 1 - cut at 100, 290
+
+3 column(s), 6 row(s)
+
+col  kind        filled  role
+  0  date           83%  when
+  1  text          100%  -
+  2  amount        100%  money
+
+   1   02/05/2026 | CARTE 28/04 AMAZON EU> | 12,40
+   2   03/05/2026 | VIR SEPA LOYER MAI     | 750,00
+   3   05/05/2026 | CARTE 03/05 SNCF CONN> | 68,00
+   4   09/05/2026 | PRLV EDF               | 91,32
+   5   12/05/2026 | CARTE 11/05 LE BOULAN> | 7,90
+   6 !            | TOTAL DES DEBITS       | 929,62   <- column 0 (date) is empty
+```
+
+Text, not an image: it goes into a terminal, a CI log, a bug report, a test's expected value. It needs no canvas and no headless browser.
+
+## No configuration per issuer
+
+The usual way to read a table is to tune settings until one issuer's layout comes out right. It works, and it stops working at the second issuer: every new bank, every new format, every redesign is another block of settings that only its author understands.
+
+truecopy learns the table from the table. A column full of dates **is** the date column, whatever its header says; a row that breaks what every other row does is a total, a balance, a footer.
+
+```ts
+import { findRowAnomalies } from 'truecopy/signature';
+
+// Which rows fall outside the signature the table itself sets.
+const anomalies = findRowAnomalies(rows, signature);
+```
+
+It reads no label, so it survives an issuer you have never seen. A list of forbidden words only recognises yesterday's documents.
+
+### Where that stops, measured
+
+What reads no label is the **judgement** — which rows belong to the table, which column holds what. The **cut** is a different problem, and it is the one that still needs help.
+
+Measured on a real bank statement whose header labels were deliberately hidden: the page-wide spread of x proposed **twelve** columns where the table had five, because it counts the letterhead, the address block and the footer as evidence of where a column starts. Cut on the rows that share the table's shape instead — the ones carrying a date and an amount — it proposed five, and three of the five roles were named from content alone.
+
+**`boundariesFromRecurrence` is the general answer**, and `readTable` uses it: keep only the x that come back row after row, because a real column's left edge recurs and a word inside a description does not. On the statement above it took the cut from twelve columns to seven, and named the rest as thin. Where the page gives you something better to trust — a header row, a rule — `boundariesFromAnchors` takes it.
+
+And whatever you do, keep the self-check. On that same statement the reading still came back **wrong**, and the only reason that was visible is that the sum of the rows did not match the balances the document itself declares.
+
+**That is the honest shape of this library.** It does not promise to read an unknown layout correctly. It promises to tell you when it did not.
+
+## Every value knows where it came from
+
+A value you cannot point at is a value nobody can check. Handed a list of figures, a person has to hunt through the document again; handed a **place**, they jump to it — and that difference is what makes a correction screen used or abandoned.
+
+```ts
+import { cellsOf, placesOf } from 'truecopy/layout';
+
+const cells = cellsOf(page); // cells[3][1] is what the fourth row holds
+const places = placesOf(page); // places[3][1] is where to find it
+// { page: 1, x: 430, y: 700, width: 30 }
+```
+
+The two are laid out identically, so they are read together. A cell nothing fell into has **no place** — `null`, not a rectangle of nothing. `ReviewableRow.where` carries the same thing for the rows a person is asked to confirm.
+
+No height, because none is known: a text item carries no height here, and inventing a line spacing would draw a rectangle the document never had.
+
+## Notation is not domain
+
+That `1 234,50` and `1,234.50` are the same quantity, that `(123,45)` is negative and so is `123,45-`, that `25/01` is a day before a month here and after it there — none of that says anything about banks or invoices. It says how the page was typeset, and it is the part everybody rewrites and everybody gets wrong once.
+
+```ts
+import { readNumber, findNumbers, readLeadingDate } from 'truecopy/notation';
+
+readNumber('27800.50'); // 27800.5   — not 2 780 050
+readNumber('(123,45)'); // -123.45   — the accounting negative
+readNumber("1'234.56"); // 1234.56
+
+// Never starts a match inside another number: a date glued to a figure
+// reads as one figure, not as "026 300,00".
+findNumbers('30/05/2026 300,00', 2); // [{ value: 300, ... }]
+
+readLeadingDate('25 janv. 2026 GROCERIES', { dateOrder: 'DMY', months });
+// { date, length: 13 }  — so the caller strips it and keeps the wording
+```
+
+It says `null` rather than guess. On figures somebody will act upon, a refusal costs a correction and a wrong reading costs a decision.
+
+## A refusal you can say in your own language
+
+```ts
+try {
+	await openDocument(file);
+} catch (error) {
+	if (error instanceof UnreadableDocument) {
+		// 'empty' | 'too-big' | 'no-text' | 'too-slow' | 'not-opened'
+		showInYourOwnWords(error.reason);
+	}
+}
+```
+
+The reason is named so the sentence is not. A library that ships only English prose forces an application that speaks anything else to keep its own copy of the door.
+
+## One declaration, two outputs
+
+Write the schema once and get both the check and the record type. A shape declared twice drifts, and the half that drifts silently is always the check.
+
+```ts
+import { schemaOf, validate, type RecordOf } from 'truecopy/schema';
+
+export const CAREER = schemaOf({
+	name: 'career-record',
+	fields: {
+		year: { format: 'year', minimum: 1930, maximum: 2030, required: true },
+		quarters: { format: 'integer', minimum: 0, maximum: 4, required: false },
+		pay: { format: 'number', minimum: 0, required: false }
+	},
+	minimumRecords: 5,
+	key: 'year'
+});
+
+export type CareerRow = RecordOf<typeof CAREER>;
+//   { year: number; quarters: number | null; pay: number | null }
+
+const violation = validate(CAREER, rows);
+// null, or { cause: 'too-few-records', conforming: 1, expected: 5 }
+```
+
+The schema is **pure data** — no accessor, no closure, nothing that does not survive JSON. It can be served, versioned, refined by whoever reads the documents, and swapped for another market without a deploy. What is missing is named; your application writes the sentence in its own voice.
+
+**Already declared that row type in Zod, Valibot or ArkType?** Do not declare it twice. Any [Standard Schema](https://standardschema.dev) works, and truecopy adds the part a per-record validator cannot know — how many well-formed records make a document:
+
+```ts
+import { validateWith } from 'truecopy/schema';
+
+validateWith(myZodSchema, rows, { minimumRecords: 5, key: 'year' });
+```
+
+## Why refusing matters
+
+The research world arrived at the same place from the other side, and gave it a name: **calibrated abstention**. [Zero Hallucination, by Construction](https://arxiv.org/abs/2607.17883) (Raduta et al., 2026) makes it one of six layers of an architecture for enterprise document AI — _"the system declines rather than guesses when grounding is insufficient"_ — paired with an evidence-based confidence that checks what was produced against the source document. Those are `refuse` and `selfCheck`, layer for layer.
+
+It stays rare for a reason that is not technical: a benchmark rewards a confident guess and scores an abstention as a miss, so the whole machine is tuned to guess. A deterministic parser has no excuse to inherit that.
+
+The five laws a reader is written to:
+
+1. **The document checks itself.** A bank statement carries `opening + Σ = closing`; a career record announces its own total of quarters. Setting your reading against what the document declares is the only check that depends on no layout.
+2. **Refusing beats returning a plausible table.** The worst defect is not missing an anomaly; it is inventing twenty-two of them out of a document you misread.
+3. **Counting is not measuring.** Running two readings and keeping "the one that finds more rows" always picks the worse: a reader that cuts badly turns footnotes into data.
+4. **The reader proposes, the person confirms.** The correction is part of the product, not the recovery path.
+5. **Every quantifier is bounded.** These patterns run over a whole document, line by line.
+
+## The kit that makes it compulsory
+
+An interface is dodged with a `return null`; an assertion is not. Drop the kit into your gate with a corpus of your own:
+
+```ts
+import { checkContract, contractReport, failures, pdfWithText } from 'truecopy/kit';
+
+it('holds the reading contract', async () => {
+	const results = await checkContract(
+		myReader,
+		[
+			{ name: 'balances', document: aSoundDocument, expected: 'read' },
+			{ name: 'does not balance', document: aWrongDocument, expected: 'needs-review' }
+		],
+		{
+			referencePdf: pdfWithText([{ word: '2018', x: 50, y: 700 }]),
+			// YOUR door, not the kit's: what is measured is your reader,
+			// extraction included.
+			open: openLikeTheApp,
+			foreign: [{ name: 'a payslip', document: aPayslip }]
+		}
+	);
+
+	expect(failures(results)).toEqual([]);
+	writeFileSync('contract.txt', contractReport(results));
+});
+```
+
+The six rules, numbered on their own: the laws above are what a reader is written to, these are what a corpus checks it against from the outside.
+
+1. The verdict the corpus announces is the verdict returned.
+2. A reading that contradicts its document **never** comes back as sound.
+3. Everything read is reviewable by the person.
+4. The chain from bytes to records really runs, on a **real** PDF (`pdfWithText` builds one, xref table included).
+5. A document without substance is **refused**, not silently returned empty.
+6. A document of **another kind** is refused — you supply the corpus of what it must be told apart from, because only you know.
+
+`contractReport` turns the run into a file you commit. A reading that quietly falls from twenty-six records to twenty-four passes every rule and no assertion notices; the diff does.
+
+The fifth law — every quantifier bounded — is not in the kit, because a naive source scan produces false positives. It is held by `eslint-plugin-regexp` and its `no-super-linear-backtracking` and `no-super-linear-move` rules, in your own gate.
+
+## Three methods, not five
+
+A reader implements `read`, `selfCheck` and `rowsToReview`. Those three carry the doctrine: the work, the first law, and the person's place in it.
+
+`repair` and `refuse` are **optional**, and their defaults err the only direction a default may err in — toward refusing. `repair` attempts nothing, because an honest gap beats a patch-up. `refuse` refuses a reading that produced no record.
+
+Five methods before anything runs is a wall, and a wall in front of an interface gets `return null` written five times. That is the dodge [`kit.ts`](src/kit.ts) exists to catch, and the likeliest author of it is now a model writing from the types.
+
+## The mechanisms
+
+Each one is also its own entry point, so a project that wants one pays for one.
+
+| Module                             | `truecopy/…` | What it does                                                                          |
+| ---------------------------------- | ------------ | ------------------------------------------------------------------------------------- |
+| [`open.ts`](src/open.ts)           | `open`       | bytes → pages → rows: size cap, page cap, deadline, engine released, engine swappable |
+| [`layout.ts`](src/layout.ts)       | `layout`     | the pure geometry: rows, columns, cells, places — no engine, no bytes, no clock       |
+| [`table.ts`](src/table.ts)         | `table`      | `readTable(file)`: the two-line path, and what it will not vouch for                  |
+| [`notation.ts`](src/notation.ts)   | `notation`   | how the page writes a number and a date, never what they mean                         |
+| [`classify.ts`](src/classify.ts)   | `classify`   | is this the kind of document expected, precedence included                            |
+| [`columns.ts`](src/columns.ts)     | `columns`    | what each column contains, counted once                                               |
+| [`roles.ts`](src/roles.ts)         | `roles`      | what each column is, deduced from that                                                |
+| [`signature.ts`](src/signature.ts) | `signature`  | which rows break the table's own type signature                                       |
+| [`schema.ts`](src/schema.ts)       | `schema`     | the fields, formats and count a reading must satisfy                                  |
+| [`explain.ts`](src/explain.ts)     | `explain`    | what all of the above decided, in words                                               |
+| [`pattern.ts`](src/pattern.ts)     | `pattern`    | domain knowledge as **data**, compiled behind a ReDoS guard                           |
+| [`contract.ts`](src/contract.ts)   | `contract`   | what an honest reading looks like                                                     |
+| [`kit.ts`](src/kit.ts)             | `kit`        | what makes it compulsory                                                              |
+
+## Precedence, and why it is stated rather than ordered
+
+A bank statement quotes the word _invoice_ in a transaction label. Read in the wrong order it is filed as an invoice, and every operation it carries leaves the budget with it. An IBAN, or the debit/credit/balance vocabulary, settles the question before the word invoice is even looked at.
+
+Three notions and no more: a **pattern set** (all of its patterns), a **requirement** (any one of its sets), a **kind** (all of its requirements, first match wins). `absent` inverts a requirement, so _an invoice only when there is no IBAN_ is stated rather than smuggled into an ordering that means something else.
+
+## It knows nothing about your documents
+
+It has never heard of a date, an amount, a debit or a quarter. You name the **kind** of a cell and the **role** you want back; this library counts, divides, compares, and says which rule broke.
+
+That is deliberate. A library that shipped the meaning would force the next project to describe its document in a vocabulary designed for someone else's.
+
+Everything that varies by market, by issuer or by document family is a **value**, not a branch — see `pattern.ts`. A value can be served by a backend, refined by whoever reads the documents, versioned, and swapped for another market without a deploy. A branch can only be changed by whoever can change the code. Profiles carry regular expressions and JSON does not, so they travel as `{ source, flags }` and are rebuilt here — which is exactly where the danger is, and where the guard goes. A rejected pattern compiles to one that never matches, so the feature degrades and the page stays alive.
+
+## One reader, or two
+
+A project plugs in one reader, or two. A statement reader may run a positional one when there are coordinates and a line grammar when there are not — and an OCR page is exactly where both apply and the richer read wins. That competition is your business; everything around it is not.
+
+Which is why this is not "a general parser". It is the pipeline and the guarantees around whichever reader you write.
+
+## Requirements
+
+Node 20+, ESM. `pdfjs-dist` is an **optional** peer dependency, loaded on demand and only for PDFs — reading text, a paste or a CSV needs nothing.
+
+pdf.js is used through its **legacy** build, deliberately: the modern one refuses to run outside a browser, which would make the whole chain untestable. If you want the worker, resolve its URL yourself and pass it in — every bundler spells that differently, and picking one here would lock you into it:
+
+```ts
+import workerSrc from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url'; // Vite
+await openDocument(file, { workerSrc, maximumPages: 200 });
+```
+
+## Gate
+
+```sh
+npm run gate
+```
+
+Format, lint (zero warnings, sonarjs + regexp), typecheck, build, knip, jscpd, tests, coverage **100 %** — ratchets that only ever go up. A kit that measures others measures itself first.
+
+The same command runs in CI, on every push and every pull request. If it is green on your machine it is green here.
+
+## Contributing
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md) — what a change needs, and how a release goes out. Found a document that reads wrong? Open an issue with what `npx truecopy` printed, never the document itself.
+
+Security: [`SECURITY.md`](SECURITY.md). The library makes no network call, touches no filesystem and ships no runtime dependency, which leaves a small and specific surface — it is described there.
+
+## Licence
+
+MIT © Florian Mousseau
