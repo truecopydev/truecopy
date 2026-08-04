@@ -36,7 +36,7 @@ any place someone is representing truecopy.
 
 ## Reporting
 
-Email <florian.mousseau@gmail.com>. Reports are read by the maintainer and by
+Email <contact@truecopy.dev>. Reports are read by the maintainer and by
 nobody else, and are not repeated to the person reported.
 
 The maintainer will edit or remove anything that breaks this page, and will say

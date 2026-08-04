@@ -4,7 +4,7 @@
 
 Report a vulnerability privately through GitHub's
 [security advisory form](https://github.com/truecopydev/truecopy/security/advisories/new),
-or by email to <florian.mousseau@gmail.com>. Please do not open a public issue
+or by email to <contact@truecopy.dev>. Please do not open a public issue
 for it.
 
 You will get an acknowledgement within a week. If the report holds, the fix and
