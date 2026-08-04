@@ -1,0 +1,14 @@
+# Git checks out LF on every platform.
+#
+# Without this, `core.autocrlf=true` on Windows hands the working tree CRLF
+# while prettier's gate asserts LF. So `npm run gate` goes red on files the
+# contributor never opened, on a fresh clone, before they have changed a line -
+# and the failure says nothing about their work. CI stays green the whole time,
+# because CI checks out on Linux, which makes it look like their machine.
+* text=auto eol=lf
+
+# Left exactly as they are.
+*.png binary
+*.woff2 binary
+*.ico binary
+*.pdf binary
