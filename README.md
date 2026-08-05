@@ -357,6 +357,29 @@ import workerSrc from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url'; // Vite
 await openDocument(file, { workerSrc, maximumPages: 200 });
 ```
 
+## For a coding agent
+
+This library was published after every model in service was trained, so a model
+writing against it invents the API unless it is handed one. Two ways to hand it
+over, both version-matched to what you installed:
+
+```sh
+# already on disk once you install the package
+cp -r node_modules/truecopy/skills/truecopy ~/.claude/skills/
+
+# or, to follow the repository
+claude plugin marketplace add truecopydev/truecopy
+claude plugin install truecopy@truecopy
+```
+
+[`skills/truecopy/SKILL.md`](skills/truecopy/SKILL.md) is plain markdown and
+carries no Claude-specific instruction beyond its frontmatter, so it works as an
+`AGENTS.md` for any other agent that reads one. `npm run skill` fails when it
+names an export this package no longer has.
+
+The documentation site serves every page as markdown at the same path with
+`.md`, which is what [`llms.txt`](https://truecopy.dev/llms.txt) links to.
+
 ## Gate
 
 ```sh

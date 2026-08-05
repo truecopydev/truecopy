@@ -41,6 +41,7 @@
 		"bin",
 		"example",
 		"llms.txt",
+		"skills",
 		"README.md",
 		"CHANGELOG.md",
 		"LICENSE",
@@ -114,11 +115,12 @@
 		"dashes": "node scripts/dashes.mjs",
 		"check": "tsc --noEmit",
 		"api": "node scripts/api-surface.mjs",
+		"skill": "node scripts/skill.mjs",
 		"knip": "knip",
 		"dup": "jscpd src",
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
-		"gate": "npm run format:check && npm run dashes && npm run lint && npm run check && npm run build && npm run api && npm run knip && npm run dup && npm run test:coverage",
+		"gate": "npm run format:check && npm run dashes && npm run lint && npm run check && npm run build && npm run api && npm run skill && npm run knip && npm run dup && npm run test:coverage",
 		"prepublishOnly": "npm run gate"
 	},
 	"peerDependencies": {

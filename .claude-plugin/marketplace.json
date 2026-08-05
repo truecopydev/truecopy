@@ -1,0 +1,20 @@
+{
+	"name": "truecopy",
+	"owner": {
+		"name": "Florian Mousseau",
+		"url": "https://truecopy.dev"
+	},
+	"description": "The truecopy skill: read a table out of a document, and check the reading before anything acts on it.",
+	"plugins": [
+		{
+			"name": "truecopy",
+			"source": "./",
+			"description": "Read tables out of a PDF, a paste, a CSV or an OCR page in TypeScript, and check the reading - including rows a model extracted.",
+			"homepage": "https://truecopy.dev",
+			"repository": "https://github.com/truecopydev/truecopy",
+			"license": "MIT",
+			"category": "documentation",
+			"keywords": ["pdf", "table-extraction", "document-parsing", "typescript"]
+		}
+	]
+}
