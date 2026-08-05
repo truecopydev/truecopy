@@ -369,7 +369,9 @@ The same command runs in CI, on every push and every pull request. If it is gree
 
 ## Contributing
 
-[`CONTRIBUTING.md`](CONTRIBUTING.md) — what a change needs, and how a release goes out. Found a document that reads wrong? Open an issue with what `npx truecopy` printed, never the document itself.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) — what a change needs, and how it lands. Found a document that reads wrong? Open an issue with what `npx truecopy` printed, never the document itself.
+
+[`RELEASING.md`](RELEASING.md) — what a version number here will and will not do to you. The short version: releases are patches, the second digit stays put, and nothing is ever unpublished.
 
 Security: [`SECURITY.md`](SECURITY.md). The library makes no network call, touches no filesystem and ships no runtime dependency, which leaves a small and specific surface — it is described there.
 

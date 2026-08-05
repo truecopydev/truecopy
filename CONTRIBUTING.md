@@ -36,6 +36,20 @@ Regular expressions here run over whole documents, line by line, so every
 quantifier must be bounded. `eslint-plugin-regexp` refuses the two shapes that
 are not — that is the fifth law, held by a tool rather than by a comment.
 
+## Branches
+
+`main` is the only long-lived branch, and it is always releasable. Every change
+lands as a small pull request against it: a short-lived topic branch, a green
+gate, a squash merge, and the branch is deleted. There is no develop branch and
+no release branch — a release is a tag cut from `main`, nothing more.
+
+`main` is protected and takes no direct push, from anybody, including the
+maintainer. That is not ceremony: a rule that its author can step over is a
+preference, and the one thing a pull request guarantees is that the diff was
+looked at once, on a page, by somebody who was not mid-thought.
+
+The gate is a required check. A pull request cannot merge red.
+
 ## Commits
 
 One change per commit, present tense, and a subject that says what the reader
@@ -44,24 +58,26 @@ measured in`, not `update explain.ts`.
 
 ## Versioning
 
-Semantic versioning, and the majority of releases are **patches**.
+Semantic versioning, and **releases are patches**. `1.0.x` covers a fix, a new
+rule, an added function, an added option, a new entry point — everything that
+does not break a caller.
 
-- **1.0.x** — anything that does not change what a caller writes.
-- **1.x.0** — a new export, a new option, a new entry point.
-- **x.0.0** — a break.
+The second digit does not move because a release added surface. Almost every
+release adds surface, so a rule that spends a minor on it spends one every
+week, and the number stops meaning anything. It moves when the maintainer
+decides in writing that it should. The first moves for a break.
 
-The first two numbers do not move without the maintainer deciding they should,
-in writing, in the changelog. A rename that is convenient is not a reason.
+Why that is narrower than it looks, what a release costs once it is out, and
+how one is actually cut: [RELEASING.md](RELEASING.md).
 
 ## Releasing
 
-1. Move the `[Unreleased]` entries under a `## X.Y.Z` heading and write the
-   paragraph that says what the release is for.
-2. `npm version X.Y.Z`, which runs nothing but the bump and the tag.
-3. Push the commit and the tag.
-4. Run the **publish** workflow. It runs `npm ci`, then `npm publish`, and
-   `prepublishOnly` puts the whole gate in front of the registry. Publishing
-   with `--provenance` is what puts the verified badge on the npm page.
-5. Cut the GitHub release from the tag, with the changelog section as its body.
+Merging does **not** publish. Your pull request carries its changelog entry
+under `## [Unreleased]`, with no version number and no date; a separate release
+pull request stamps those later over whatever has accumulated. Green CI is a
+precondition for a release, never a reason for one.
+
+The four steps, and why the bump does not travel inside a feature PR:
+[RELEASING.md](RELEASING.md).
 
 A version is never unpublished. Somebody's lockfile already has it.

@@ -1,6 +1,37 @@
 # Changelog
 
-## 1.0.0
+Every change a caller could notice, and why it was made. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); what each number
+means and when one is published is [RELEASING.md](RELEASING.md).
+
+Entries land here under `## [Unreleased]`, with no version and no date. A
+release PR is what stamps them.
+
+## [Unreleased]
+
+### Changed
+
+- **What a version number will do to you, narrowed.** The rule was "1.x.0 — a
+  new export, a new option, a new entry point"; it is now a patch, and the
+  second digit stays put. Almost every release adds surface, so the old rule
+  spends a minor every week and the number stops carrying a signal — it took
+  selfstore from 1.6 to 1.8 in three days. [RELEASING.md](RELEASING.md) is the
+  whole contract: what earns which number, when a release is cut, and why
+  nothing is ever unpublished.
+- **A release now publishes the tag it says it does.** Dispatched without one,
+  the publish workflow used to check out the default branch — so a release
+  shipped whatever `main` happened to be at that minute, not the commit its
+  notes describe and not the commit its provenance attests. The tag is now
+  required, its version has to match `package.json`, and `refs/tags/v*` is
+  protected against deletion and force-update: once `vX.Y.Z` exists it points
+  where it points forever, which is what makes the attestation on the npm page
+  worth checking.
+- **The path from a commit to the registry is hardened.** Actions are pinned to
+  a commit rather than to a movable tag, installs run with `--ignore-scripts`,
+  what a consumer actually installs is audited, and the whole history is
+  scanned for secrets. `main` takes no direct push and cannot merge red.
+
+## [1.0.0] - 2026-08-03
 
 The first release. The API is what it is going to be: from here the version
 moves in its third number, and the first two move only for a reason written
