@@ -9,6 +9,25 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **A skill, so a coding agent writes against the real API instead of inventing
+  one.** truecopy was published after every model in service was trained, which
+  makes it the one library a model cannot know: asked to read a table out of a
+  PDF it produces plausible truecopy code, and the first thing it reaches for is
+  `selfCheck() { return null }`, the exact dodge this library exists to catch.
+  [`skills/truecopy/SKILL.md`](skills/truecopy/SKILL.md) ships in the package,
+  so it is on disk and version-matched the moment you install: copy it into
+  `~/.claude/skills/`, or add the repository as a plugin marketplace. It is
+  plain markdown with no Claude-specific instruction in the body, so it serves
+  as an `AGENTS.md` for anything else that reads one.
+- **`npm run skill`, because a second copy of an API drifts.** It fails when the
+  skill calls an export the package no longer has, names an entry point that is
+  gone, or when `.claude-plugin/plugin.json` and `package.json` disagree on the
+  version. `KindThreshold.column` becoming `share` is the case it exists for: a
+  rename touches no prose file, and the skill would have gone on teaching the
+  old name to the reader least able to notice.
+
 ### Fixed
 
 - **A release tag could still be walked forward.** The tag protection announced

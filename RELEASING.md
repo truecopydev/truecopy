@@ -106,7 +106,10 @@ only kind of rule that survives.
 
 1. `main` is green and `[Unreleased]` holds something worth installing.
 2. Open the release PR: stamp the section as `## [X.Y.Z] - YYYY-MM-DD`, bump
-   `package.json`. Merge it.
+   `package.json` **and `.claude-plugin/plugin.json`**, which carries the same
+   number because the skill it ships documents that surface. `npm run skill`
+   fails when the two disagree, so this is not a step to remember.
+   Merge it.
 3. Run the **release** workflow with `X.Y.Z`. It checks that `package.json` and
    the changelog agree, then cuts the tag and the GitHub Release from that
    section.
