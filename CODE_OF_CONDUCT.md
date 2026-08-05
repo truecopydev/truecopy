@@ -7,7 +7,7 @@ Argue about the code. Everything else is off topic.
 ## What that means
 
 Everyone is welcome here, whatever they are and wherever they come from. What is
-being judged is a reading, a rule, a measurement — never the person who proposed
+being judged is a reading, a rule, a measurement, never the person who proposed
 it.
 
 Expected:
@@ -40,5 +40,5 @@ Email <contact@truecopy.dev>. Reports are read by the maintainer and by
 nobody else, and are not repeated to the person reported.
 
 The maintainer will edit or remove anything that breaks this page, and will say
-that it was done. Someone who keeps at it stops being welcome — that decision is
+that it was done. Someone who keeps at it stops being welcome, and that decision is
 the maintainer's, and it is explained when it is taken.

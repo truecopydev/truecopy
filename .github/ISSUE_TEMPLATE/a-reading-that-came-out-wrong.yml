@@ -19,7 +19,7 @@ body:
     id: explained
     attributes:
       label: What the reading decided
-      description: The output of `npx truecopy` or of `explainDocument`. Redact the cells if you need to — the cut, the kinds and the fill rates are what matter.
+      description: The output of `npx truecopy` or of `explainDocument`. Redact the cells if you need to, because the cut, the kinds and the fill rates are what matter.
       render: text
     validations:
       required: true
@@ -54,4 +54,4 @@ body:
     attributes:
       label: One more thing
       options:
-        - label: The reading came back wrong **and `warnings` was empty** — it did not say it could not vouch for this.
+        - label: The reading came back wrong **and `warnings` was empty**. It did not say it could not vouch for this.

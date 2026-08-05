@@ -111,13 +111,14 @@
 		"lint": "eslint . --max-warnings 0",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
+		"dashes": "node scripts/dashes.mjs",
 		"check": "tsc --noEmit",
 		"api": "node scripts/api-surface.mjs",
 		"knip": "knip",
 		"dup": "jscpd src",
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
-		"gate": "npm run format:check && npm run lint && npm run check && npm run build && npm run api && npm run knip && npm run dup && npm run test:coverage",
+		"gate": "npm run format:check && npm run dashes && npm run lint && npm run check && npm run build && npm run api && npm run knip && npm run dup && npm run test:coverage",
 		"prepublishOnly": "npm run gate"
 	},
 	"peerDependencies": {

@@ -7,7 +7,7 @@ body:
       value: |
         The line this library holds: **the caller names what a document means,
         this code counts, divides and compares.** A proposal that teaches it
-        what a debit or a value date is will be turned down, however useful —
+        what a debit or a value date is will be turned down, however useful:
         that belongs in the application. Everything on this side of the line is
         open.
 
@@ -23,7 +23,7 @@ body:
     id: today
     attributes:
       label: What you do today instead
-      description: The code you wrote to get around it. This is the most useful part of the report — it says what the missing piece has to be shaped like.
+      description: The code you wrote to get around it. This is the most useful part of the report, because it says what the missing piece has to be shaped like.
       render: ts
     validations:
       required: true

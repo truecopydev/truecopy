@@ -12,7 +12,7 @@ updates:
 
   # Everything in package.json is a devDependency: the package ships no runtime
   # dependency at all, and `pdfjs-dist` is an optional peer the caller owns. So
-  # one grouped pull request a month, not fourteen — none of them can reach
+  # one grouped pull request a month, not fourteen: none of them can reach
   # anybody who installed truecopy.
   #
   # Minors and patches only, in that group. A major goes out on its own, because
