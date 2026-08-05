@@ -4,6 +4,11 @@
 # goes out when somebody decides it does, and a tag is often pushed to see what
 # CI says.
 #
+# It publishes a TAG, never a branch. Dispatched without one, this used to check
+# out the default branch and publish whatever `main` happened to be at that
+# minute - which is not the commit the release notes describe, and not the
+# commit the provenance would then attest to. The tag is required.
+#
 # `--provenance` is what puts the verified badge on the npm page: npm records
 # which workflow, which commit and which repository built the tarball, and a
 # consumer can check it. That is the reason this runs here rather than on a
@@ -15,6 +20,10 @@ name: publish
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish, with the v prefix (e.g. v1.0.1).
+        required: true
 
 permissions:
   contents: read
@@ -24,15 +33,42 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+
+      # The one mistake this cannot recover from. A version is never
+      # unpublished, so a tag dispatched by hand that does not match the version
+      # in the tree burns a number - either the wrong code goes out under the
+      # right name, or the bump was forgotten and npm rejects it after the gate
+      # has already run. Two seconds, before anything else.
+      - name: the tag and package.json agree
+        run: |
+          tagged="${{ inputs.tag }}"
+          tagged="${tagged#v}"
+          declared=$(node -p "require('./package.json').version")
+          if [ "$tagged" != "$declared" ]; then
+            echo "::error::tag $tagged, package.json $declared - one of them is wrong."
+            exit 1
+          fi
+
+      - name: NPM_TOKEN is set
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "::error::NPM_TOKEN is not set. Add it in the repository secrets - a granular token with publish rights on truecopy and nothing else."
+            exit 1
+          fi
 
       # The whole gate stands between this and the registry: `prepublishOnly`
       # runs format, lint, typecheck, build, knip, jscpd, tests and coverage.

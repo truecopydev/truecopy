@@ -25,17 +25,39 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      # Actions are pinned to a commit, with the tag in a comment. A tag is a
+      # pointer its owner can move: `@v7` today and `@v7` tomorrow can be
+      # different code running with this repository's token, and nothing in the
+      # diff would say so. Dependabot moves these pins and updates the comment.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Nothing here pushes. Left on, the token stays in .git/config for
+          # every later step to find, including anything npm decides to run.
+          persist-credentials: false
 
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      # `--ignore-scripts` blocks install-time lifecycle scripts: a compromised
+      # transitive dependency gets to run arbitrary code on `npm ci` otherwise,
+      # before a single test has started. Nothing here needs one - the only
+      # dependency in the tree with an install script is fsevents, which is
+      # macOS-only and optional.
+      - run: npm ci --ignore-scripts
 
       # format, lint, typecheck, build, knip, jscpd, tests, coverage ratchet.
       - run: npm run gate
+
+      # Only what a consumer actually installs. The package ships no runtime
+      # dependency, so this passes on an empty set today - which is the point:
+      # the day one is added, this is already watching it. `--omit=dev` because
+      # an advisory on a linter cannot reach anybody who ran `npm i truecopy`,
+      # and a gate that goes red for something nobody can be hurt by gets
+      # ignored, then removed.
+      - name: audit what a consumer installs
+        run: npm audit --omit=dev --audit-level=high
 
       # What would actually be published, installed and imported for real. A
       # green suite proves the source works; only this proves the PACKAGE does -
@@ -46,7 +68,7 @@ jobs:
           mkdir -p /tmp/consumer && cd /tmp/consumer
           npm init -y > /dev/null
           npm pkg set type=module
-          npm install "$GITHUB_WORKSPACE"/truecopy-*.tgz
+          npm install --ignore-scripts "$GITHUB_WORKSPACE"/truecopy-*.tgz
           node --input-type=module -e "
             import { schemaOf, validate, explainRows } from 'truecopy';
             import { findRowAnomalies } from 'truecopy/signature';
@@ -65,3 +87,22 @@ jobs:
               throw new Error('explain does not run from the package');
             }
           "
+
+  # Its own job, and the comment at the top of this file says why that has to be
+  # earned: this one genuinely differs. It needs the whole history rather than
+  # the tip, and a container rather than Node - and it has to report even when
+  # the gate above went red at the format check, because a leaked key is not a
+  # finding that can wait for a prettier fix.
+  #
+  # History and not the diff: a secret committed once is disclosed forever, and
+  # the commit that removes it is the one that draws attention to it.
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: scan the history for secrets
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest detect --source /repo --redact --no-banner
