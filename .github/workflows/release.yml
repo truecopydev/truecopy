@@ -6,9 +6,12 @@
 # changelog section itself, which means the release page and the changelog
 # cannot drift apart.
 #
-# `refs/tags/v*` is protected against deletion and non-fast-forward, so a tag
-# created here is final. That is deliberate: npm provenance attests a commit,
-# and an attestation that points at a movable tag attests nothing.
+# `refs/tags/v*` accepts no update at all - not a deletion, not a rewind, and not
+# a move forward - so a tag created here is final. Naming the third one matters:
+# forbidding force-push only blocks a rewind, and walking a release tag forward
+# onto a later commit is a fast-forward that goes straight through. That is
+# deliberate: npm provenance attests a commit, and an attestation pointing at a
+# movable tag attests nothing.
 #
 # Idempotent: a version already released keeps its tag untouched and only has
 # its notes refreshed. Publishing to npm is a separate, deliberate act - see
