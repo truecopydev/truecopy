@@ -18,6 +18,11 @@ name: claude-review
 #      into it. That exact pattern is how the "Comment and Control" attack class
 #      exfiltrated CI secrets from agent actions in 2026.
 #   3. `permissions` stays minimal. Widen it only with a stated reason.
+#   4. The action is pinned to a COMMIT, not to `@v1`. A tag is mutable: this
+#      one moved on 2026-08-04, and whoever moves it decides what runs with our
+#      token. Sonar rule S7637 caught this on 2026-08-05. Bump the pin
+#      deliberately (dependabot's github-actions ecosystem proposes it), never
+#      by widening it back to a tag.
 on:
   pull_request:
     types: [opened, synchronize, ready_for_review]
@@ -52,7 +57,7 @@ jobs:
           fetch-depth: 0
 
       - name: Claude review
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@9db594c7a0e82298c121c18b7f08aa1579ce7341 # v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           use_sticky_comment: true
