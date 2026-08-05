@@ -9,6 +9,16 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A release tag could still be walked forward.** The tag protection announced
+  in the entry below forbade deletion and force-push, which reads like
+  immutability and is not: "no force-push" blocks a **rewind**, while moving a
+  release tag **onto a later commit** is a fast-forward and goes straight
+  through — and forward is the direction that matters, since `main` advances
+  after every release. Measured by trying it rather than by reading the setting,
+  and the tag moved. `refs/tags/v*` now accepts no update at all.
+
 ### Changed
 
 - **What a version number will do to you, narrowed.** The rule was "1.x.0 — a

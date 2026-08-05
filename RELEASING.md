@@ -117,9 +117,15 @@ only kind of rule that survives.
 Both are manual, and both are meant to be. A tag must not be able to publish on
 its own: tags get pushed to see what CI says.
 
-`refs/tags/v*` is protected against deletion and non-fast-forward. A tag, once
-cut, points where it points forever — which is what makes the provenance
-attestation on the npm page mean anything.
+`refs/tags/v*` accepts no update at all — not a deletion, not a rewind, and not
+a move forward. A tag, once cut, points where it points forever, which is what
+makes the provenance attestation on the npm page mean anything.
+
+Naming the third one matters, because forbidding the first two is not enough and
+reads as though it were. "No force-push" only blocks a **rewind**; walking a
+release tag **forward** onto a later commit is a fast-forward, so it goes
+through — and forward is the direction that matters, since `main` advances after
+every release. The rule that closes it is `update`.
 
 An entry that only restates the diff is not an entry: the changelog says what
 changed and **why**, in prose, because the why is the part nobody can recover
