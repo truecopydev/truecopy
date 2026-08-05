@@ -11,4 +11,4 @@ the document that produced it is worth more than any description of the fix.
 - [ ] A test fails without this change
 - [ ] `CHANGELOG.md` says what changed, under `## [Unreleased]`
 - [ ] No new runtime dependency
-- [ ] Nothing here learns what a document _means_ — the caller still names the kind of a cell
+- [ ] Nothing here learns what a document _means_: the caller still names the kind of a cell

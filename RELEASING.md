@@ -6,7 +6,7 @@ change under you.
 ## The promise that actually matters
 
 truecopy reads other people's documents. The number on the package is not what
-you are trusting — the reading is, and a reading is not something a changelog
+you are trusting: the reading is, and a reading is not something a changelog
 can promise in prose.
 
 So the library ships the check instead of the promise.
@@ -27,18 +27,18 @@ Everything below is about the package.
 **Patch, unless a caller breaks.** Move the last digit. That is the rule, not
 the default with exceptions.
 
-| Bump      | When                                                                                                                                                        |
-| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **major** | Existing code stops compiling, or reads differently without changing a line.                                                                                |
-| **minor** | Almost never. Reserved for what no reader could take for a routine release — a different way of using the library altogether. A new entry point is not one. |
-| **patch** | Everything else, without an exception to look for: a fix, a new rule, a `.d.ts` correction, an added function, an added option, a new subpath.              |
+| Bump      | When                                                                                                                                                       |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **major** | Existing code stops compiling, or reads differently without changing a line.                                                                               |
+| **minor** | Almost never. Reserved for what no reader could take for a routine release: a different way of using the library altogether. A new entry point is not one. |
+| **patch** | Everything else, without an exception to look for: a fix, a new rule, a `.d.ts` correction, an added function, an added option, a new subpath.             |
 
 **The second digit stays put.** It does not move because a release added an
 export, and it does not move because a release feels big. It moves when the
 maintainer decides in writing that it should, in the changelog, having said
-what makes this one different — and that decision has not been made yet.
+what makes this one different, and that decision has not been made yet.
 
-This is narrower than what CONTRIBUTING.md said until now, which read "1.x.0 —
+This is narrower than what CONTRIBUTING.md said until now, which read "1.x.0 for
 a new export, a new option, a new entry point". The reason it changed is
 [selfstore](https://github.com/selfstoredev/selfstore), which shipped that
 exact rule and went from 1.6 to 1.8 in three days: almost every release adds
@@ -70,7 +70,7 @@ Green CI is a precondition for a release, never a reason for one.
 ## Nothing gets unpublished
 
 Published versions stay published, even superseded ones, even mistakes. The
-`0.0.1` → `0.1.2` line from 2–3 August 2026 is still on npm, published while
+`0.0.1` → `0.1.2` line from 2 and 3 August 2026 is still on npm, published while
 the API was still moving; **1.0.0 (3 August 2026) is the first release meant to
 be depended on**, and the earlier ones stay where they are.
 
@@ -90,7 +90,7 @@ the next release.
 ## The mechanism, not just the intention
 
 A rule that depends on remembering it gets broken. So the bump does not travel
-inside the feature PR — if it did, every merge would already be a release, and
+inside the feature PR: if it did, every merge would already be a release, and
 not publishing would take more effort than publishing.
 
 - **A feature PR carries its CHANGELOG entry under `## [Unreleased]`**, written
@@ -110,21 +110,21 @@ only kind of rule that survives.
 3. Run the **release** workflow with `X.Y.Z`. It checks that `package.json` and
    the changelog agree, then cuts the tag and the GitHub Release from that
    section.
-4. Run the **publish** workflow with `vX.Y.Z`. It publishes that tag — not
-   `main` — with `--provenance`, and `prepublishOnly` puts the whole gate in
+4. Run the **publish** workflow with `vX.Y.Z`. It publishes that tag (not
+   `main`) with `--provenance`, and `prepublishOnly` puts the whole gate in
    front of the registry.
 
 Both are manual, and both are meant to be. A tag must not be able to publish on
 its own: tags get pushed to see what CI says.
 
-`refs/tags/v*` accepts no update at all — not a deletion, not a rewind, and not
+`refs/tags/v*` accepts no update at all: not a deletion, not a rewind, and not
 a move forward. A tag, once cut, points where it points forever, which is what
 makes the provenance attestation on the npm page mean anything.
 
 Naming the third one matters, because forbidding the first two is not enough and
 reads as though it were. "No force-push" only blocks a **rewind**; walking a
 release tag **forward** onto a later commit is a fast-forward, so it goes
-through — and forward is the direction that matters, since `main` advances after
+through, and forward is the direction that matters, since `main` advances after
 every release. The rule that closes it is `update`.
 
 An entry that only restates the diff is not an entry: the changelog says what

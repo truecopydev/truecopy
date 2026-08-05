@@ -11,9 +11,15 @@ npm install
 npm run gate
 ```
 
-Format, lint (zero warnings), typecheck, build, `knip`, `jscpd`, tests,
-coverage. It runs on every push and every pull request, and it is the same
-command locally and in CI — if it is green on your machine it is green here.
+Format, no typographic dash, lint (zero warnings), typecheck, build, `knip`,
+`jscpd`, tests, coverage. It runs on every push and every pull request, and it
+is the same command locally and in CI: if it is green on your machine it is
+green here.
+
+`npm run dashes` refuses an em dash, an en dash and every other character in
+the dash block. Write what the sentence wants instead: a colon introduces, a
+comma joins, a full stop ends, brackets hold an aside, and a spaced hyphen is
+the pause this library's own output already uses.
 
 Coverage thresholds are **100 %** on statements, branches, functions and lines,
 and they are a ratchet: they only ever go up. That is not a target, it is a
@@ -34,14 +40,14 @@ floor. A library that measures other people's readings measures itself first.
 
 Regular expressions here run over whole documents, line by line, so every
 quantifier must be bounded. `eslint-plugin-regexp` refuses the two shapes that
-are not — that is the fifth law, held by a tool rather than by a comment.
+are not: that is the fifth law, held by a tool rather than by a comment.
 
 ## Branches
 
 `main` is the only long-lived branch, and it is always releasable. Every change
 lands as a small pull request against it: a short-lived topic branch, a green
 gate, a squash merge, and the branch is deleted. There is no develop branch and
-no release branch — a release is a tag cut from `main`, nothing more.
+no release branch: a release is a tag cut from `main`, nothing more.
 
 `main` is protected and takes no direct push, from anybody, including the
 maintainer. That is not ceremony: a rule that its author can step over is a
@@ -59,7 +65,7 @@ measured in`, not `update explain.ts`.
 ## Versioning
 
 Semantic versioning, and **releases are patches**. `1.0.x` covers a fix, a new
-rule, an added function, an added option, a new entry point — everything that
+rule, an added function, an added option, a new entry point, everything that
 does not break a caller.
 
 The second digit does not move because a release added surface. Almost every

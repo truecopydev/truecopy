@@ -15,21 +15,29 @@ release PR is what stamps them.
   in the entry below forbade deletion and force-push, which reads like
   immutability and is not: "no force-push" blocks a **rewind**, while moving a
   release tag **onto a later commit** is a fast-forward and goes straight
-  through — and forward is the direction that matters, since `main` advances
+  through, and forward is the direction that matters, since `main` advances
   after every release. Measured by trying it rather than by reading the setting,
   and the tag moved. `refs/tags/v*` now accepts no update at all.
 
 ### Changed
 
-- **What a version number will do to you, narrowed.** The rule was "1.x.0 — a
+- **The em dash is gone from every page here, and cannot come back.** 84 of
+  them across eleven files, all in the documentation and none in the source,
+  with the README the one everybody reads on npm. Each was replaced by what its
+  own sentence wanted, a colon, a comma, a full stop or a bracket, rather than
+  by one substitution repeated 84 times. `npm run dashes` is now part of the
+  gate and refuses the whole dash block. One of them was worth more than
+  typography: the README quoted a warning this library emits and quoted it
+  wrongly, with an em dash where the real string carries a spaced hyphen.
+- **What a version number will do to you, narrowed.** The rule was "1.x.0 for a
   new export, a new option, a new entry point"; it is now a patch, and the
   second digit stays put. Almost every release adds surface, so the old rule
-  spends a minor every week and the number stops carrying a signal — it took
+  spends a minor every week and the number stops carrying a signal: it took
   selfstore from 1.6 to 1.8 in three days. [RELEASING.md](RELEASING.md) is the
   whole contract: what earns which number, when a release is cut, and why
   nothing is ever unpublished.
 - **A release now publishes the tag it says it does.** Dispatched without one,
-  the publish workflow used to check out the default branch — so a release
+  the publish workflow used to check out the default branch, so a release
   shipped whatever `main` happened to be at that minute, not the commit its
   notes describe and not the commit its provenance attests. The tag is now
   required, its version has to match `package.json`, and `refs/tags/v*` is
@@ -50,14 +58,14 @@ down in this file.
 A parser that returns a plausible-looking table from a document it misread is
 worse than one that returns nothing, because nobody checks a table that looks
 right. This library is the pipeline around whichever reader ends up doing the
-work — the door bytes come through, the checks that catch a wrong reading, a
+work: the door bytes come through, the checks that catch a wrong reading, a
 way to see what it decided, and a conformance kit that goes red the day the
 reading stops being honest.
 
 ### The mechanisms
 
-Eight, in the order a document meets them — `open`, `notation`, `classify`,
-`columns`, `roles`, `signature`, `schema`, `explain` — plus `layout` for the
+Eight, in the order a document meets them (`open`, `notation`, `classify`,
+`columns`, `roles`, `signature`, `schema`, `explain`), plus `layout` for the
 geometry, `table` for the two-line path, `pattern` for domain knowledge held as
 data, `contract` for the shape of an honest reading and `kit` for what makes it
 compulsory. Each is also its own entry point, so a project that wants one pays
@@ -72,18 +80,18 @@ loads nothing at all.
   a list of warnings computed without knowing anything about the document: a
   column filled on 2 % of its rows, a page that shows no column at all, pages
   that disagree on how many columns there are. An empty list is not a promise
-  that the reading is right — it says nothing looked wrong from the shape of
+  that the reading is right: it says nothing looked wrong from the shape of
   the page, and the difference between the two is the whole argument here.
 - **The document checks itself.** A reading that contradicts what the document
   declares about itself never comes back as sound. Refusing beats a plausible
-  table, and every value can be pointed at — `Place`, `placeOf`, `placesOf`,
-  `ReviewableRow.where` — because a person confirms what they can find again.
+  table, and every value can be pointed at (`Place`, `placeOf`, `placesOf`,
+  `ReviewableRow.where`), because a person confirms what they can find again.
 - **No configuration per issuer.** The table is learnt from the table: a column
   full of dates is the date column whatever its header says, and a row that
   breaks what every other row does is a total, a balance or a footer. Reading
   no label is what survives an issuer never seen.
 - **The cut keeps what recurs.** The spread of x over a whole page counts the
-  letterhead, the address block and every word inside a description — measured
+  letterhead, the address block and every word inside a description: measured
   on a real statement, twelve columns where the table has five.
   `boundariesFromRecurrence` keeps only the left edges that come back row after
   row, which needs no knowledge of the document at all. Where the page offers
@@ -91,14 +99,14 @@ loads nothing at all.
 - **One engine, three rulers.** A PDF is measured in points, a table pasted
   with spaces in characters, a delimited file in the index of the field. The
   cut does not care which ruler measured them, so there is no second algorithm
-  and no second set of thresholds — and the reading names the unit it worked
+  and no second set of thresholds, and the reading names the unit it worked
   in, because `cut at 1, 2` with no unit is a riddle.
 - **One declaration, two outputs.** `schemaOf` yields the check and the record
   type, `RecordOf<typeof schema>`. A schema is pure data, so it survives JSON
   and can be served, versioned and swapped for another market without a deploy.
   `validateWith` takes any Standard Schema, so a row type declared in Zod or
   Valibot is not declared twice.
-- **`explainDocument` puts the decision into words** — the cut, what each
+- **`explainDocument` puts the decision into words**: the cut, what each
   column holds, which rows were dropped and why. Reach for it first when a
   reading comes out wrong.
 - **The kit makes the contract compulsory.** An interface is dodged with a
@@ -113,7 +121,7 @@ jscpd, and **100 % coverage** as a ratchet. A kit that measures others measures
 itself first.
 
 `API.md` is part of it: every exported name, by entry point, committed. knip
-cannot see that surface — the barrel is the entry point, so everything it
+cannot see that surface: the barrel is the entry point, so everything it
 re-exports counts as used and a name nobody imports stays green forever.
 Measured while this file was being drawn up, thirty-two of fifty-seven exported
 values had no consumer anywhere and nothing said so. `npm run api` reads the
@@ -137,7 +145,7 @@ a promise in somebody's import, which is what a 1.0 has to be able to say.
   plausible-but-wrong reading this library argues against.
 - **An aligned paste is not read as a CSV because its amounts hold commas.**
   Every French amount does, so counting commas finds exactly one on every line
-  of a pasted statement — and cutting on it would turn `12,40` into two
+  of a pasted statement, and cutting on it would turn `12,40` into two
   columns. Alignment wins; only a tab overrides it, a tab never being
   punctuation.
 - **No height on a `Place`, because none is known.** Inventing a line spacing

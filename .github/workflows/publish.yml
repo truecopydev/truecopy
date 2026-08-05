@@ -14,7 +14,7 @@
 # consumer can check it. That is the reason this runs here rather than on a
 # laptop, where nothing can be attested.
 #
-# Needs one secret, NPM_TOKEN — a granular access token with publish rights on
+# Needs one secret, NPM_TOKEN: a granular access token with publish rights on
 # this package and nothing else.
 name: publish
 
