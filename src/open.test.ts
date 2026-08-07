@@ -4,7 +4,9 @@ import {
 	UnreadableDocument,
 	openDocument,
 	positionedItems,
-	withDeadline
+	withDeadline,
+	type OpenOptions,
+	type PdfEngine
 } from './open.js';
 import { pdfWithText } from './kit.js';
 
@@ -81,9 +83,9 @@ describe('the reason a document was refused', () => {
 	 * voice and its own language; without a name it has to match on an English
 	 * sentence, or keep a copy of this whole file to say the same thing.
 	 */
-	const refusal = async (file: File): Promise<UnreadableDocument> => {
+	const refusal = async (file: File, options?: OpenOptions): Promise<UnreadableDocument> => {
 		try {
-			await openDocument(file);
+			await openDocument(file, options);
 		} catch (error) {
 			return error as UnreadableDocument;
 		}
@@ -111,6 +113,30 @@ describe('the reason a document was refused', () => {
 	it('names a PDF the engine would not open', async () => {
 		const file = new File(['not a PDF at all'], 'fake.pdf', { type: 'application/pdf' });
 		expect((await refusal(file)).reason).toBe('not-opened');
+	});
+
+	it('tells a missing engine apart from a file that will not open', async () => {
+		// The two refusals send a reader in opposite directions: install the
+		// engine, or hunt for the password of a file that has none. Conflating
+		// them is what makes an agent write "this document is protected" about a
+		// project that simply never installed pdfjs-dist.
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'ok.pdf', {
+			type: 'application/pdf'
+		});
+		const broken = {
+			getDocument: () => {
+				throw new Error('engine missing');
+			}
+		} as unknown as PdfEngine;
+		expect((await refusal(file, { pdfjs: broken })).reason).toBe('not-opened');
+
+		// And the message of a missing engine must name what to install.
+		const missing = new UnreadableDocument(
+			'no-engine',
+			'No PDF engine: install pdfjs-dist, or pass one as the `pdfjs` option.'
+		);
+		expect(missing.reason).toBe('no-engine');
+		expect(missing.message).toContain('pdfjs-dist');
 	});
 
 	it('names a read that ran out of time', async () => {
