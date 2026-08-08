@@ -188,13 +188,15 @@ try {
 	await openDocument(file);
 } catch (error) {
 	if (error instanceof UnreadableDocument) {
-		// 'empty' | 'too-big' | 'no-text' | 'too-slow' | 'not-opened'
+		// 'empty' | 'too-big' | 'no-text' | 'too-slow' | 'no-engine' | 'not-opened'
 		showInYourOwnWords(error.reason);
 	}
 }
 ```
 
 The reason is named so the sentence is not. A library that ships only English prose forces an application that speaks anything else to keep its own copy of the door.
+
+`no-engine` and `not-opened` are kept apart on purpose, and the difference is not cosmetic: one says _install `pdfjs-dist`_, the other says _this file will not open, look for its password_. Told the wrong one, a person hunts for a lock that does not exist and an agent writes that the document is protected. `pdfjs-dist` is a peer dependency so that a project reading only pastes and CSV does not download a PDF engine it will never call.
 
 ## One declaration, two outputs
 

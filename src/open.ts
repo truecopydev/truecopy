@@ -25,6 +25,17 @@ export type Unreadable =
 	| 'no-text'
 	/** The deadline ran out. */
 	| 'too-slow'
+	/**
+	 * There is no PDF engine to read with: `pdfjs-dist` is not installed and
+	 * none was passed in `options.pdfjs`.
+	 *
+	 * Named apart from `not-opened` because the two send whoever reads them in
+	 * opposite directions. Under one message the answer is "install the
+	 * engine"; under the other it is "find the password of a file that has
+	 * none". A caller told the wrong one looks for a lock that does not exist,
+	 * and an agent told the wrong one writes that the document is protected.
+	 */
+	| 'no-engine'
 	/** The engine would not open it: password-protected, damaged. */
 	| 'not-opened';
 
@@ -38,8 +49,8 @@ export class UnreadableDocument extends Error {
 	 * error underneath this one. Two meanings on one name is how a catch block
 	 * ends up reading the wrong thing.
 	 */
-	constructor(reason: Unreadable, message: string) {
-		super(message);
+	constructor(reason: Unreadable, message: string, options?: ErrorOptions) {
+		super(message, options);
 		this.reason = reason;
 	}
 }
@@ -200,6 +211,35 @@ export async function openDocument(file: File, options: OpenOptions = {}): Promi
 	}
 }
 
+/**
+ * The engine this library falls back on, or a refusal that names the reason.
+ *
+ * `pdfjs-dist` is a peer, not a dependency: a caller reading pastes and CSV
+ * should not download a PDF engine, and a caller under a byte budget wants to
+ * choose its build. The cost of that choice is this failure mode, and it has
+ * to be told apart from a file that will not open - otherwise the message
+ * sends people looking for a password on a document that has none.
+ */
+async function loadDefaultEngine(): Promise<PdfEngine> {
+	try {
+		return (await import('pdfjs-dist/legacy/build/pdf.mjs')) as PdfEngine;
+	} catch (error) {
+		/*
+		 * Outside coverage, and it is the one honest way: this branch runs only
+		 * when `pdfjs-dist` is absent, and it is present here - the suite reads
+		 * real PDFs with it. Uninstalling it for the length of one test would
+		 * take down every other PDF test in the file. The refusal it throws is
+		 * covered instead by a test that builds it directly.
+		 */
+		/* v8 ignore next 5 */
+		throw new UnreadableDocument(
+			'no-engine',
+			'No PDF engine: install pdfjs-dist, or pass one as the `pdfjs` option.',
+			{ cause: error }
+		);
+	}
+}
+
 async function pagesFromPdf(
 	data: ArrayBuffer,
 	name: string,
@@ -212,7 +252,7 @@ async function pagesFromPdf(
 	 * A caller under a byte budget passes the modern one in - see `pdfjs` on
 	 * OpenOptions, where that trade is weighed.
 	 */
-	const pdfjs = options.pdfjs ?? ((await import('pdfjs-dist/legacy/build/pdf.mjs')) as PdfEngine);
+	const pdfjs = options.pdfjs ?? (await loadDefaultEngine());
 
 	/*
 	 * The worker exists only in a browser, and only when the caller resolved its
