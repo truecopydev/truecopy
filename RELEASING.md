@@ -117,6 +117,15 @@ only kind of rule that survives.
    `main`) with `--provenance`, and `prepublishOnly` puts the whole gate in
    front of the registry.
 
+Nothing in step 4 holds a credential. The registry authenticates the workflow
+itself, by a signed claim about the run (OIDC), against a trusted publisher
+declared once on npmjs.com under this package's Settings: owner `truecopydev`,
+repository `truecopy`, workflow `publish.yml`, no environment. The workflow
+**file name is part of the permission** - renaming it revokes publishing until
+the declaration is updated to match, and a fork cannot publish at all, because
+the claim carries the repository it came from. It is revoked in the same place
+it was granted, without touching a secret here.
+
 Both are manual, and both are meant to be. A tag must not be able to publish on
 its own: tags get pushed to see what CI says.
 

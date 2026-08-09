@@ -9,13 +9,11 @@
 # minute - which is not the commit the release notes describe, and not the
 # commit the provenance would then attest to. The tag is required.
 #
-# `--provenance` is what puts the verified badge on the npm page: npm records
-# which workflow, which commit and which repository built the tarball, and a
-# consumer can check it. That is the reason this runs here rather than on a
-# laptop, where nothing can be attested.
-#
-# Needs one secret, NPM_TOKEN: a granular access token with publish rights on
-# this package and nothing else.
+# Authenticated by OIDC (npm trusted publishing), not by a secret: npmjs.com
+# names this repository and this workflow FILE as allowed to publish this
+# package. Renaming this file, or moving the job into another workflow, revokes
+# that permission until the trusted publisher is updated to match. A fork cannot
+# publish, because the claim carries the repository it came from.
 name: publish
 
 on:
@@ -27,7 +25,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # provenance
+  id-token: write # the claim that authenticates this run to the registry
 
 jobs:
   publish:
@@ -38,11 +36,40 @@ jobs:
           ref: ${{ inputs.tag }}
           persist-credentials: false
 
+      # No `registry-url`. It looks like the setting that points npm at the
+      # registry, and what it actually does is WRITE AN .npmrc carrying an auth
+      # line - which is precisely what stops npm from reaching for OIDC. npm
+      # asks the registry to authenticate this workflow only when it finds no
+      # credential configured for that registry, so the line left behind by a
+      # helper meant to help is what keeps a token in the loop.
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 20
-          registry-url: https://registry.npmjs.org
           cache: npm
+
+      # Trusted publishing needs npm 11.5.1+, and Node 20 ships npm 10. Raising
+      # the npm CLI rather than the Node version keeps the runtime this package
+      # is tested against unchanged: `engines` is what promises Node 20, and a
+      # publish job is not the place to start testing a different one.
+      #
+      # Pinned exactly, and installed without its lifecycle scripts: this is the
+      # tool that signs the artefact and speaks for this repository to the
+      # registry.
+      - run: npm install -g --ignore-scripts npm@11.19.0
+
+      # A global install does not always win the PATH against the npm bundled
+      # with the Node setup-node laid down, and npm 10 has no notion of trusted
+      # publishing at all - it would ask for a token and report only that it
+      # needs auth, which is indistinguishable from a missing secret. One line,
+      # so the next reader is never left guessing which npm spoke.
+      - name: which npm publishes, and can it ask for a token
+        run: |
+          echo "npm $(npm --version) at $(command -v npm)"
+          if [ -z "$ACTIONS_ID_TOKEN_REQUEST_URL" ]; then
+            echo "::error::no OIDC request URL in this job - id-token: write is missing or the runner did not mint one."
+            exit 1
+          fi
+          echo "OIDC request URL present."
 
       - run: npm ci --ignore-scripts
 
@@ -52,27 +79,40 @@ jobs:
       # right name, or the bump was forgotten and npm rejects it after the gate
       # has already run. Two seconds, before anything else.
       - name: the tag and package.json agree
+        # Through `env`, not inline: an expression inside a `run:` block is
+        # substituted into the script before bash reads it, so a dispatched
+        # value would be executed rather than compared.
+        env:
+          TAG: ${{ inputs.tag }}
         run: |
-          tagged="${{ inputs.tag }}"
-          tagged="${tagged#v}"
+          tagged="${TAG#v}"
           declared=$(node -p "require('./package.json').version")
           if [ "$tagged" != "$declared" ]; then
             echo "::error::tag $tagged, package.json $declared - one of them is wrong."
             exit 1
           fi
 
-      - name: NPM_TOKEN is set
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "::error::NPM_TOKEN is not set. Add it in the repository secrets - a granular token with publish rights on truecopy and nothing else."
-            exit 1
-          fi
-
+      # No token. The registry decides whether this workflow, on this
+      # repository, may publish this package - configured once on npmjs.com
+      # under the package's Settings, and revocable there without touching
+      # anything here.
+      #
+      # It replaces a token rather than joining one, because the token path is
+      # closing: npm now refuses account changes and direct publishing from the
+      # granular tokens that bypass two-factor auth, and classic automation
+      # tokens can no longer be created at all. A token in this file would be a
+      # credential to rotate, leak or let expire, and an expired one publishes
+      # nothing while the job reports success.
+      #
       # The whole gate stands between this and the registry: `prepublishOnly`
       # runs format, lint, typecheck, build, knip, jscpd, tests and coverage.
       # A version is never unpublished, so it is checked before, not after.
-      - run: npm publish --provenance --access public
+      - name: publish
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # A publish that fails says WHY. Without this, npm decides in silence
+          # whether to ask the registry to authenticate this workflow, and a
+          # refusal arrives as a bare "need auth" that reads like a missing
+          # token. The extra output only ever appears on the one job that
+          # publishes, a few times a month.
+          NPM_CONFIG_LOGLEVEL: verbose
+        run: npm publish --provenance --access public

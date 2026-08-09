@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-09
+
 ### Added
 
 - **A skill, so a coding agent writes against the real API instead of inventing
@@ -30,6 +32,14 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **A missing engine was reported as a locked document.** With `pdfjs-dist`
+  absent and no engine passed in, the door refused with `not-opened` and the
+  message "if it is password-protected, save an unprotected copy". That sends a
+  reader hunting for a lock the file does not have, and an agent reading it
+  writes that the document is protected: a wrong diagnosis stated confidently,
+  which is the failure this library exists to prevent. `no-engine` is now its
+  own refusal and its message names what to install. Met on a real document,
+  while reading a UCITS annual report.
 - **A release tag could still be walked forward.** The tag protection announced
   in the entry below forbade deletion and force-push, which reads like
   immutability and is not: "no force-push" blocks a **rewind**, while moving a
@@ -67,6 +77,16 @@ release PR is what stamps them.
   a commit rather than to a movable tag, installs run with `--ignore-scripts`,
   what a consumer actually installs is audited, and the whole history is
   scanned for secrets. `main` takes no direct push and cannot merge red.
+- **Publishing no longer holds a credential.** The publish workflow
+  authenticated with `NPM_TOKEN`; it now authenticates by OIDC, and npmjs.com
+  names this repository and this workflow file as the only thing allowed to put
+  a version of this package on the registry. There is no secret left to rotate,
+  leak or let expire, and an expired one is the worst of those: it publishes
+  nothing while the job reports success. It is also the only path that stays
+  open, since npm has stopped issuing classic automation tokens and now refuses
+  direct publishing from the granular tokens that bypass two-factor auth. The
+  file name is part of the permission: renaming `publish.yml` revokes it until
+  the trusted publisher is updated to match.
 
 ## [1.0.0] - 2026-08-03
 
