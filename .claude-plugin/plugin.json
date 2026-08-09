@@ -1,6 +1,6 @@
 {
 	"name": "truecopy",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Read tables out of a PDF, a paste, a CSV or an OCR page in TypeScript, and check the reading before anything downstream acts on it - including rows a model extracted.",
 	"author": {
 		"name": "Florian Mousseau",
