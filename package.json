@@ -2,7 +2,7 @@
 	"name": "truecopy",
 	"version": "1.0.1",
 	"type": "module",
-	"description": "Turn a PDF, a paste or a CSV into rows, and refuse the readings you cannot trust. Learns each document's own shape, so a new issuer needs no new configuration.",
+	"description": "Extract tables from a PDF, a paste or a CSV in TypeScript, and know when the extraction cannot be trusted. Learns each document's own shape, so a new issuer needs no new configuration.",
 	"keywords": [
 		"pdf",
 		"pdf-parser",

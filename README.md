@@ -1,8 +1,8 @@
 # truecopy
 
-**Turn a document into rows, and refuse the readings you cannot trust.**
+**Extract tables from a PDF in TypeScript, and know when the extraction is wrong.**
 
-A PDF, a paste, a CSV, an OCR page: one engine reads all of them.
+Turn a document into rows, and refuse the readings you cannot trust. A PDF, a paste, a CSV, an OCR page: one engine reads all of them.
 
 [![npm](https://img.shields.io/npm/v/truecopy)](https://www.npmjs.com/package/truecopy)
 [![gate](https://github.com/truecopydev/truecopy/actions/workflows/gate.yml/badge.svg)](https://github.com/truecopydev/truecopy/actions/workflows/gate.yml)
