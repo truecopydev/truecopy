@@ -57,8 +57,11 @@ Two of those checks are unusual and are load-bearing:
   co-author line, no trailer, no branding in a commit, a branch or a PR body.
   `gh pr create` sometimes adds a generated-by trailer: re-read the body and
   remove it.
-- This repo is **public**. An agent prepares the pull request; the merge is
-  Florian's call.
+- This repo is **public**, and a public commit is final: work goes through a
+  pull request whatever its size. Since 9 August 2026 an agent merges its own,
+  under one condition stricter than a private repo's: **the gate is really
+  green - checks present AND passed**. A pull request carrying no check at all
+  does not merge, whatever the reason for their absence.
 
 ## Releases
 
@@ -67,8 +70,12 @@ app breaks**. A new export does not move the second digit - almost every release
 adds one, so that criterion would move it forever. A burnt number is never
 reclaimed, nothing is ever unpublished.
 
-**Publishing to npm is never done by an agent**, on any repo, with or without a
-green gate. The package leaves Florian's machine and that decision is his.
+**An agent publishes to npm**, since 9 August 2026 and for the same reason the
+merge moved: a fix nobody installs repairs nobody. What does not undo itself is
+unchanged and is what keeps this safe - a burnt number is never reclaimed, so
+the last digit moves, a patch when in doubt, and the gate is green before the
+registry sees anything. A release stays a deliberate act with a reason, never
+one because CI went green.
 
 Two traps already paid, both in `publish.yml`:
 
