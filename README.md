@@ -35,9 +35,10 @@ npm install truecopy
 ```ts
 import { readTable } from 'truecopy';
 
-const { rows, warnings } = await readTable(file);
+const { rows, warnings, findings } = await readTable(file);
 // rows     [['02/05/2026', 'CARTE AMAZON', '12,40'], …]
 // warnings ['column 3 of page 2 is filled on only 8% of its rows - the cut may have invented it']
+// findings [{ code: 'thin-column', page: 2, column: 3, shareFilled: 0.08, message: '…' }]
 ```
 
 No `kindOf`, no thresholds, no roles. If you only want the cells, destructure `rows` and go.
@@ -56,6 +57,8 @@ That last line is the rule and not the exception. A quoted CSV field may hold th
 `explainDocument` names the ruler, so a cut is never a bare list of numbers: `cut at 100, 290` on a page, `cut at characters 7, 22` on a paste, `cut on the delimiter` on a CSV, where the columns _are_ the fields and their indices would tell you nothing.
 
 The second field is why this is not just another extractor. **An empty `warnings` is not a promise that the reading is right**: it means nothing looked wrong from the shape of the page, which is a much smaller claim. Every warning is computed without knowing anything about your document: a page with no columns at all, a column that is almost always empty, pages cut differently from one another, a blank page in the middle.
+
+`findings` is that same list with a `code` on it, plus the page and the column it is about. A person reads the sentence; a program branches on the code, and never on English that could be reworded tomorrow.
 
 When the rows have to be **trusted** (when something downstream acts on them), the rest of this page is how.
 

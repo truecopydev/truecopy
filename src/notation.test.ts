@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	decimalMarkOf,
 	findNumbers,
 	isOnlyNumber,
 	numberToken,
@@ -32,6 +33,16 @@ describe('readNumber', () => {
 		expect(readNumber('27.800')).toBe(27800);
 		expect(readNumber('1.2')).toBe(1.2);
 		expect(readNumber('1.234')).toBe(1234);
+	});
+
+	it('takes the decimal mark the document settled, instead of counting', () => {
+		// `1,234` is one thousand two hundred and thirty-four in Luxembourg and one
+		// point two three four in Paris. Five characters do not decide that; the
+		// document does.
+		expect(readNumber('1,234', ',')).toBe(1.234);
+		expect(readNumber('1,234', '.')).toBe(1234);
+		expect(readNumber('48,275,477.16', '.')).toBe(48275477.16);
+		expect(readNumber('3 775 881 779,64', ',')).toBe(3775881779.64);
 	});
 
 	it('reads all three ways a document writes a minus', () => {
@@ -186,5 +197,51 @@ describe('readLeadingDate', () => {
 		expect(readLeadingDate('GROCERIES 25/01/2026', FRENCH)).toBeNull();
 		expect(readLeadingDate('99-99-9999', FRENCH)).toBeNull();
 		expect(readLeadingDate('2026-13-01', FRENCH)).toBeNull();
+	});
+});
+
+describe('decimalMarkOf', () => {
+	/*
+	 * The same question as the column cut, asked of numbers: what recurs over the
+	 * document decides, never what one token looks like. Met on a real French
+	 * report that prints its figures the English way - the reader had no way to
+	 * know, and read every amount a thousand times too small.
+	 */
+	it('reads a run that carries both marks: the rightmost is the decimal one', () => {
+		expect(decimalMarkOf('TOTAL ACTIF NET 48,275,477.16')).toBe('.');
+		expect(decimalMarkOf('TOTAL 2.418.919.276,24')).toBe(',');
+	});
+
+	it('reads a mark repeated over groups of three as a thousands mark', () => {
+		expect(decimalMarkOf('1.234.567 titres')).toBe(',');
+	});
+
+	it('reads a mark followed by anything but three digits as the decimal one', () => {
+		expect(decimalMarkOf('27800.50')).toBe('.');
+		expect(decimalMarkOf('quantite 5,0')).toBe(',');
+	});
+
+	it('says nothing when nothing in the text settles it', () => {
+		// A lone `1,234` is unreadable by construction, and so is a page of them.
+		expect(decimalMarkOf('1,234 puis 5,678')).toBeNull();
+		// Whole numbers carry no mark at all, so they answer nothing either.
+		expect(decimalMarkOf('page 12 sur 2026')).toBeNull();
+		expect(decimalMarkOf('aucun chiffre ici')).toBeNull();
+		expect(decimalMarkOf('')).toBeNull();
+	});
+
+	it('does not take a date or a version for a number', () => {
+		// Groups that are not three digits long: the run is not a thousands
+		// notation, and it votes for nothing rather than for the wrong mark.
+		expect(decimalMarkOf('arrete au 31.12.2025')).toBeNull();
+		expect(decimalMarkOf('truecopy 1.0.1')).toBeNull();
+	});
+
+	it('lets the document settle what the token could not', () => {
+		// The two compose with no word in between, and a document that settled
+		// nothing must not force the caller to write it differently.
+		const page = 'TOTAL ACTIF NET 48,275,477.16 dont 1,234 parts';
+		expect(readNumber('1,234', decimalMarkOf(page))).toBe(1234);
+		expect(readNumber('27800.50', decimalMarkOf('nothing here settles it'))).toBe(27800.5);
 	});
 });

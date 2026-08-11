@@ -47,11 +47,12 @@ export {
 	rowsFrom
 } from './layout.js';
 
-export type { Table } from './table.js';
+export type { Doubt, Finding, Table } from './table.js';
 export { readTable } from './table.js';
 
-export type { Notation, FoundNumber, LeadingDate } from './notation.js';
+export type { DecimalMark, Notation, FoundNumber, LeadingDate } from './notation.js';
 export {
+	decimalMarkOf,
 	findNumbers,
 	isOnlyNumber,
 	numberToken,
@@ -98,6 +99,7 @@ export { describeAnomaly, explainDocument, explainRows } from './explain.js';
 export type {
 	SelfCheck,
 	Discrepancy,
+	Extraction,
 	Refusal,
 	ReviewableRow,
 	Reading,
@@ -105,7 +107,7 @@ export type {
 	Verdict,
 	ReadResult
 } from './contract.js';
-export { discrepancyOf, readDocument } from './contract.js';
+export { checkExtraction, discrepancyOf, readDocument } from './contract.js';
 
 export type { CorpusCase, CheckResult, ContractOptions, PlacedWord } from './kit.js';
 export {
