@@ -46,6 +46,26 @@ describe('readTable', () => {
 		expect(document.origin).toBe('pdf');
 		expect(document.pages).toHaveLength(1);
 	});
+
+	it('keeps the rows in their pages, laid out like the cut', async () => {
+		// Flattening loses which page a row came from, and some documents cannot
+		// be read without it: a page printing two tables side by side carries two
+		// runs of headings, and walking the rows in order alternates between them.
+		const bundle = new File(
+			[
+				pdfWithPages([
+					[at('a', 50, 700), at('b', 200, 700)],
+					[at('c', 50, 700), at('d', 200, 700)]
+				])
+			],
+			'lot.pdf',
+			{ type: 'application/pdf' }
+		);
+		const { rows, pages, boundaries } = await readTable(bundle);
+		expect(pages).toEqual([[['a', 'b']], [['c', 'd']]]);
+		expect(pages.flat()).toEqual(rows);
+		expect(boundaries).toHaveLength(pages.length);
+	});
 });
 
 describe('what readTable refuses to vouch for', () => {
@@ -111,6 +131,60 @@ describe('what readTable refuses to vouch for', () => {
 		expect((await readTable(bundle)).warnings.join(' ')).toMatch(
 			/pages disagree on how many columns/
 		);
+	});
+
+	it('names each doubt, so a program does not match English to act on it', async () => {
+		const sparse = pdf([
+			at('a', 50, 700),
+			at('b', 200, 700),
+			at('rare', 400, 700),
+			at('c', 50, 680),
+			at('d', 200, 680),
+			at('e', 50, 660),
+			at('f', 200, 660),
+			at('g', 50, 640),
+			at('h', 200, 640),
+			at('i', 50, 620),
+			at('j', 200, 620),
+			at('k', 50, 600),
+			at('l', 200, 600)
+		]);
+		const { findings } = await readTable(sparse);
+		expect(findings).toHaveLength(1);
+		expect(findings[0].code).toBe('thin-column');
+		expect(findings[0].page).toBe(1);
+		expect(findings[0].column).toBe(2);
+		expect(findings[0].shareFilled).toBeCloseTo(1 / 6);
+	});
+
+	it('says the same thing twice on purpose: a sentence and a code', async () => {
+		// The sentences are derived from the findings rather than written twice,
+		// so a message can never say one thing and a code another.
+		const prose = pdf([at('one whole sentence with no column', 50, 700)]);
+		const { warnings, findings } = await readTable(prose);
+		expect(findings.map((finding) => finding.code)).toEqual(['no-column']);
+		expect(warnings).toEqual(findings.map((finding) => finding.message));
+	});
+
+	it('names a blank page and the pages that disagree, both by code', async () => {
+		const bundle = new File(
+			[
+				pdfWithPages([
+					[at('a', 50, 700), at('b', 200, 700), at('c', 400, 700)],
+					[],
+					[at('d', 50, 700), at('e', 200, 700)]
+				])
+			],
+			'lot.pdf',
+			{ type: 'application/pdf' }
+		);
+		const { findings } = await readTable(bundle);
+		expect(findings.map((finding) => finding.code)).toContain('blank-page');
+		expect(findings.find((finding) => finding.code === 'blank-page')?.page).toBe(2);
+		// A doubt about the whole document names no page, and says so by leaving
+		// it out rather than by inventing a zero.
+		const disagree = findings.find((finding) => finding.code === 'pages-disagree');
+		expect(disagree?.page).toBeUndefined();
 	});
 
 	it('a table with no warning is not a promise of correctness', async () => {
