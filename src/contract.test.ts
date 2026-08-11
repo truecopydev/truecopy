@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { discrepancyOf, readDocument, type Reader } from './contract.js';
+import { checkExtraction, discrepancyOf, readDocument, type Reader } from './contract.js';
 import type { Document } from './document.js';
 import { openDocument } from './open.js';
 import { documentFromText, pageFrom, documentFrom } from './layout.js';
@@ -293,5 +293,124 @@ describe('a positioned document', () => {
 			'note.pdf'
 		);
 		expect(readDocument(document, toy).reading.records).toEqual([{ label: 'Supplies', value: 4 }]);
+	});
+});
+
+describe('checkExtraction', () => {
+	/*
+	 * The rows may come from anywhere - a reader, a spreadsheet, a model handed
+	 * the PDF and asked for a table. Nothing here asks where they came from, and
+	 * that is precisely why the same check applies to all three.
+	 */
+	const page = documentFromText(
+		['CARTE 12,40', 'VIREMENT 750,00', 'PRELEVEMENT 68,00', 'TOTAL 830,40'].join('\n'),
+		'statement.txt'
+	);
+	const rows = [
+		{ label: 'CARTE', amount: 12.4 },
+		{ label: 'VIREMENT', amount: 750 },
+		{ label: 'PRELEVEMENT', amount: 68 }
+	];
+	const extraction = {
+		records: rows,
+		amountOf: (row: { amount: number }) => row.amount,
+		declared: [830.4],
+		unit: 'EUR'
+	};
+
+	it('reads rows that land on what the document declares', () => {
+		const result = checkExtraction(page, extraction);
+		expect(result.verdict).toBe('read');
+		expect(result.discrepancy?.amount).toBe(0);
+	});
+
+	it('rounds to the document precision, so a float residue is not a discrepancy', () => {
+		// `discrepancy` compares a float subtraction against exactly zero. Left
+		// unrounded, a reading that is right to the cent comes back as
+		// needs-review, and a check that cries wolf is a check nobody reads.
+		const cents = documentFromText(['A 0,10', 'B 0,20', 'TOTAL 0,30'].join('\n'), 'cents.txt');
+		const halves = [{ amount: 0.1 }, { amount: 0.2 }];
+		expect(halves.reduce((total, row) => total + row.amount, 0)).not.toBe(0.3);
+		const result = checkExtraction(cents, {
+			records: halves,
+			amountOf: (row: { amount: number }) => row.amount,
+			declared: [0.3],
+			unit: 'EUR'
+		});
+		expect(result.verdict).toBe('read');
+	});
+
+	it('does not let a reading that contradicts its document come back as read', () => {
+		const invented = { ...extraction, records: [...rows, { label: 'INVENTED', amount: 99 }] };
+		const result = checkExtraction(page, invented);
+		expect(result.verdict).toBe('needs-review');
+		expect(result.discrepancy?.amount).toBe(99);
+	});
+
+	it('flags a row carrying a figure the document does not contain anywhere', () => {
+		const invented = { ...extraction, records: [...rows, { label: 'INVENTED', amount: 99 }] };
+		expect(checkExtraction(page, invented).rowsToReview).toEqual([
+			{ raw: '99', fields: { amount: 99 } }
+		]);
+	});
+
+	it('shows a flagged row the way the caller words it', () => {
+		const invented = {
+			...extraction,
+			records: [{ label: 'INVENTED', amount: 99 }],
+			amountOf: (row: { label: string; amount: number }) => row.amount,
+			describe: (row: { label: string; amount: number }) => row.label
+		};
+		expect(checkExtraction(page, invented).rowsToReview[0].raw).toBe('INVENTED');
+	});
+
+	it('counts a figure the document prints with the opposite sign as written', () => {
+		const signed = {
+			...extraction,
+			records: [{ label: 'CARTE', amount: -12.4 }],
+			declared: [-12.4]
+		};
+		expect(checkExtraction(page, signed).rowsToReview).toEqual([]);
+	});
+
+	it('reads a figure with the decimal mark the document itself uses', () => {
+		// English notation on the page: without it, 48 275 477,16 is nowhere in
+		// this document and every row would be flagged.
+		const english = documentFromText('TOTAL ACTIF NET 48,275,477.16', 'report.txt');
+		const result = checkExtraction(english, {
+			records: [{ amount: 48275477.16 }],
+			amountOf: (row: { amount: number }) => row.amount,
+			declared: [48275477.16],
+			unit: 'EUR'
+		});
+		expect(result.rowsToReview).toEqual([]);
+		expect(result.verdict).toBe('read');
+	});
+
+	it('says out loud that the caller named nothing to check against', () => {
+		// An empty list is not a pass. The reading is not contradicted because
+		// nothing was compared, and the result says so in as many words.
+		const result = checkExtraction(page, { ...extraction, declared: [] });
+		expect(result.selfCheck).toEqual({
+			nothing: 'the caller named no figure this document declares about itself'
+		});
+		expect(result.discrepancy).toBeNull();
+	});
+
+	it('refuses an extraction that carries no row at all', () => {
+		const result = checkExtraction(page, { ...extraction, records: [] });
+		expect(result.verdict).toBe('refused');
+	});
+
+	it('takes the decimals the caller says the document prints', () => {
+		const grams = documentFromText('TOTAL 1,005', 'weights.txt');
+		const result = checkExtraction(grams, {
+			records: [{ amount: 0.5025 }, { amount: 0.5025 }],
+			amountOf: (row: { amount: number }) => row.amount,
+			declared: [1.005],
+			unit: 'kg',
+			decimals: 3
+		});
+		expect(result.verdict).toBe('read');
 	});
 });
