@@ -8,7 +8,7 @@ import {
 	type OpenOptions,
 	type PdfEngine
 } from './open.js';
-import { pdfWithText } from './kit.js';
+import { pdfWithPages, pdfWithText } from './kit.js';
 
 describe('withDeadline', () => {
 	it('lets a read that finishes through', async () => {
@@ -74,6 +74,38 @@ describe('openDocument', () => {
 			maximumPages: 1
 		});
 		expect(document.pages).toHaveLength(1);
+	});
+
+	/*
+	 * A cap that only cuts at the end is the wrong end of a long document: an
+	 * annual report prints its portfolio from page 313, and the first forty pages
+	 * are a cover and an auditor's opinion. Opening a page is what a reading
+	 * costs, so a page nobody wants is better never opened.
+	 */
+	const threePages = (): File =>
+		new File(
+			[
+				pdfWithPages([
+					[{ word: 'cover', x: 10, y: 700 }],
+					[{ word: 'portfolio', x: 10, y: 700 }],
+					[{ word: 'notes', x: 10, y: 700 }]
+				])
+			],
+			'report.pdf',
+			{ type: 'application/pdf' }
+		);
+
+	it('opens only the pages asked for, and they keep their own numbers', async () => {
+		const document = await openDocument(threePages(), { keepPage: (page) => page >= 2 });
+		expect(document.pages.map((page) => page.pageNumber)).toEqual([2, 3]);
+	});
+
+	it('counts the pages it opened against the cap, never the ones it skipped', async () => {
+		const document = await openDocument(threePages(), {
+			keepPage: (page) => page >= 2,
+			maximumPages: 1
+		});
+		expect(document.pages.map((page) => page.pageNumber)).toEqual([2]);
 	});
 });
 

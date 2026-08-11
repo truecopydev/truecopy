@@ -99,6 +99,21 @@ export interface OpenOptions extends Partial<Limits> {
 	 * Neither choice is right for both, so neither is made here.
 	 */
 	pdfjs?: PdfEngine;
+	/**
+	 * Which pages to open at all. Left out, every page up to `maximumPages`.
+	 *
+	 * `maximumPages` cuts at the END and only there, which is the wrong end of a
+	 * long document: an annual report prints its portfolio from page 313 to page
+	 * 1427, and reading the first 40 pages of it reads a cover, a letter and an
+	 * auditor's opinion. Opening the engine on a page is what a reading costs -
+	 * measured at 99 % of it on a 381-page report - so a page nobody wants is
+	 * better not opened than opened and dropped.
+	 *
+	 * The pages that are kept keep the number the document gives them: a finding
+	 * about page 313 says 313, whether or not page 312 was opened. `maximumPages`
+	 * then counts the pages OPENED, so it still bounds the work.
+	 */
+	keepPage?: (pageNumber: number) => boolean;
 }
 
 /**
@@ -269,8 +284,13 @@ async function pagesFromPdf(
 	const pdf = await task.promise;
 	try {
 		const pages: TextPage[] = [];
-		const count = Math.min(pdf.numPages, limits.maximumPages);
-		for (let pageNumber = 1; pageNumber <= count; pageNumber++) {
+		const wanted = options.keepPage ?? (() => true);
+		// The cap counts the pages OPENED, so it bounds the work whichever pages
+		// are asked for. Skipping is what costs nothing: a page that is never
+		// opened is never laid out, and that is the whole saving.
+		for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+			if (pages.length >= limits.maximumPages) break;
+			if (!wanted(pageNumber)) continue;
 			const page = await pdf.getPage(pageNumber);
 			const viewport = page.getViewport({ scale: 1 });
 			const content = await page.getTextContent();
