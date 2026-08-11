@@ -26,14 +26,44 @@ const HELP = `truecopy - see what a reading of your document decides
 
   npx truecopy <file>            the cut, the columns, and what is not vouched for
   npx truecopy explain <file>    the same
+  npx truecopy --json <file>     the same reading as data, for a program
 
   Any file it can open: a PDF, a CSV, a paste saved to disk.
 `;
 
-/** The arguments, with the optional verb dropped. One verb, so it is optional. */
+/** The arguments, with the verb and the flags dropped. One verb, so it is
+ *  optional; one flag, so it is a word and not a parser. */
 function fileFrom(argv) {
-	const args = argv.filter((arg) => arg !== 'explain');
+	const args = argv.filter((arg) => arg !== 'explain' && arg !== '--json');
 	return args.length === 1 ? args[0] : null;
+}
+
+/**
+ * The same reading, as data.
+ *
+ * A person reads the sentences above; a program - or an agent - branches on the
+ * code, the page and the column. Handing it the prose and asking it to match
+ * English is how a reading gets acted on wrong, and this library exists to stop
+ * exactly that. The document itself is not written out: it carries every
+ * positioned item on every page, which is megabytes nobody asked for.
+ */
+function asJson(table) {
+	const { document, rows, pages, boundaries, findings } = table;
+	return JSON.stringify(
+		{
+			file: document.name,
+			origin: document.origin,
+			rows,
+			pages: document.pages.map((page, index) => ({
+				number: page.pageNumber,
+				rows: pages[index],
+				boundaries: boundaries[index]
+			})),
+			findings
+		},
+		null,
+		'\t'
+	);
 }
 
 async function run(argv) {
@@ -48,10 +78,22 @@ async function run(argv) {
 		type: path.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'text/plain'
 	});
 
-	const { document, warnings, boundaries } = await readTable(file);
-	// The cut readTable actually used, so the heading and the cells agree.
+	const table = await readTable(file);
+	if (argv.includes('--json')) {
+		process.stdout.write(`${asJson(table)}\n`);
+		return 0;
+	}
+
+	const { document, warnings, boundaries } = table;
+	/*
+	 * The cut readTable actually used, so the heading and the cells agree. Keyed
+	 * on the page's position in the reading and NOT on its number: they are the
+	 * same only when every page was opened, and `keepPage` is precisely the
+	 * option that makes them differ.
+	 */
+	const cuts = new Map(document.pages.map((page, index) => [page.pageNumber, boundaries[index]]));
 	const explained = explainDocument(document, {
-		boundariesOf: (page) => boundaries[page.pageNumber - 1]
+		boundariesOf: (page) => cuts.get(page.pageNumber)
 	});
 	process.stdout.write(`${explained}\n`);
 

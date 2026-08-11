@@ -86,6 +86,27 @@ describe('npx truecopy', () => {
 		expect(run('--help').code).toBe(0);
 	});
 
+	it('hands the same reading to a program, as data', () => {
+		// A program that has to branch on a doubt should not be matching English
+		// prose to do it, and a message rewritten for clarity should not break it.
+		const { out, code } = run('--json', STATEMENT);
+		expect(code).toBe(0);
+		const read = JSON.parse(out);
+		expect(read.file).toBe('statement.pdf');
+		expect(read.rows[0]).toEqual(['02/05/2026', 'CARTE AMAZON', '12,40']);
+		expect(read.pages[0].number).toBe(1);
+		expect(read.pages[0].rows).toEqual(read.rows);
+		expect(read.pages[0].boundaries).toHaveLength(2);
+		expect(read.findings).toEqual([]);
+	});
+
+	it('names each doubt in the data, and never only in a sentence', () => {
+		const prose = onDisk('prose.txt', 'one line of prose\nand another one');
+		const read = JSON.parse(run('--json', prose).out);
+		expect(read.findings.map((finding) => finding.code)).toEqual(['no-column']);
+		expect(read.findings[0].message).toContain('every row came back whole');
+	});
+
 	it('says which file it could not open', () => {
 		const { out, code } = run('nowhere/at/all.pdf');
 		expect(code).toBe(1);
