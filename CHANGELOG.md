@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-08-11
+
 ### Added
 
 - **Every doubt is named, not only worded.** `readTable` now returns `findings`
