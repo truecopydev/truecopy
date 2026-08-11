@@ -65,7 +65,7 @@ const IN_NUMBER = " \\t\\u00A0\\u202F\\u2009'";
 export function numberToken(decimals?: number): RegExp {
 	const fraction = decimals === undefined ? `(?:[.,]\\d+)?` : `[.,]\\d{${decimals}}(?!\\d)`;
 	return new RegExp(
-		`(?<![\\d.,/])[-+]?\\(?[${IN_NUMBER}]{0,12}(?:\\d{1,3}(?:[${IN_NUMBER}.]\\d{3})+|\\d+)${fraction}\\)?-?`
+		`(?<![\\d.,/])[-+]?\\(?[${IN_NUMBER}]{0,12}(?:\\d{1,3}(?:[${IN_NUMBER}.,]\\d{3})+|\\d+)${fraction}\\)?-?`
 	);
 }
 
@@ -122,20 +122,114 @@ function normaliseSeparators(text: string): string {
  *  carries a digit, so none of them survives into the reading. */
 const NOT_IN_NUMBER = /[€$£¥\s']/g;
 
+/** Which mark a document puts before its decimals. */
+export type DecimalMark = ',' | '.';
+
+/** The separators rewritten against a mark the caller already knows is the
+ *  decimal one. Nothing is counted and nothing is guessed: the other mark groups
+ *  thousands, whatever it looks like on this particular token. */
+function normaliseAgainst(text: string, decimal: DecimalMark): string {
+	const thousands = decimal === ',' ? '.' : ',';
+	return text.split(thousands).join('').replace(decimal, '.');
+}
+
 /**
  * The number a token holds, or `null` when it holds none.
  *
  * Null and never a guess: on figures that a person will act upon, an honest
  * refusal costs a correction and a wrong reading costs a decision.
+ *
+ * `decimal` settles what a token alone cannot. `1,234` is one thousand two
+ * hundred and thirty-four on a Luxembourg page and one point two three four on a
+ * Paris one, and no amount of looking at those five characters decides which -
+ * only the document does, through `decimalMarkOf`. Left out, the count below
+ * decides, which is right far more often than not and is still a guess.
+ *
+ * `null` is accepted and means the same as leaving it out, so that the two
+ * compose without a word in between: `readNumber(raw, decimalMarkOf(text))` is
+ * the whole idea, and a document that settled nothing must not force the caller
+ * to write it differently.
  */
-export function readNumber(raw: string): number | null {
+export function readNumber(raw: string, decimal?: DecimalMark | null): number | null {
 	if (!raw) return null;
 	const { negative, body } = stripSign(raw.trim());
 	const digits = body.replace(NOT_IN_NUMBER, '');
 	if (!/\d/.test(digits)) return null;
-	const value = Number.parseFloat(normaliseSeparators(digits));
+	const normalised = decimal ? normaliseAgainst(digits, decimal) : normaliseSeparators(digits);
+	const value = Number.parseFloat(normalised);
 	if (!Number.isFinite(value)) return null;
 	return negative ? -value : value;
+}
+
+/** A group of thousands is exactly three digits, always. Any other run behind a
+ *  mark makes that mark the decimal one. */
+const THOUSANDS_GROUP = 3;
+
+/** A run of digits and the marks inside it. Not `numberToken`: that one reads
+ *  ONE number and stops at the second comma of `48,275,477.16`, which is exactly
+ *  the token this question needs whole. */
+const DIGIT_RUN = /\d[\d.,]*\d/g;
+
+/**
+ * What one run says about which mark is the decimal one, or null when it says
+ * nothing.
+ *
+ * Both marks: the rightmost is the decimal one, in every notation there is. One
+ * mark repeated: it groups thousands, but only if every group it cuts is exactly
+ * three digits - `31.12.2025` is a date and `1.0.1` is a version, and neither
+ * votes. One mark once: decimal, unless what follows is exactly three digits, in
+ * which case the run is `1,234` and answers nothing at all.
+ */
+function markOf(run: string): DecimalMark | null {
+	const groups = (mark: DecimalMark): string[] => run.split(mark).slice(1);
+	const commas = groups(',');
+	const dots = groups('.');
+	if (commas.length > 0 && dots.length > 0) {
+		return run.lastIndexOf(',') > run.lastIndexOf('.') ? ',' : '.';
+	}
+	if (commas.length > 0) return decidedBy(commas, ',', '.');
+	if (dots.length > 0) return decidedBy(dots, '.', ',');
+	return null;
+}
+
+/** What the groups one mark cuts say about it: repeated over threes it groups
+ *  thousands, so the decimal mark is the other one; used once before anything
+ *  but three digits it is the decimal mark itself; anything else says nothing. */
+function decidedBy(cut: string[], mark: DecimalMark, other: DecimalMark): DecimalMark | null {
+	const grouped = cut.every((group) => group.length === THOUSANDS_GROUP);
+	if (cut.length > 1) return grouped ? other : null;
+	return grouped ? null : mark;
+}
+
+/**
+ * Which mark this document puts before its decimals, or `null` when nothing in
+ * it settles the question.
+ *
+ * The same question as the column cut, asked of numbers: a page is read by what
+ * RECURS on it, not by what one token looks like. A single `1,234` is unreadable
+ * by construction, but a document that also writes `1.234,56` has answered, and
+ * one that writes `1,234,567` has answered the other way.
+ *
+ * Three kinds of evidence, none of which knows what a number means:
+ * a token carrying both marks (the rightmost is the decimal one), a mark used
+ * more than once (it groups thousands), and a mark followed by anything but
+ * three digits (a group of thousands is exactly three).
+ *
+ * `null` is an answer, and the honest one: a caller that gets it should read the
+ * document's own words - a report translated into another language keeps its
+ * figures and changes their punctuation, and guessing there corrupts them
+ * silently.
+ */
+export function decimalMarkOf(text: string): DecimalMark | null {
+	let comma = 0;
+	let dot = 0;
+	for (const match of text.matchAll(DIGIT_RUN)) {
+		const mark = markOf(match[0]);
+		if (mark === ',') comma += 1;
+		if (mark === '.') dot += 1;
+	}
+	if (comma === dot) return null;
+	return comma > dot ? ',' : '.';
 }
 
 export interface FoundNumber {
