@@ -10,8 +10,9 @@ never learns what your documents mean: you name what a cell IS, it counts,
 divides and compares. TypeScript, ESM, Node 20+, MIT, runs in a browser.
 
 ```sh
-npm install truecopy          # pdfjs-dist is an optional peer, PDFs only
-npx truecopy a-document.pdf   # try it on a real file before writing any code
+npm install truecopy                 # pdfjs-dist is an optional peer, PDFs only
+npx truecopy a-document.pdf          # try it on a real file before writing any code
+npx truecopy --json a-document.pdf   # the same reading as data: rows, pages, cut, findings
 ```
 
 ## Decide first whether this is the right tool
@@ -40,7 +41,7 @@ not gaps:
 ```ts
 import { readTable } from 'truecopy';
 
-const { rows, boundaries, warnings, document } = await readTable(file);
+const { rows, pages, boundaries, warnings, findings, document } = await readTable(file);
 ```
 
 One engine, three rulers, and the reading says which one it used: a PDF cuts on
@@ -52,6 +53,21 @@ half-parsed.
 reading is right.** It means nothing looked wrong from the shape of the page.
 Never phrase it to a user as "the extraction succeeded". Everything below exists
 because of that distinction.
+
+Three fields decide how you write the rest, and each has a wrong first instinct:
+
+- **`findings`, never the sentences.** It is `warnings` with a `code` on it -
+  `blank-page`, `no-column`, `thin-column`, `pages-disagree` - plus the `page`
+  and `column` it is about. Branch on the code. Matching the prose is what
+  breaks the day a message is reworded.
+- **`pages`, when a page prints more than one table.** `rows` is flat and equals
+  `pages.flat()`, which loses which page a row came from. A page printing two
+  tables side by side carries two runs of headings, and walking the rows in
+  order alternates between them: a row silently inherits the heading of the
+  other column. `pages[i]` and `boundaries[i]` are the same page.
+- **`keepPage`, on a long document.** `openDocument(file, { keepPage: (n) => n >= 313 })`.
+  Opening a page is 99 % of what a reading costs, `maximumPages` cuts at the end
+  only, and the kept pages keep their own numbers.
 
 ## When the rows have to be trusted
 
@@ -82,34 +98,41 @@ comes back as `read`.**
 ## Checking rows that came from a model
 
 Nothing in the pipeline asks where a reading came from, so rows an LLM returned
-go through the same check. Have `read` hand back the model's rows, and let
-`selfCheck` confront their sum with what the document declares.
+go through the same check as rows a reader produced. That is one call:
 
 ```ts
-const written = new Set(findNumbers(document.text, 2).map((found) => found.value));
+import { checkExtraction, openDocument } from 'truecopy';
 
-const result = readDocument(document, {
-	read: () => ({ records: rowsFromTheModel, header: { declared } }),
-	selfCheck: (_document, reading) => ({
-		declared: [reading.header.declared],
-		// ROUND to the document's precision. `discrepancy` is a float subtraction
-		// compared against exactly zero, so a cent-sized residue turns a correct
-		// reading into `needs-review`.
-		read: Math.round(reading.records.reduce((sum, row) => sum + row.amount, 0) * 100) / 100,
-		unit: 'EUR'
-	}),
-	// The rows a person should confirm: those carrying a figure the document
-	// does not contain anywhere. Catches a value invented outright.
-	rowsToReview: (_document, reading) =>
-		reading.records
-			.filter((row) => !written.has(row.amount) && !written.has(-row.amount))
-			.map((row) => ({ raw: row.label, fields: { ...row } }))
+const document = await openDocument(file);
+const result = checkExtraction(document, {
+	records: rowsFromTheModel,
+	amountOf: (row) => row.amount,
+	// What the DOCUMENT declares about the same total, read from the document.
+	// An empty list is allowed and is not a pass: the result then says, in as
+	// many words, that nothing was checked against.
+	declared: [declaredTotal],
+	unit: 'EUR',
+	describe: (row) => row.label
 });
+
+result.verdict; // 'read' | 'needs-review' | 'refused'
+result.discrepancy; // what is missing, against what the document announced
+result.rowsToReview; // rows carrying a figure the document contains NOWHERE
 ```
+
+It does two things that are easy to get wrong by hand: it rounds the sum to the
+document's precision, because `discrepancy` compares a float subtraction against
+exactly zero and a cent-sized residue turns a correct reading into
+`needs-review`; and it reads the document's figures with the document's own
+decimal mark, so a page printing `48,275,477.16` in a French report is not
+treated as containing none of the numbers on it.
 
 This does not compare the model against the truth. It compares it against what
 the document says about itself, which is the only check that can call a reading
 wrong rather than odd. Two errors that cancel out still pass.
+
+Reach for `readDocument` above instead when the reading is yours to write and
+has to be repeated: it takes the three methods and drives them.
 
 ## Traps that cost an afternoon
 
@@ -119,6 +142,11 @@ wrong rather than odd. Two errors that cancel out still pass.
 - `findRowAnomalies` returns `null` below `minimumRows` (5). Too few rows to
   learn anything, and saying nothing beats learning from nothing. Handle the
   `null`.
+- `readNumber('1,234')` guesses, and a guess is what it is: 1234 in Luxembourg,
+  1.234 in Paris. On a whole document, ask it once - `decimalMarkOf(document.text)` -
+  and pass the answer, `null` included. A report translated into another
+  language keeps its figures and changes their punctuation, and that is the case
+  where guessing corrupts every amount at once.
 - The pdf.js worker URL is NOT resolved for you. Pass `workerSrc` in a browser,
   or leave it out and pdf.js runs inline, which is what makes the chain testable
   in Node.

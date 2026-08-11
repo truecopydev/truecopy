@@ -9,6 +9,62 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **Every doubt is named, not only worded.** `readTable` now returns `findings`
+  alongside `warnings`: the same list in two shapes, one sentence and one
+  `code` - `blank-page`, `no-column`, `thin-column`, `pages-disagree` - with the
+  page and the column it is about. `warnings` is derived from it, so a message
+  and a code can never say different things. A program that has to act on a
+  doubt was matching English prose to do it, and a message rewritten for clarity
+  broke it: for a library whose product is the refusal, the refusal was the one
+  thing not machine-readable.
+- **`readTable` keeps the rows in their pages.** `pages` holds the same rows,
+  laid out exactly like `boundaries`, so `pages[i]` and `boundaries[i]` are one
+  page. `rows` is still the flat list and is exactly `pages.flat()`. Flattening
+  loses which page a row came from, and some documents cannot be read without
+  it: a page printing two tables side by side carries two runs of headings, and
+  walking the rows in order alternates between them - a position inherits the
+  heading of the other column, silently.
+- **`keepPage`: which pages to open at all.** `maximumPages` cuts at the end and
+  only there, which is the wrong end of a long document: an annual report prints
+  its portfolio from page 313 to page 1427, and reading its first forty pages
+  reads a cover and an auditor's opinion. Opening the engine on a page is what a
+  reading costs - measured at 99 % of it on a 381-page report, against 0,02 s
+  for the cut and 0,01 s for everything downstream. Pages that are kept keep the
+  number the document gives them, and `maximumPages` now counts the pages
+  opened, so it still bounds the work.
+- **`decimalMarkOf`: the notation read off the document instead of guessed off a
+  token.** `1,234` is one thousand two hundred and thirty-four in Luxembourg and
+  one point two three four in Paris, and no amount of looking at those five
+  characters decides which. The same question as the column cut, asked of
+  numbers: what recurs over the document decides. Three kinds of evidence, none
+  of which knows what a number means - a run carrying both marks, a mark
+  repeated over groups of exactly three, a mark followed by anything but three
+  digits. `null` when nothing settles it, and `readNumber(raw, decimalMarkOf(text))`
+  composes because `readNumber` now takes that answer, `null` included.
+- **`checkExtraction`: rows checked against their document in one call.** The
+  rows may come from anywhere - a reader written against this contract, a
+  spreadsheet, or a model handed the PDF and asked for a table. It rounds the
+  sum to the document's precision, because `discrepancy` compares a float
+  subtraction against exactly zero and a cent-sized residue turned a correct
+  reading into `needs-review`; and it flags every row carrying a figure that
+  appears nowhere in the document, read with the document's own decimal mark.
+  Writing this by hand was the twenty lines everybody wrote the same way.
+- **`npx truecopy --json <file>`.** The same reading as data: the rows, the rows
+  per page, the cut, and the findings with their codes. The command printed
+  prose only, so trying the library from an agent meant writing code first.
+
+### Fixed
+
+- **A number written with commas for its thousands was read truncated, in
+  silence.** `findNumbers('TOTAL 48,275,477.16')` returned 48 275: the token
+  pattern accepted a space or a dot between groups of three and not a comma, so
+  the match stopped at the second one. `readNumber` read the same string
+  correctly, which is what made it invisible. Any reading that ran over English
+  notation in running text moves with this, and it moves toward the number the
+  document prints.
+
 ## [1.0.1] - 2026-08-09
 
 ### Added

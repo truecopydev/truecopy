@@ -9,10 +9,13 @@ Install: `npm install truecopy` (Node 20+, ESM only; `pdfjs-dist` is an optional
 ## Try it with no code at all
 
 ```sh
-npx truecopy a-document.pdf
+npx truecopy a-document.pdf          # the cut, the columns, and what is not vouched for
+npx truecopy --json a-document.pdf   # the same reading as data, for a program
 ```
 
-Prints the cut, the columns, and what the reading could NOT vouch for.
+Prints the cut, the columns, and what the reading could NOT vouch for. With
+`--json`: the rows, the rows per page, the cut, and the findings with their
+codes - which is the whole reading, without writing a line of code first.
 
 ## The shortest thing that works
 
@@ -22,6 +25,10 @@ import { readTable } from 'truecopy';
 // No configuration at all. `warnings` says what could NOT be vouched for, and
 // an empty one is NOT a promise that the reading is right.
 const { rows, warnings } = await readTable(file);
+
+// The same doubts, named: branch on `code` and never on the sentence.
+const { findings } = await readTable(file);
+findings.filter((doubt) => doubt.code === 'thin-column'); // .page, .column, .shareFilled
 ```
 
 When the rows have to be TRUSTED, the pipeline below is how.
@@ -63,16 +70,17 @@ The one rule the pipeline enforces: **a reading that contradicts its document ne
 
 Each is also its own entry point (`truecopy/signature`), and the package is side-effect free.
 
-- `truecopy/table` - `readTable(file)` -> `{ rows, boundaries, warnings, document }`. The two-line path, no configuration.
+- `truecopy/table` - `readTable(file)` -> `{ rows, pages, boundaries, warnings, findings, document }`. The two-line path, no configuration. `rows` is flat and equals `pages.flat()`; `pages[i]` and `boundaries[i]` are the same page, which is what a document printing two tables side by side has to be read with. `findings` is `warnings` with a `Doubt` code on it.
 - `truecopy/layout` - the pure geometry: `cellsOf`, `placesOf` (WHERE each cell is, laid out identically - a value that cannot be pointed at cannot be checked), `boundariesFromRecurrence` (keep only the x that come back row after row; the page-wide spread counts the letterhead as columns), `boundariesFromAnchors`, `columnBoundaries`, `columnAt`, `gapFor` (the column gap for a page's `CoordinateUnit`), `placeOf`, `rowToCells`, `rowsFrom`, `pageFrom`, `documentFrom`, `documentFromText`. No engine, no bytes, no clock.
-- `truecopy/open` - `openDocument`, `positionedItems`, `withDeadline`, `UnreadableDocument` (carries `reason`: `empty | too-big | no-text | too-slow | not-opened`, so YOUR application writes the sentence, in its own language)
-- `truecopy/notation` - `readNumber`, `findNumbers`, `isOnlyNumber`, `readDate`, `readLeadingDate`. How a page writes a figure, never what it means. `readNumber('27800.50')` is 27800.5, `readNumber('(123,45)')` is -123.45.
+- `truecopy/open` - `openDocument`, `positionedItems`, `withDeadline`, `UnreadableDocument` (carries `reason`: `empty | too-big | no-text | too-slow | not-opened | no-engine`, so YOUR application writes the sentence, in its own language). `keepPage: (page) => boolean` decides which pages are opened AT ALL: `maximumPages` cuts at the end, and opening a page is 99 % of what a reading costs.
+- `truecopy/notation` - `readNumber`, `decimalMarkOf`, `findNumbers`, `isOnlyNumber`, `readDate`, `readLeadingDate`. How a page writes a figure, never what it means. `readNumber('27800.50')` is 27800.5, `readNumber('(123,45)')` is -123.45. `decimalMarkOf(document.text)` learns which mark the document uses, the way the cut learns columns, and `readNumber(raw, decimalMarkOf(text))` composes: `1,234` is 1234 or 1.234 and only the document says which.
 - `truecopy/classify` - is this the KIND of document expected, with precedence (an IBAN settles it before the word "invoice" is looked at)
 - `truecopy/columns` - what each column contains, counted once
 - `truecopy/roles` - what each column IS, deduced from that
 - `truecopy/signature` - which rows break the table's own type signature
 - `truecopy/schema` - `validateWith` takes ANY Standard Schema (zod, valibot, arktype), so a row type declared there is not declared again. `schemaOf` + `RecordOf<typeof schema>`: one declaration yields the check AND the record type. A schema is pure data, so it survives JSON.
 - `truecopy/explain` - `explainDocument(document, { signature, roles })` returns TEXT showing the cut, what each column holds, and which rows were dropped and why. Reach for this first when a reading comes out wrong.
+- `truecopy/contract` - `readDocument` (the reader you write), and `checkExtraction({ records, amountOf, declared, unit })` for rows that already exist, whoever produced them. Same verdict, one call: it rounds the sum to the document's precision and flags every row carrying a figure the document does not contain anywhere.
 - `truecopy/kit` - `checkContract` + `contractReport`: six rules a reading must hold, run in your own test suite against a corpus of your own.
 
 ## What it will never do
