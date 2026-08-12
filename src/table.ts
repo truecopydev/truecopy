@@ -25,7 +25,7 @@ import type { Document, TextPage } from './document.js';
 import { openDocument, type OpenOptions } from './open.js';
 import { boundariesFromRecurrence, cellsOf, gapFor } from './layout.js';
 import { cellAt, columnCount, profileColumns } from './columns.js';
-import { findNumbers } from './notation.js';
+import { decimalMarkOf, findNumbers, type DecimalMark } from './notation.js';
 
 /**
  * What a reading could not vouch for, named rather than only worded.
@@ -164,26 +164,33 @@ const DOUBLED_ABOVE = 0.5;
  * The cell must hold nothing but numbers and separators, so an address carrying
  * a number and a street name is not a merged pair.
  *
- * And every number in it must carry its own decimal mark. Without that, two
- * integers separated by a space are indistinguishable from ONE number, the space
- * being exactly what French notation puts between thousands. Measured: the loose
- * rule fires on 48 % of a column that is perfectly well cut, the strict one on
- * none of it, and on 93 % of the column that really is two.
+ * And every number in it must carry a fraction IN THE DOCUMENT'S OWN MARK.
+ * Without that, two integers separated by a space are indistinguishable from ONE
+ * number, the space being exactly what French notation puts between thousands.
+ * Measured: the loose rule fires on 48 % of a column that is perfectly well cut,
+ * the strict one on none of it, and on 93 % of the column that really is two.
+ *
+ * The mark has to be the document's and not "any dot or comma", which is the
+ * same trap one field over: under English notation `1,234` is a plain thousands
+ * integer, so a mark-agnostic test would call an accidentally split
+ * comma-grouped column merged - exactly the failure this condition exists to
+ * rule out, moved to another notation.
  */
-function holdsTwoValues(cell: string): boolean {
+function holdsTwoValues(cell: string, mark: DecimalMark): boolean {
+	const fraction = mark === ',' ? /,\d/ : /\.\d/;
 	const found = findNumbers(cell);
 	if (found.length < 2) return false;
-	if (!found.every((number) => /[.,]\d/.test(number.raw))) return false;
+	if (!found.every((number) => fraction.test(number.raw))) return false;
 	let rest = cell;
 	for (const number of found) rest = rest.replace(number.raw, ' ');
 	return /^[\s.,;:/-]*$/.test(rest);
 }
 
-function mergedColumns(page: TextPage, rows: string[][]): Finding[] {
+function mergedColumns(page: TextPage, rows: string[][], mark: DecimalMark): Finding[] {
 	const findings: Finding[] = [];
 	for (let column = 0; column < columnCount(rows); column += 1) {
 		const filled = rows.map((row) => cellAt(row, column)).filter((cell) => cell !== '');
-		const doubled = filled.filter(holdsTwoValues).length;
+		const doubled = filled.filter((cell) => holdsTwoValues(cell, mark)).length;
 		// `Math.max` rather than a guard on an empty column: the guard is a branch
 		// no page reaches, and a branch no test can reach is a branch nobody reads.
 		const share = doubled / Math.max(filled.length, 1);
@@ -201,7 +208,12 @@ function mergedColumns(page: TextPage, rows: string[][]): Finding[] {
 	return findings;
 }
 
-function complainAbout(page: TextPage, rows: string[][], cut: number[]): Finding[] {
+function complainAbout(
+	page: TextPage,
+	rows: string[][],
+	cut: number[],
+	mark: DecimalMark | null
+): Finding[] {
 	const where = `page ${page.pageNumber}`;
 	if (page.rows.length === 0) {
 		return [
@@ -225,7 +237,10 @@ function complainAbout(page: TextPage, rows: string[][], cut: number[]): Finding
 	}
 	// Both, because they are opposite failures and a page can carry each on a
 	// different column: one the cut invented, one it never separated.
-	return [...thinColumns(page, rows), ...mergedColumns(page, rows)];
+	// A document that settles no decimal mark gets no merged-column doubt: without
+	// it, a fraction cannot be told from a thousands group, so nothing here is
+	// CERTAIN and a doubt this library cannot substantiate is one it does not raise.
+	return [...thinColumns(page, rows), ...(mark === null ? [] : mergedColumns(page, rows, mark))];
 }
 
 /** Pages that were cut differently from the others. One page out of step is
@@ -257,6 +272,10 @@ function pagesOutOfStep(perPage: number[]): Finding[] {
  */
 export async function readTable(file: File, options: OpenOptions = {}): Promise<Table> {
 	const document = await openDocument(file, options);
+	// Read once, off the whole document, because that is what settles it: five
+	// characters do not say whether `1,234` is a thousand or a fraction, and a
+	// page that never writes a decimal borrows the answer from the rest.
+	const mark = decimalMarkOf(document.text);
 	const pages: string[][][] = [];
 	const findings: Finding[] = [];
 	const boundaries: number[][] = [];
@@ -273,7 +292,7 @@ export async function readTable(file: File, options: OpenOptions = {}): Promise<
 		const cells = cellsOf(page, cut);
 		boundaries.push(cut);
 		pages.push(cells);
-		findings.push(...complainAbout(page, cells, cut));
+		findings.push(...complainAbout(page, cells, cut, mark));
 		if (page.rows.length > 0) columnsPerPage.push(columnCount(cells));
 	}
 

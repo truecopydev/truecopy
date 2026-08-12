@@ -145,6 +145,45 @@ describe('what readTable refuses to vouch for', () => {
 		expect(findings.filter((finding) => finding.code === 'merged-column')).toEqual([]);
 	});
 
+	it('does not call a comma-grouped column merged, under English notation', async () => {
+		/*
+		 * The same trap one notation over, and the reason the mark comes from the
+		 * document rather than from a regular expression. Under English notation
+		 * `1,234` is a plain thousands integer, so a test for "any dot or comma
+		 * before a digit" would call an accidentally split comma-grouped column
+		 * merged - exactly the failure the decimal condition exists to rule out.
+		 */
+		const english = pdf([
+			at('a', 50, 700),
+			at('1,234 5,678', 200, 700),
+			at('b', 50, 680),
+			at('2,345 6,789', 200, 680),
+			at('c', 50, 660),
+			at('3,456 7,890', 200, 660),
+			// What settles the notation for the whole document: a decimal written
+			// the English way, which is what makes the commas above thousands.
+			at('total 9,876.54', 50, 620)
+		]);
+		const { findings } = await readTable(english);
+		expect(findings.filter((finding) => finding.code === 'merged-column')).toEqual([]);
+	});
+
+	it('raises no merged-column doubt when the document settles no decimal mark', async () => {
+		// A fraction cannot be told from a thousands group without one, so nothing
+		// here is CERTAIN - and a doubt this library cannot substantiate is one it
+		// does not raise.
+		const undecided = pdf([
+			at('a', 50, 700),
+			at('1,234 5,678', 200, 700),
+			at('b', 50, 680),
+			at('2,345 6,789', 200, 680),
+			at('c', 50, 660),
+			at('3,456 7,890', 200, 660)
+		]);
+		const { findings } = await readTable(undecided);
+		expect(findings.filter((finding) => finding.code === 'merged-column')).toEqual([]);
+	});
+
 	it('does not call an address a merged column', async () => {
 		// A cell holding a number and a word is one value with a name on it.
 		const address = pdf([
