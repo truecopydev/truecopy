@@ -274,10 +274,24 @@ function makeDate(year: number, monthIndex: number, day: number): Date | null {
 	return date;
 }
 
-/** Lower-case and stripped of its accents, so a table of month names does not
- *  have to carry every spelling of the same word. NFD splits a letter from its
- *  accent, and `\p{M}` is what an accent is. */
-const accentFree = (text: string): string =>
+/**
+ * Lower-case and stripped of its accents, so a table of month names does not
+ * have to carry every spelling of the same word. NFD splits a letter from its
+ * accent, and `\p{M}` is what an accent is.
+ *
+ * Exported because it is not only the month table's business. PDF producers
+ * disagree about accents, so any label read out of a document has to be folded
+ * before it is compared - the same typographic problem `decimalMarkOf` answers
+ * one field over, and no more about a domain than that one is. `\p{M}` and not
+ * a hand-written range: it covers the marks a Latin range misses, and does not
+ * need extending for the next alphabet.
+ *
+ * What it deliberately does not do is fold anything but accents. The eszett,
+ * the Turkish dotless i and the Nordic letters are DIFFERENT letters, and a
+ * caller who needs one folded knows something about its language that this
+ * library does not.
+ */
+export const accentFree = (text: string): string =>
 	text.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
 
 const dayMonth = (first: number, second: number, notation: Notation): [number, number] =>
