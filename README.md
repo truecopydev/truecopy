@@ -313,6 +313,7 @@ Each one is also its own entry point, so a project that wants one pays for one.
 | [`columns.ts`](src/columns.ts)     | `columns`    | what each column contains, counted once                                               |
 | [`roles.ts`](src/roles.ts)         | `roles`      | what each column is, deduced from that                                                |
 | [`records.ts`](src/records.ts)     | `records`    | which rows belong to the same record, when a printed row is not one                   |
+| [`labels.ts`](src/labels.ts)       | `labels`     | which cells could be the value a label announces, closest first                       |
 | [`signature.ts`](src/signature.ts) | `signature`  | which rows break the table's own type signature                                       |
 | [`schema.ts`](src/schema.ts)       | `schema`     | the fields, formats and count a reading must satisfy                                  |
 | [`explain.ts`](src/explain.ts)     | `explain`    | what all of the above decided, in words                                               |

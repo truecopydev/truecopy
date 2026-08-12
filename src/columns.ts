@@ -35,7 +35,14 @@ export interface ProfileOptions {
 
 const DEFAULT_SAMPLE_LIMIT = 200;
 
-export const cellAt = (row: string[], column: number): string => (row[column] ?? '').trim();
+/** One cell, trimmed, and empty rather than undefined past the end of the row.
+ *
+ *  `readonly` on the row so the newer mechanisms can call it: they take
+ *  `readonly (readonly string[])[]`, and a signature that only accepts a mutable
+ *  array made each of them re-derive this one line. Strictly wider - it accepts
+ *  what it accepted before and returns the same. */
+export const cellAt = (row: readonly string[], column: number): string =>
+	(row[column] ?? '').trim();
 
 export const columnCount = (rows: string[][]): number =>
 	rows.reduce((widest, row) => Math.max(widest, row.length), 0);

@@ -1,7 +1,7 @@
 /*
  * truecopy - a reading you can certify against the document it came from.
  *
- * Nine mechanisms, in the order a document meets them:
+ * Ten mechanisms, in the order a document meets them:
  *
  *   open       bytes -> pages -> rows, with the caps, the deadline, the release
  *   notation   how the page writes a number and a date, never what they mean
@@ -9,6 +9,7 @@
  *   columns    what each column contains, counted once
  *   roles      what each column is, deduced from that
  *   records    which rows belong to the same record, when a row is not one
+ *   labels     which cells could be the value a label announces
  *   signature  which rows break the table's own type signature
  *   schema     the fields, the formats, the count a reading must satisfy
  *   explain    what all of the above decided, in words, when it went wrong
@@ -90,6 +91,9 @@ export type {
 	RecordsOptions
 } from './records.js';
 export { recordsFrom, spineWidthOf } from './records.js';
+
+export type { Candidate, Cell, Labelled, LabelOptions, Look } from './labels.js';
+export { columnOfHeader, labelledValues } from './labels.js';
 
 export type { KindThreshold, SignatureOptions, RowAnomaly } from './signature.js';
 export { findRowAnomalies, sharesByKind, thresholdsFor } from './signature.js';

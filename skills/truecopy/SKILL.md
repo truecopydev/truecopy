@@ -101,6 +101,35 @@ nothing. Measured on two real documents: 185 records from 185 instalments with
 no cover-page row swallowed, and 61 records from 214 rows where a judged 65
 buildings live.
 
+## Finding the figure a document announces about itself
+
+`selfCheck` needs what the document declares, and that figure is rarely where
+you would put it: a heading with its amount to the right, a heading with prose
+and a form reference before its amount, a unit announced once in a column
+header.
+
+```ts
+import { labelledValues, columnOfHeader } from 'truecopy/labels';
+
+// Every label, with the cells that could be its value, CLOSEST FIRST.
+const found = labelledValues(rows, isTotal, isAmount);
+found[0].values.map((cell) => readNumber(cell.raw, mark)); // -> SelfCheck.declared
+
+// A unit announced once, in a header: the column its bare numbers live in.
+const surface = columnOfHeader(rows, (cell) => /\(en m2\)/i.test(cell));
+```
+
+- **`isLabel` and `isValue` are yours.** This library does not know a total from
+  a heading, and a list of words meaning "total" would be a domain shipped in a
+  parser.
+- **It hands back a LIST and will not pick.** That list is what
+  `SelfCheck.declared` takes, and `discrepancyOf` keeps the one that fits, so the
+  document decides instead of a rule about how far a number sits from a heading.
+- **A search stops at the next label**, which is not a detail: two headings
+  printed close together otherwise let the second one's figure count for the
+  first as well, and a doubled total refuses a reading that was right.
+- **`columnOfHeader` returns `null` when SEVERAL columns match**, not the first.
+
 ## When the rows have to be trusted
 
 `readDocument(document, reader)` returns

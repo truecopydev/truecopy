@@ -9,6 +9,38 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`labels`: which cells could be the value a label announces.** `contract.ts`
+  states the need in as many words and answered none of it - `SelfCheck.declared`
+  is a LIST because "a document may announce several candidate values when its
+  layout scattered a label from its number" - and three consumer applications
+  wrote the search separately: four lines under a heading, the first amount to
+  its right, a column index read out of a header cell. Same question, three
+  geometries, no domain word in any of them.
+
+  `labelledValues(rows, isLabel, isValue)` returns each label with the cells
+  that could be its value, **closest first**, walking the row and the column.
+  `columnOfHeader(rows, isHeader)` answers the third geometry and refuses when
+  several columns match, because two of them is exactly the document nobody
+  should read on a hunch.
+
+  It will not pick. Handing back one value would decide between two readings of
+  a layout, which is the plausible-but-wrong answer argued against everywhere
+  else here. The list feeds `SelfCheck.declared` and `discrepancyOf` keeps the
+  one that fits, so the document decides rather than a rule about how far a
+  number usually sits from its heading.
+
+  One rule costs a reading when it is missing, and it was met on a real pension
+  record: a search **stops at the next label**. Two headings printed close
+  together let the second one's figure count for the first as well - a doubled
+  total, a false proof, and a refusal on a reading that was right.
+
+  Unlike `records`, this one cannot be measured on the de-identified corpus: the
+  mask replaces every wording, and the wording is what a label IS. Its cases
+  come from the three consumers that met them, and its home for regression is
+  the synthetic corpus, where the meaning is chosen.
+
 ## [1.0.3] - 2026-08-12
 
 ### Added
