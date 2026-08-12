@@ -61,7 +61,8 @@ export {
 	numberToken,
 	readDate,
 	readLeadingDate,
-	readNumber
+	readNumber,
+	wellGrouped
 } from './notation.js';
 
 export type { RawPattern, CompileOptions } from './pattern.js';

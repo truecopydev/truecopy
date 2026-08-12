@@ -8,6 +8,7 @@ import {
 	readDate,
 	readLeadingDate,
 	readNumber,
+	wellGrouped,
 	type Notation
 } from './notation.js';
 
@@ -244,6 +245,48 @@ describe('decimalMarkOf', () => {
 		const page = 'TOTAL ACTIF NET 48,275,477.16 dont 1,234 parts';
 		expect(readNumber('1,234', decimalMarkOf(page))).toBe(1234);
 		expect(readNumber('27800.50', decimalMarkOf('nothing here settles it'))).toBe(27800.5);
+	});
+});
+
+describe('wellGrouped', () => {
+	it('accepts what a typesetter would write, and one group alone whatever its length', () => {
+		expect(wellGrouped('1 300 000', ',')).toBe(true);
+		expect(wellGrouped('106 236 000,00', ',')).toBe(true);
+		// A quantity is often printed with no separator at all.
+		expect(wellGrouped('1300000', ',')).toBe(true);
+		expect(wellGrouped('1,300,000.00', '.')).toBe(true);
+	});
+
+	it('refuses a group that no number starts with', () => {
+		/*
+		 * The reason this exists. `readNumber` throws separators away, so
+		 * `000 106 236 000,00` reads as a perfectly good hundred and six million
+		 * and a cut made there leaves 1 300 where the report prints 1 300 000.
+		 * The value still closes its sector, so no arithmetic catches it: a
+		 * quantity nothing cross-checks is where a wrong figure survives.
+		 */
+		expect(wellGrouped('000 106 236 000,00', ',')).toBe(false);
+		expect(wellGrouped('0300 000', ',')).toBe(false);
+		expect(wellGrouped('1 30 000', ',')).toBe(false);
+		expect(wellGrouped('12345 678', ',')).toBe(false);
+	});
+
+	it('reads the thousands mark off the decimal one it is given', () => {
+		// French groups with a space and decimals with a comma; English does both
+		// with the other pair, and one answer settles both.
+		expect(wellGrouped('1,300,000.00', ',')).toBe(false);
+		expect(wellGrouped('1 300 000,00', '.')).toBe(false);
+	});
+
+	it('says no to nothing at all, and to what is not a number', () => {
+		expect(wellGrouped('', ',')).toBe(false);
+		expect(wellGrouped('   ', ',')).toBe(false);
+		expect(wellGrouped(',50', ',')).toBe(false);
+		expect(wellGrouped('-', ',')).toBe(false);
+		// Two decimal marks is not a number, and calling its grouping good would
+		// pass exactly the ambiguity this refuses.
+		expect(wellGrouped('1,300,000.00', ',')).toBe(false);
+		expect(wellGrouped('1 300,ab', ',')).toBe(false);
 	});
 });
 

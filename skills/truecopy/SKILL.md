@@ -57,9 +57,14 @@ because of that distinction.
 Three fields decide how you write the rest, and each has a wrong first instinct:
 
 - **`findings`, never the sentences.** It is `warnings` with a `code` on it -
-  `blank-page`, `no-column`, `thin-column`, `pages-disagree` - plus the `page`
-  and `column` it is about. Branch on the code. Matching the prose is what
-  breaks the day a message is reworded.
+  `blank-page`, `no-column`, `thin-column`, `merged-column`, `pages-disagree` -
+  plus the `page` and `column` it is about. Branch on the code. Matching the
+  prose is what breaks the day a message is reworded.
+- **`merged-column` is the one to act on first.** A thin column was invented by
+  the cut and is usually harmless; a merged one was never separated, is filled on
+  every row exactly like a good column, and every figure read from it is two
+  figures glued. Do not publish that column: re-cut the page from
+  `pages[i]`/`boundaries[i]`, or refuse it.
 - **`pages`, when a page prints more than one table.** `rows` is flat and equals
   `pages.flat()`, which loses which page a row came from. A page printing two
   tables side by side carries two runs of headings, and walking the rows in

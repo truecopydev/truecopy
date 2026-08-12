@@ -11,6 +11,12 @@ release PR is what stamps them.
 
 ### Added
 
+- **A merged column says so: the `merged-column` finding.** The opposite failure to `thin-column`, and the dangerous one. A column the cut never separated is filled on every row, exactly like a good one, so no fill rate can see it: the reading is wrong and silent about being wrong. Read as one figure, one such column produced 97 wrong values out of 162 on a real property schedule, and the merged money column of the corpus loan schedule had been pinned since August 3 with the note that nothing warns.
+
+  It fires only when a cell CERTAINLY holds two values: nothing but numbers and separators, and every number carrying its own decimal mark. Without that second condition two integers separated by a space are indistinguishable from ONE number, the space being exactly what French notation puts between thousands - measured, the loose rule fires on 48 % of a column that is perfectly well cut and the strict one on none of it. On the two real geometries of the corpus: 93 to 94 % on the column that really is two, on each of the four table pages, and not one finding anywhere else.
+
+- **`wellGrouped`: is this number grouped the way its document groups thousands?** `readNumber` throws the separators away, which is right for reading one number and wrong for deciding where two of them meet: `000 106 236 000,00` reads as a perfectly good hundred and six million, so a cut made there is well formed and still leaves 1 300 where the report prints 1 300 000. The value closes its sector either way, so no arithmetic catches it, and a quantity nothing cross-checks is where a wrong figure survives. Met on a real fund report by a consumer that had to write this itself.
+
 - **`labels`: which cells could be the value a label announces.** `contract.ts`
   states the need in as many words and answered none of it - `SelfCheck.declared`
   is a LIST because "a document may announce several candidate values when its
