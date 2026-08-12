@@ -283,10 +283,12 @@ describe('wellGrouped', () => {
 		expect(wellGrouped('   ', ',')).toBe(false);
 		expect(wellGrouped(',50', ',')).toBe(false);
 		expect(wellGrouped('-', ',')).toBe(false);
-		// Two decimal marks is not a number, and calling its grouping good would
-		// pass exactly the ambiguity this refuses.
-		expect(wellGrouped('1,300,000.00', ',')).toBe(false);
+		// A fraction that is not digits, and a mark used twice: neither is a
+		// number, and calling either well grouped would pass exactly the ambiguity
+		// this refuses. `1,300,000.00` belongs to the test above, which owns the
+		// case of a mark reading the other notation's grouping.
 		expect(wellGrouped('1 300,ab', ',')).toBe(false);
+		expect(wellGrouped('1 300,00,00', ',')).toBe(false);
 	});
 });
 
