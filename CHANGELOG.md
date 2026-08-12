@@ -9,6 +9,31 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`accentFree`, which was already here in private.** Lower-cases a text and
+  strips its accents, so two spellings of one label compare equal. It served the
+  month-name lookup and nothing else could reach it, yet every reader that
+  compares a label read out of a document needs it: PDF producers disagree about
+  accents, and a prescribed heading arrives with them on one file and without
+  them on the next. It sits in `notation` beside `decimalMarkOf` for the same
+  reason that one does - it is how the page was typeset, not what it means. It
+  folds accents and nothing else: the eszett and the dotless i are different
+  letters, and a caller who folds one knows something about its language that
+  this library does not.
+
+### Documentation
+
+- **In Node, pass no engine.** The legacy pdf.js build is imported for you when
+  `pdfjs` is left out, which the README said only obliquely: two consumers
+  import it by hand in nine ingestion scripts, which works and is redundant.
+  Said outright now, next to the reason the option exists at all.
+- **`DEFAULT_LIMITS` is meant to be raised by a batch script.** Twenty megabytes
+  and forty pages protect a browser tab; an annual report runs to 45 MB over 200
+  pages, and two consumers raised the limits separately without anything saying
+  they were supposed to. With a pointer to `keepPage`, which cuts at the right
+  end of a long document.
+
 ## [1.0.2] - 2026-08-11
 
 ### Added

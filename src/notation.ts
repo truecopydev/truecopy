@@ -279,14 +279,12 @@ function makeDate(year: number, monthIndex: number, day: number): Date | null {
  * have to carry every spelling of the same word. NFD splits a letter from its
  * accent, and `\p{M}` is what an accent is.
  *
- * Exported because it was private and every reader wrote it again: twenty-four
- * copies across three of the four applications that install this package, one
- * of them a file of its own. The reason is not laziness, it is that PDF
- * producers disagree about accents, so any label read out of a document has to
- * be folded before it is compared - which is the same typographic problem
- * `decimalMarkOf` answers one field over, and no more about a domain than that
- * one is. `\p{M}` and not a hand-written range: it covers the marks a Latin
- * range misses, and does not need extending for the next alphabet.
+ * Exported because it is not only the month table's business. PDF producers
+ * disagree about accents, so any label read out of a document has to be folded
+ * before it is compared - the same typographic problem `decimalMarkOf` answers
+ * one field over, and no more about a domain than that one is. `\p{M}` and not
+ * a hand-written range: it covers the marks a Latin range misses, and does not
+ * need extending for the next alphabet.
  *
  * What it deliberately does not do is fold anything but accents. The eszett,
  * the Turkish dotless i and the Nordic letters are DIFFERENT letters, and a
