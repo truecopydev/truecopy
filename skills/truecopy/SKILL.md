@@ -84,9 +84,12 @@ three to five times, silently.
 ```ts
 import { recordsFrom } from 'truecopy/records';
 
-const { records, loose, findings } = recordsFrom(rows);
-// records[i].rows are the row indices of one record, spine included
-// loose are the rows it could not place: a cover page, a letterhead
+// One PAGE at a time, never the flattened rows: see the third point below.
+for (const page of pages) {
+	const { records, loose, findings } = recordsFrom(page);
+	// records[i].rows are indices into THIS page, spine included
+	// loose are the rows it could not place: a letterhead, a page number
+}
 ```
 
 Three things to know, and each has a wrong first instinct:
@@ -100,6 +103,10 @@ Three things to know, and each has a wrong first instinct:
   cannot be split by width - a record that leaves a column empty is as wide as
   a rich fragment. Pass `spineWidth` if your document tells you which; do not
   hunt for a threshold that makes one file land.
+- **Group each PAGE, not the flattened document**, and `few-spines` is what
+  says you forgot. A spine belongs to a table, so a whole document sets its
+  width from the widest row printed anywhere in it. Measured on a real annual
+  report: 7 records over 3115 flat rows, and 1126 reading `pages` one at a time.
 
 On a table where a record IS a row, it returns one record per row and changes
 nothing. Measured on two real documents: 185 records from 185 instalments with
