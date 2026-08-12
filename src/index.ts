@@ -83,9 +83,6 @@ export { cellAt, columnCount, dominantKind, profileColumns } from './columns.js'
 export type { RoleRule } from './roles.js';
 export { assignRoles, dominantKinds } from './roles.js';
 
-export type { Candidate, Cell, Labelled, LabelOptions, Look } from './labels.js';
-export { columnOfHeader, labelledValues } from './labels.js';
-
 export type {
 	RecordBlock,
 	RecordDoubt,
@@ -94,6 +91,9 @@ export type {
 	RecordsOptions
 } from './records.js';
 export { recordsFrom, spineWidthOf } from './records.js';
+
+export type { Candidate, Cell, Labelled, LabelOptions, Look } from './labels.js';
+export { columnOfHeader, labelledValues } from './labels.js';
 
 export type { KindThreshold, SignatureOptions, RowAnomaly } from './signature.js';
 export { findRowAnomalies, sharesByKind, thresholdsFor } from './signature.js';

@@ -135,8 +135,9 @@ export function labelledValues(
 	const found: Labelled[] = [];
 
 	rows.forEach((row, at) => {
-		row.forEach((cell, column) => {
-			if (cell.trim() === '' || !isLabel(cell.trim())) return;
+		row.forEach((_, column) => {
+			const text = cellAt(row, column);
+			if (text === '' || !isLabel(text)) return;
 			const label: Cell = { row: at, column };
 			const values: Candidate[] = [];
 			if (look !== 'column') {
@@ -183,8 +184,9 @@ export function columnOfHeader(
 ): number | null {
 	const columns = new Set<number>();
 	for (const row of rows) {
-		row.forEach((cell, column) => {
-			if (cell.trim() !== '' && isHeader(cell.trim())) columns.add(column);
+		row.forEach((_, column) => {
+			const text = cellAt(row, column);
+			if (text !== '' && isHeader(text)) columns.add(column);
 		});
 	}
 	const [only] = columns;
