@@ -69,6 +69,38 @@ Three fields decide how you write the rest, and each has a wrong first instinct:
   Opening a page is 99 % of what a reading costs, `maximumPages` cuts at the end
   only, and the kept pages keep their own numbers.
 
+## When a row is not a record
+
+Check this before writing any loop over `rows`. In a great many real documents
+a record occupies two or three PRINTED rows - a street on one line, the figures
+on the next, the postcode on a third - and one row per record undercounts by
+three to five times, silently.
+
+```ts
+import { recordsFrom } from 'truecopy/records';
+
+const { records, loose, findings } = recordsFrom(rows);
+// records[i].rows are the row indices of one record, spine included
+// loose are the rows it could not place: a cover page, a letterhead
+```
+
+Three things to know, and each has a wrong first instinct:
+
+- **It says WHICH rows, never joins their text.** How to join half a name to
+  its other half differs by document, so that stays yours.
+- **`loose` is not a failure list.** Every row comes back either in a record or
+  in `loose`, because a mechanism may be wrong about where a fragment belongs
+  and is never allowed to be silent about a row.
+- **`spine-not-sharp` means take over, not retry.** Some documents genuinely
+  cannot be split by width - a record that leaves a column empty is as wide as
+  a rich fragment. Pass `spineWidth` if your document tells you which; do not
+  hunt for a threshold that makes one file land.
+
+On a table where a record IS a row, it returns one record per row and changes
+nothing. Measured on two real documents: 185 records from 185 instalments with
+no cover-page row swallowed, and 61 records from 214 rows where a judged 65
+buildings live.
+
 ## When the rows have to be trusted
 
 `readDocument(document, reader)` returns
