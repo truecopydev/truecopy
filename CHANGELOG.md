@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-08-12
+
 ### Added
 
 - **`records`: which rows belong to the same record, when a row is not one.**
