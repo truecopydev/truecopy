@@ -14,6 +14,14 @@ this library.
 Nothing below is a preference. Each point names where the code is and what was
 measured.
 
+**What "measured" means here, and where it does not.** Most of this was read
+from source across four repositories, which makes each point a well-located
+hypothesis rather than a run. The corpus repository is what turns one into the
+other, and it has already sent one back: section 1 said something about
+`signature` that running it disproved, and the correction is in the section
+rather than quietly deleted. A claim in this file that no fixture covers is a
+claim waiting for one.
+
 ## 1. A record that spans several lines
 
 **Three of the four wrote it, and it breaks a mechanism this library already
@@ -32,14 +40,26 @@ one of them 1,19 % of a fund, because the row carrying the amounts carried no
 name and nothing but the arithmetic was checked.
 
 All eight mechanisms here (`open`, `notation`, `classify`, `columns`, `roles`,
-`signature`, `schema`, `explain`) work on the physical line. Worse, `signature`
-works AGAINST these documents: a continuation line carries one filled cell, so
-it breaks the table's type signature and comes back as an anomaly when it is a
-valid fragment.
+`signature`, `schema`, `explain`) work on the physical line.
+
+**Corrected on 12 August 2026, by a measurement.** This section first said that
+`signature` works against these documents, flagging a continuation line as an
+anomaly because it carries one filled cell. That was read from the source and
+never run. The `patrimoine-scpi` family of the corpus repository now runs it on
+a real property schedule: **121 fragments out of 214 rows, and not one anomaly.**
+
+Which is worse, and mechanically so. A column may only condemn an empty cell
+once it is filled on 90 % of its rows, and the fragments drag every column below
+that threshold. So the signature is learned from the very rows it should have
+excluded, and comes out with no expectation left to break: the mechanism whose
+job is to say which rows break the table's own type signature has nothing at all
+to say about a table more than half made of fragments.
 
 What is missing is a ninth mechanism that groups rows into records before
 `signature` and `schema` speak. It stays domain-free: what joins two lines is
-that one of them cannot stand alone in the shape the table has established.
+that one of them cannot stand alone in the shape the table has established. And
+`signature` does not merely wait for it - it needs it, because its own sample is
+what the fragments spoil.
 
 ## 2. The value that goes with a label
 
