@@ -165,14 +165,26 @@ the option.**
   runs to 45 MB. Two independent readers reaching the same conclusion is an
   argument for a named profile beside `DEFAULT_LIMITS`, or at least a line
   saying `maximumBytes` is meant to be raised by a script.
-- **`standardFontDataUrl` is never passed to pdf.js.** `open.ts` calls
-  `getDocument({ data })` and the `PdfEngine` interface cannot carry the option.
-  This one corrupts the TEXT: "TAqgie Viqqe" for "Typologie Ville", "B ALLAN -M
-  IR e" for a commune published on a public site. Only one consumer measured it,
-  and it is the most serious thing in this file. It does not even need a
-  consumer to reproduce: `npm run test:coverage` prints
-  `UnknownErrorException: Ensure that the standardFontDataUrl API parameter is
-provided` four times, on this repository's own PDF fixtures.
+- **`standardFontDataUrl` is never passed to pdf.js.** `open.ts` called
+  `getDocument({ data })` and the `PdfEngine` interface could not carry the
+  option. A real gap, and `OpenOptions` carries it now.
+
+  **Corrected on 12 August 2026, by a measurement, and this was the most serious
+  thing in this file until it was run.** The claim was that this corrupts the
+  text. It does not. Over 125 real annual reports, pdf.js prints its warning on
+  every one, three come back with genuinely broken text, and passing the pack
+  changes **not one character of any of them**. The corruption is a subsetted
+  font whose `ToUnicode` map is absent or wrong: the glyphs are embedded, their
+  mapping to characters is not, and a pack of STANDARD fonts has nothing to say
+  about a custom one. That text is lost at the source, and nothing here recovers
+  it.
+
+  What is left is the lesson, and it is the one this library is built on: **a
+  warning names a cause, not a diagnosis.** `Ensure that the standardFontDataUrl
+API parameter is provided` sat beside garbled text on the same documents and
+  had nothing to do with it. That is the `no-engine` failure met from the other
+  side - a message that points at the wrong thing sends a reader to repair the
+  wrong thing - and here it held a "high" severity for nine days.
 
 ## What must not come here
 

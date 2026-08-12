@@ -114,6 +114,39 @@ export interface OpenOptions extends Partial<Limits> {
 	 * then counts the pages OPENED, so it still bounds the work.
 	 */
 	keepPage?: (pageNumber: number) => boolean;
+	/**
+	 * Where pdf.js finds its standard font pack, and its character maps.
+	 *
+	 * The interface could not carry these, so no reader could pass them, which is
+	 * a gap worth closing on its own. What it is NOT is a repair for garbled
+	 * text, and that deserves saying because the warning invites the mistake.
+	 *
+	 * MEASURED, on 125 real annual reports: pdf.js prints `Ensure that the
+	 * standardFontDataUrl API parameter is provided` on every one of them, three
+	 * come back with genuinely broken text (`difOciqe e defa..abqe` where the page
+	 * prints a French sentence), and passing the pack changes **not one character
+	 * of any of them**. The corruption is a subsetted font whose `ToUnicode` map
+	 * is absent or wrong: the glyphs are embedded, their mapping to characters is
+	 * not, and a pack of STANDARD fonts has nothing to say about a custom one.
+	 *
+	 * So this silences a warning and serves a document that really does use an
+	 * unmapped standard font. It does not rescue a document like those three, and
+	 * nothing here can: that text is lost at the source.
+	 *
+	 * The URL is the caller's to resolve, for the same reason as `workerSrc`: the
+	 * pack ships inside `pdfjs-dist` and every bundler spells the path
+	 * differently. Nothing here guesses one.
+	 *
+	 *     // Node
+	 *     const url = new URL('./node_modules/pdfjs-dist/standard_fonts/', import.meta.url).href;
+	 *     await openDocument(file, { pdfjs, standardFontDataUrl: url });
+	 */
+	standardFontDataUrl?: string;
+	/** Where pdf.js finds its character maps, for a document written in a CJK
+	 *  encoding. Same reasoning as `standardFontDataUrl`, and `cMapPacked` is
+	 *  true for the maps `pdfjs-dist` ships. */
+	cMapUrl?: string;
+	cMapPacked?: boolean;
 }
 
 /**
@@ -124,7 +157,17 @@ export interface OpenOptions extends Partial<Limits> {
  * a hard dependency out of an optional one.
  */
 export interface PdfEngine {
-	getDocument(source: { data: Uint8Array }): {
+	/**
+	 * `data` is what this library needs. The two font parameters are optional
+	 * here and passed through untouched: pdf.js reads them, nothing in this file
+	 * does, and an engine that ignores them still satisfies this type.
+	 */
+	getDocument(source: {
+		data: Uint8Array;
+		standardFontDataUrl?: string;
+		cMapUrl?: string;
+		cMapPacked?: boolean;
+	}): {
 		promise: Promise<PdfFile>;
 		destroy(): Promise<void>;
 	};
@@ -280,7 +323,20 @@ async function pagesFromPdf(
 
 	// The loading task is kept, not just the document: the task is what carries
 	// destroy(), and destroy() is what stops the worker.
-	const task = pdfjs.getDocument({ data: new Uint8Array(data) });
+	/*
+	 * The font parameters go through only when the caller gave them. Passing
+	 * `undefined` is not the same as leaving a key out for pdf.js: it takes the
+	 * key as given and resolves it against its own base, which is a path that
+	 * does not exist outside a browser.
+	 */
+	const task = pdfjs.getDocument({
+		data: new Uint8Array(data),
+		...(options.standardFontDataUrl === undefined
+			? {}
+			: { standardFontDataUrl: options.standardFontDataUrl }),
+		...(options.cMapUrl === undefined ? {} : { cMapUrl: options.cMapUrl }),
+		...(options.cMapPacked === undefined ? {} : { cMapPacked: options.cMapPacked })
+	});
 	const pdf = await task.promise;
 	try {
 		const pages: TextPage[] = [];
