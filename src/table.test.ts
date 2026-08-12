@@ -139,7 +139,11 @@ describe('what readTable refuses to vouch for', () => {
 			at('b', 50, 680),
 			at('12 345 6 789', 200, 680),
 			at('c', 50, 660),
-			at('98 765 4 321', 200, 660)
+			at('98 765 4 321', 200, 660),
+			// This row is what makes the test say what it claims. Without a decimal
+			// anywhere, the document settles no mark and the doubt is skipped whole -
+			// so the assertion would pass without ever reaching the rule it is about.
+			at('total 9 876,54', 50, 620)
 		]);
 		const { findings } = await readTable(ambiguous);
 		expect(findings.filter((finding) => finding.code === 'merged-column')).toEqual([]);
