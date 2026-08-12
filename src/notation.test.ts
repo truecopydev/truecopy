@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	accentFree,
 	decimalMarkOf,
 	findNumbers,
 	isOnlyNumber,
@@ -243,5 +244,28 @@ describe('decimalMarkOf', () => {
 		const page = 'TOTAL ACTIF NET 48,275,477.16 dont 1,234 parts';
 		expect(readNumber('1,234', decimalMarkOf(page))).toBe(1234);
 		expect(readNumber('27800.50', decimalMarkOf('nothing here settles it'))).toBe(27800.5);
+	});
+});
+
+describe('accentFree', () => {
+	it('folds a label so two spellings of it compare equal', () => {
+		// The case every consumer met: one PDF producer writes the accents, the
+		// next one drops them, and the same prescribed heading has to be
+		// recognised through both.
+		expect(accentFree('Inventaire des actifs et passifs')).toBe(
+			accentFree('INVENTAIRE DES ACTIFS ET PASSIFS')
+		);
+		expect(accentFree('Société')).toBe('societe');
+		expect(accentFree('BALLAN-MIRÉ')).toBe('ballan-mire');
+	});
+
+	it('leaves everything that is not an accent alone', () => {
+		// Punctuation, digits and spacing carry information a reader still needs,
+		// and folding them here would decide something this library does not know.
+		// The eszett is a letter, not an accented one: a caller who folds it to
+		// `ss` knows something about German that this file does not.
+		expect(accentFree('(en m2) 1 234,56')).toBe('(en m2) 1 234,56');
+		expect(accentFree('Straße')).toBe('straße');
+		expect(accentFree('')).toBe('');
 	});
 });

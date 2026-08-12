@@ -355,12 +355,16 @@ A library with no stated limit grows one every release. These are refusals, not 
 
 Node 20+, ESM. `pdfjs-dist` is an **optional** peer dependency, loaded on demand and only for PDFs: reading text, a paste or a CSV needs nothing.
 
-pdf.js is used through its **legacy** build, deliberately: the modern one refuses to run outside a browser, which would make the whole chain untestable. If you want the worker, resolve its URL yourself and pass it in, because every bundler spells that differently and picking one here would lock you into it:
+pdf.js is used through its **legacy** build, deliberately: the modern one refuses to run outside a browser, which would make the whole chain untestable. **In Node, pass no engine at all** and that build is imported for you. Nine ingestion scripts across two consumers import it by hand and pass it as `pdfjs`, which works and is redundant; the option is there for a browser reader under a byte budget, which is the one case where the modern build is worth its own import.
+
+If you want the worker, resolve its URL yourself and pass it in, because every bundler spells that differently and picking one here would lock you into it:
 
 ```ts
 import workerSrc from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url'; // Vite
 await openDocument(file, { workerSrc, maximumPages: 200 });
 ```
+
+A batch script raises the limits, and is meant to: `DEFAULT_LIMITS` (20 MB, 40 pages, 30 s) protects a browser tab, not an ingestion that runs once a year. Two consumers reading annual reports settled on 80 to 200 MB and 600 to 2000 pages. Reach for `keepPage` before `maximumPages`: it cuts at the right end of a long document.
 
 ## For a coding agent
 

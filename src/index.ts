@@ -52,6 +52,7 @@ export { readTable } from './table.js';
 
 export type { DecimalMark, Notation, FoundNumber, LeadingDate } from './notation.js';
 export {
+	accentFree,
 	decimalMarkOf,
 	findNumbers,
 	isOnlyNumber,
