@@ -102,6 +102,106 @@ describe('what readTable refuses to vouch for', () => {
 		]);
 	});
 
+	it('says when a column was never separated, which a fill rate cannot see', async () => {
+		/*
+		 * The opposite failure to a thin column, and the dangerous one: a column
+		 * the cut never separated is filled on every row, exactly like a good one,
+		 * so no fill rate finds it. Read as one figure, one such column produced
+		 * 97 wrong values out of 162 on a real property schedule, and the merged
+		 * money column of a real loan schedule went unremarked for a week.
+		 */
+		const merged = pdf([
+			at('a', 50, 700),
+			at('1,00 2 000,00', 200, 700),
+			at('b', 50, 680),
+			at('3,00 4 000,00', 200, 680),
+			at('c', 50, 660),
+			at('5,00 6 000,00', 200, 660),
+			at('d', 50, 640),
+			at('7,00 8 000,00', 200, 640)
+		]);
+		const { findings } = await readTable(merged);
+		const merges = findings.filter((finding) => finding.code === 'merged-column');
+		expect(merges).toHaveLength(1);
+		expect(merges[0]).toMatchObject({ column: 1, page: 1, shareDoubled: 1 });
+	});
+
+	it('does not call two integers a merged column, a space being a thousands mark', async () => {
+		/*
+		 * The condition that stops this crying wolf, and it was measured: without
+		 * it the doubt fires on 48 % of a column that is perfectly well cut,
+		 * because `30 418 3 741` reads as two numbers and as one. Only a decimal
+		 * mark on each makes the boundary certain.
+		 */
+		const ambiguous = pdf([
+			at('a', 50, 700),
+			at('30 418 3 741', 200, 700),
+			at('b', 50, 680),
+			at('12 345 6 789', 200, 680),
+			at('c', 50, 660),
+			at('98 765 4 321', 200, 660),
+			// This row is what makes the test say what it claims. Without a decimal
+			// anywhere, the document settles no mark and the doubt is skipped whole -
+			// so the assertion would pass without ever reaching the rule it is about.
+			at('total 9 876,54', 50, 620)
+		]);
+		const { findings } = await readTable(ambiguous);
+		expect(findings.filter((finding) => finding.code === 'merged-column')).toEqual([]);
+	});
+
+	it('does not call a comma-grouped column merged, under English notation', async () => {
+		/*
+		 * The same trap one notation over, and the reason the mark comes from the
+		 * document rather than from a regular expression. Under English notation
+		 * `1,234` is a plain thousands integer, so a test for "any dot or comma
+		 * before a digit" would call an accidentally split comma-grouped column
+		 * merged - exactly the failure the decimal condition exists to rule out.
+		 */
+		const english = pdf([
+			at('a', 50, 700),
+			at('1,234 5,678', 200, 700),
+			at('b', 50, 680),
+			at('2,345 6,789', 200, 680),
+			at('c', 50, 660),
+			at('3,456 7,890', 200, 660),
+			// What settles the notation for the whole document: a decimal written
+			// the English way, which is what makes the commas above thousands.
+			at('total 9,876.54', 50, 620)
+		]);
+		const { findings } = await readTable(english);
+		expect(findings.filter((finding) => finding.code === 'merged-column')).toEqual([]);
+	});
+
+	it('raises no merged-column doubt when the document settles no decimal mark', async () => {
+		// A fraction cannot be told from a thousands group without one, so nothing
+		// here is CERTAIN - and a doubt this library cannot substantiate is one it
+		// does not raise.
+		const undecided = pdf([
+			at('a', 50, 700),
+			at('1,234 5,678', 200, 700),
+			at('b', 50, 680),
+			at('2,345 6,789', 200, 680),
+			at('c', 50, 660),
+			at('3,456 7,890', 200, 660)
+		]);
+		const { findings } = await readTable(undecided);
+		expect(findings.filter((finding) => finding.code === 'merged-column')).toEqual([]);
+	});
+
+	it('does not call an address a merged column', async () => {
+		// A cell holding a number and a word is one value with a name on it.
+		const address = pdf([
+			at('18,00 Rue Lecourbe 75015,00', 50, 700),
+			at('x', 200, 700),
+			at('20,00 Rue Cler 75007,00', 50, 680),
+			at('y', 200, 680),
+			at('22,00 Rue Bara 92100,00', 50, 660),
+			at('z', 200, 660)
+		]);
+		const { findings } = await readTable(address);
+		expect(findings.filter((finding) => finding.code === 'merged-column')).toEqual([]);
+	});
+
 	it('says when a page of the document is blank', async () => {
 		// A blank page in the middle of a bundle is ordinary - a footer sheet, a
 		// verso - and joining single-page files does not reproduce one.

@@ -25,6 +25,7 @@ import type { Document, TextPage } from './document.js';
 import { openDocument, type OpenOptions } from './open.js';
 import { boundariesFromRecurrence, cellsOf, gapFor } from './layout.js';
 import { columnCount, profileColumns } from './columns.js';
+import { decimalMarkOf, findNumbers, type DecimalMark } from './notation.js';
 
 /**
  * What a reading could not vouch for, named rather than only worded.
@@ -42,6 +43,17 @@ export type Doubt =
 	| 'no-column'
 	/** A column filled on almost none of its rows: the cut may have invented it. */
 	| 'thin-column'
+	/**
+	 * A column whose cells hold TWO values where the table's others hold one:
+	 * the cut missed a boundary and two neighbouring columns landed together.
+	 *
+	 * The opposite failure to `thin-column`, and the dangerous one. A column that
+	 * was never separated cannot be seen by a fill rate - it is filled on every
+	 * row, exactly like a good one - so a reading of it is wrong and silent about
+	 * being wrong. Read as one figure, one such column produced 97 wrong values
+	 * out of 162 on a real property schedule.
+	 */
+	| 'merged-column'
 	/** The pages were not cut the same way, so they are probably not one table. */
 	| 'pages-disagree';
 
@@ -52,10 +64,12 @@ export interface Finding {
 	readonly message: string;
 	/** The page it was found on. Absent when it is about the whole document. */
 	readonly page?: number;
-	/** The column it is about, for a `thin-column`. */
+	/** The column it is about, for a `thin-column` or a `merged-column`. */
 	readonly column?: number;
 	/** How often that column is filled, 0 to 1, for a `thin-column`. */
 	readonly shareFilled?: number;
+	/** How often that column holds two values, 0 to 1, for a `merged-column`. */
+	readonly shareDoubled?: number;
 }
 
 export interface Table {
@@ -131,7 +145,89 @@ function thinColumns(page: TextPage, rows: string[][]): Finding[] {
 	);
 }
 
-function complainAbout(page: TextPage, rows: string[][], cut: number[]): Finding[] {
+/**
+ * Past this share of its filled cells holding two values, a column was never
+ * separated.
+ *
+ * Measured rather than chosen, on the two real geometries of the corpus: the one
+ * column known to be a merged pair holds two on 93 % of its cells, and every
+ * other column of both documents holds two on none of them. Half is far from
+ * both, which is what a threshold should be.
+ */
+const DOUBLED_ABOVE = 0.5;
+
+/**
+ * A cell that CERTAINLY holds two values, never one that might.
+ *
+ * Two conditions, and the second is the one that stops this crying wolf.
+ *
+ * The cell must hold nothing but numbers and separators, so an address carrying
+ * a number and a street name is not a merged pair.
+ *
+ * And every number in it must carry a fraction IN THE DOCUMENT'S OWN MARK.
+ * Without that, two integers separated by a space are indistinguishable from ONE
+ * number, the space being exactly what French notation puts between thousands.
+ * Measured: the loose rule fires on 48 % of a column that is perfectly well cut,
+ * the strict one on none of it, and on 93 % of the column that really is two.
+ *
+ * The mark has to be the document's and not "any dot or comma", which is the
+ * same trap one field over: under English notation `1,234` is a plain thousands
+ * integer, so a mark-agnostic test would call an accidentally split
+ * comma-grouped column merged - exactly the failure this condition exists to
+ * rule out, moved to another notation.
+ */
+function holdsTwoValues(cell: string, mark: DecimalMark): boolean {
+	const fraction = mark === ',' ? /,\d/ : /\.\d/;
+	const found = findNumbers(cell);
+	if (found.length < 2) return false;
+	if (!found.every((number) => fraction.test(number.raw))) return false;
+	let rest = cell;
+	for (const number of found) rest = rest.replace(number.raw, ' ');
+	return /^[\s.,;:/-]*$/.test(rest);
+}
+
+function mergedColumns(page: TextPage, rows: string[][], mark: DecimalMark): Finding[] {
+	/*
+	 * Through `profileColumns`, exactly like `thinColumns`, and not for symmetry:
+	 * it caps the work at its sample, and this is the doubt that costs the most
+	 * to compute - a regular expression over every cell. A table describes itself
+	 * in its first rows, and scanning ten thousand to learn what two hundred
+	 * already said is time somebody spends watching a spinner.
+	 */
+	const profiles = profileColumns(rows, {
+		kindOf: (cell) => (holdsTwoValues(cell, mark) ? 'doubled' : null)
+	});
+	return profiles.flatMap((profile, column) => {
+		const doubled = profile.shareOfKind.doubled ?? 0;
+		/*
+		 * `doubled > half of filled` rather than the ratio compared to a half: both
+		 * shares are of the same rows, so the comparison is the same one without a
+		 * division - and without the guard on an empty column that a division would
+		 * need. A column filled on nothing has doubled nothing either, and `0 > 0`
+		 * is already false.
+		 */
+		if (doubled <= DOUBLED_ABOVE * profile.shareFilled) return [];
+		const share = doubled / profile.shareFilled;
+		return [
+			{
+				code: 'merged-column' as const,
+				page: page.pageNumber,
+				column,
+				shareDoubled: share,
+				message:
+					`column ${column} of page ${page.pageNumber} holds two values on ` +
+					`${Math.round(share * 100)}% of its rows - the cut missed a boundary and two columns landed together`
+			}
+		];
+	});
+}
+
+function complainAbout(
+	page: TextPage,
+	rows: string[][],
+	cut: number[],
+	mark: DecimalMark | null
+): Finding[] {
 	const where = `page ${page.pageNumber}`;
 	if (page.rows.length === 0) {
 		return [
@@ -153,7 +249,12 @@ function complainAbout(page: TextPage, rows: string[][], cut: number[]): Finding
 			}
 		];
 	}
-	return thinColumns(page, rows);
+	// Both, because they are opposite failures and a page can carry each on a
+	// different column: one the cut invented, one it never separated.
+	// A document that settles no decimal mark gets no merged-column doubt: without
+	// it, a fraction cannot be told from a thousands group, so nothing here is
+	// CERTAIN and a doubt this library cannot substantiate is one it does not raise.
+	return [...thinColumns(page, rows), ...(mark === null ? [] : mergedColumns(page, rows, mark))];
 }
 
 /** Pages that were cut differently from the others. One page out of step is
@@ -185,6 +286,10 @@ function pagesOutOfStep(perPage: number[]): Finding[] {
  */
 export async function readTable(file: File, options: OpenOptions = {}): Promise<Table> {
 	const document = await openDocument(file, options);
+	// Read once, off the whole document, because that is what settles it: five
+	// characters do not say whether `1,234` is a thousand or a fraction, and a
+	// page that never writes a decimal borrows the answer from the rest.
+	const mark = decimalMarkOf(document.text);
 	const pages: string[][][] = [];
 	const findings: Finding[] = [];
 	const boundaries: number[][] = [];
@@ -201,7 +306,7 @@ export async function readTable(file: File, options: OpenOptions = {}): Promise<
 		const cells = cellsOf(page, cut);
 		boundaries.push(cut);
 		pages.push(cells);
-		findings.push(...complainAbout(page, cells, cut));
+		findings.push(...complainAbout(page, cells, cut, mark));
 		if (page.rows.length > 0) columnsPerPage.push(columnCount(cells));
 	}
 

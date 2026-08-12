@@ -232,6 +232,47 @@ export function decimalMarkOf(text: string): DecimalMark | null {
 	return comma > dot ? ',' : '.';
 }
 
+/**
+ * Whether a number is grouped the way its document groups thousands.
+ *
+ * `readNumber` throws the separators away, which is right for reading one number
+ * and wrong for deciding where two of them meet. `000 106 236 000,00` reads as a
+ * perfectly good hundred and six million, so a cut made there is well formed and
+ * still wrong: it leaves `1 300` where the report prints `1 300 000`.
+ *
+ * That is the shape of a silent lie. The value would still close its sector, so
+ * the arithmetic never catches it, and a quantity nothing cross-checks is
+ * precisely where a wrong figure survives. Measured on a real fund report before
+ * this existed.
+ *
+ * The rule is the one every typesetter follows and none writes down: the first
+ * group is one to three digits and does not begin with a zero, and every group
+ * after it is exactly three. One group alone passes whatever its length, because
+ * a quantity is often printed with no separator at all.
+ *
+ * `mark` is the DECIMAL mark, which is what `decimalMarkOf` returns: the
+ * thousands separator is a space in French notation and the other mark in
+ * English, and both are handled from that one answer.
+ */
+export function wellGrouped(written: string, mark: DecimalMark): boolean {
+	/*
+	 * At most one decimal mark, and digits behind it. Looking only at what
+	 * precedes the first one would call `1,300,000.00` well grouped under a
+	 * French mark, seeing nothing but the `1` in front - a pass on exactly the
+	 * ambiguity this exists to refuse.
+	 */
+	// The thousands separator follows from the decimal one: a space in French
+	// notation, the other mark in English.
+	const separator = mark === ',' ? '\\s' : ',';
+	const grouped = new RegExp(`^-?\\d{1,3}(?:${separator}\\d{3})+$`);
+	const fraction = mark === ',' ? /,\d+$/ : /\.\d+$/;
+	const integer = written.trim().replace(fraction, '');
+	// One expression rather than a walk over the groups, and not for brevity: a
+	// walk leaves branches no input reaches, and a branch no test can reach is a
+	// branch nobody has read.
+	return (/^-?\d+$/.test(integer) || grouped.test(integer)) && !/^-?0\d/.test(integer);
+}
+
 export interface FoundNumber {
 	value: number;
 	raw: string;
