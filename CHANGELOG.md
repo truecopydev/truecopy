@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-08-12
+
 ### Added
 
 - **`standardFontDataUrl` and `cMapUrl` reach pdf.js.** `PdfEngine.getDocument` could not carry them, so no reader could pass them whatever it did. They go through untouched, and a key the caller left out is left out rather than passed as `undefined`: pdf.js takes the key as given and resolves it against a base that does not exist outside a browser.
