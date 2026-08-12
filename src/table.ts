@@ -24,7 +24,7 @@
 import type { Document, TextPage } from './document.js';
 import { openDocument, type OpenOptions } from './open.js';
 import { boundariesFromRecurrence, cellsOf, gapFor } from './layout.js';
-import { cellAt, columnCount, profileColumns } from './columns.js';
+import { columnCount, profileColumns } from './columns.js';
 import { decimalMarkOf, findNumbers, type DecimalMark } from './notation.js';
 
 /**
@@ -187,25 +187,39 @@ function holdsTwoValues(cell: string, mark: DecimalMark): boolean {
 }
 
 function mergedColumns(page: TextPage, rows: string[][], mark: DecimalMark): Finding[] {
-	const findings: Finding[] = [];
-	for (let column = 0; column < columnCount(rows); column += 1) {
-		const filled = rows.map((row) => cellAt(row, column)).filter((cell) => cell !== '');
-		const doubled = filled.filter((cell) => holdsTwoValues(cell, mark)).length;
-		// `Math.max` rather than a guard on an empty column: the guard is a branch
-		// no page reaches, and a branch no test can reach is a branch nobody reads.
-		const share = doubled / Math.max(filled.length, 1);
-		if (share <= DOUBLED_ABOVE) continue;
-		findings.push({
-			code: 'merged-column',
-			page: page.pageNumber,
-			column,
-			shareDoubled: share,
-			message:
-				`column ${column} of page ${page.pageNumber} holds two values on ` +
-				`${Math.round(share * 100)}% of its rows - the cut missed a boundary and two columns landed together`
-		});
-	}
-	return findings;
+	/*
+	 * Through `profileColumns`, exactly like `thinColumns`, and not for symmetry:
+	 * it caps the work at its sample, and this is the doubt that costs the most
+	 * to compute - a regular expression over every cell. A table describes itself
+	 * in its first rows, and scanning ten thousand to learn what two hundred
+	 * already said is time somebody spends watching a spinner.
+	 */
+	const profiles = profileColumns(rows, {
+		kindOf: (cell) => (holdsTwoValues(cell, mark) ? 'doubled' : null)
+	});
+	return profiles.flatMap((profile, column) => {
+		const doubled = profile.shareOfKind.doubled ?? 0;
+		/*
+		 * `doubled > half of filled` rather than the ratio compared to a half: both
+		 * shares are of the same rows, so the comparison is the same one without a
+		 * division - and without the guard on an empty column that a division would
+		 * need. A column filled on nothing has doubled nothing either, and `0 > 0`
+		 * is already false.
+		 */
+		if (doubled <= DOUBLED_ABOVE * profile.shareFilled) return [];
+		const share = doubled / profile.shareFilled;
+		return [
+			{
+				code: 'merged-column' as const,
+				page: page.pageNumber,
+				column,
+				shareDoubled: share,
+				message:
+					`column ${column} of page ${page.pageNumber} holds two values on ` +
+					`${Math.round(share * 100)}% of its rows - the cut missed a boundary and two columns landed together`
+			}
+		];
+	});
 }
 
 function complainAbout(
