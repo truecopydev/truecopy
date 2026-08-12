@@ -89,9 +89,11 @@ describe('recordsFrom', () => {
 		expect(loose).toEqual([0, 1]);
 	});
 
-	it('does not reach past its neighbour, however close it sits', () => {
-		// Row 0 is two above the second spine and one below the first: `reach`
-		// bounds the walk, and a spine stops it whatever the distance.
+	it('gives a fragment caught between two spines to the one above', () => {
+		// A genuine tie: row 1 is one row from both spines and fits beside both.
+		// The rule has to say which, or the answer depends on whichever loop ran
+		// last. Above, because a record is printed under its own opening line
+		// more often than over the next one.
 		const rows = [
 			['', '07/12/1978', '677', 'Commerce', '791 706'],
 			['75015 PARIS', '', '', '', ''],
@@ -101,17 +103,26 @@ describe('recordsFrom', () => {
 		expect(records.map((one) => one.rows)).toEqual([[0, 1], [2]]);
 	});
 
-	it('gives a fragment to the first spine that claims it', () => {
-		// Two spines can both fit one fragment. The one printed first takes it,
-		// which is stated rather than left to whichever loop ran last.
+	it('gives a fragment to the nearer spine, not the earlier one', () => {
+		/*
+		 * The case that cost a whole record before it was measured. Row 3 fits
+		 * beside both spines, and the one printed first is two rows away: a rule
+		 * that walked down from a spine taking everything that fits reached
+		 * straight into the next record, because the postcode of one building and
+		 * the street of the next are both one cell in the same column.
+		 */
 		const rows = [
 			['', '07/12/1978', '677', 'Commerce', '791 706'],
 			['75015 PARIS', '', '', '', ''],
 			['', '', '', '', ''],
+			['25 rue Chateaubriand -', '', '', '', ''],
 			['', '15/02/1979', '899', 'Bureau', '7 130 526']
 		];
 		const { records, loose } = recordsFrom(rows);
-		expect(records.map((one) => one.rows)).toEqual([[0, 1], [3]]);
+		expect(records.map((one) => one.rows)).toEqual([
+			[0, 1],
+			[3, 4]
+		]);
 		expect(loose).toEqual([2]);
 	});
 
