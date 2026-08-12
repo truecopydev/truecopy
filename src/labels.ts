@@ -28,6 +28,8 @@
  * real pension record before it was written down.
  */
 
+import { cellAt } from './columns.js';
+
 /** Where a cell sits in a table of rows. */
 export interface Cell {
 	readonly row: number;
@@ -80,19 +82,19 @@ export interface LabelOptions {
 
 const DEFAULT_REACH = 4;
 
-const cellAt = (rows: readonly (readonly string[])[], row: number, column: number): string =>
-	(rows[row]?.[column] ?? '').trim();
-
 /**
  * Walk one direction from the label, and stop at the next label.
  *
  * Stopping and not skipping: a cell that is itself a label opens another
  * question, and reaching past it answers the wrong one. This is the rule whose
  * absence doubled a total on a real document.
+ *
+ * The one-cell read is `columns.cellAt`, reused rather than written again: the
+ * same name doing the same thing twice in one barrel is confusing before it is
+ * wasteful.
  */
 function walk(
 	rows: readonly (readonly string[])[],
-	from: Cell,
 	step: (distance: number) => Cell,
 	reach: number,
 	isLabel: (cell: string) => boolean,
@@ -101,8 +103,9 @@ function walk(
 	const found: Candidate[] = [];
 	for (let distance = 1; distance <= reach; distance += 1) {
 		const at = step(distance);
-		if (rows[at.row] === undefined) break;
-		const raw = cellAt(rows, at.row, at.column);
+		const row = rows[at.row];
+		if (row === undefined) break;
+		const raw = cellAt(row, at.column);
 		if (raw === '') continue;
 		if (isLabel(raw)) break;
 		if (isValue(raw)) found.push({ ...at, raw, distance });
@@ -140,7 +143,6 @@ export function labelledValues(
 				values.push(
 					...walk(
 						rows,
-						label,
 						(distance) => ({ row: at, column: column + distance }),
 						reach,
 						isLabel,
@@ -150,14 +152,7 @@ export function labelledValues(
 			}
 			if (look !== 'row') {
 				values.push(
-					...walk(
-						rows,
-						label,
-						(distance) => ({ row: at + distance, column }),
-						reach,
-						isLabel,
-						isValue
-					)
+					...walk(rows, (distance) => ({ row: at + distance, column }), reach, isLabel, isValue)
 				);
 			}
 			found.push({
