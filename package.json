@@ -81,6 +81,10 @@
 			"types": "./dist/roles.d.ts",
 			"import": "./dist/roles.js"
 		},
+		"./labels": {
+			"types": "./dist/labels.d.ts",
+			"import": "./dist/labels.js"
+		},
 		"./records": {
 			"types": "./dist/records.d.ts",
 			"import": "./dist/records.js"
