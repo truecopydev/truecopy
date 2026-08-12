@@ -147,6 +147,46 @@ describe('the reason a document was refused', () => {
 		expect((await refusal(file)).reason).toBe('not-opened');
 	});
 
+	it('hands the font pack to the engine, and leaves the key out when it has none', async () => {
+		/*
+		 * The interface could not carry these, so no reader could pass them. What
+		 * it does NOT do is rescue garbled text, measured on 125 real reports: the
+		 * three that come back broken are broken by a subsetted font with no
+		 * `ToUnicode` map, and the pack changes not one character of them.
+		 *
+		 * And the key is LEFT OUT rather than passed as undefined: pdf.js takes
+		 * the key as given and resolves it against a base that does not exist
+		 * outside a browser.
+		 */
+		const seen: Record<string, unknown>[] = [];
+		const spy = {
+			getDocument: (source: Record<string, unknown>) => {
+				seen.push(source);
+				throw new Error('far enough');
+			}
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'ok.pdf', {
+			type: 'application/pdf'
+		});
+
+		await refusal(file, {
+			pdfjs: spy,
+			standardFontDataUrl: 'file:///fonts/',
+			cMapUrl: 'file:///maps/',
+			cMapPacked: true
+		});
+		expect(seen[0]).toMatchObject({
+			standardFontDataUrl: 'file:///fonts/',
+			cMapUrl: 'file:///maps/',
+			cMapPacked: true
+		});
+
+		await refusal(file, { pdfjs: spy });
+		expect(seen[1]).not.toHaveProperty('standardFontDataUrl');
+		expect(seen[1]).not.toHaveProperty('cMapUrl');
+		expect(seen[1]).not.toHaveProperty('cMapPacked');
+	});
+
 	it('tells a missing engine apart from a file that will not open', async () => {
 		// The two refusals send a reader in opposite directions: install the
 		// engine, or hunt for the password of a file that has none. Conflating

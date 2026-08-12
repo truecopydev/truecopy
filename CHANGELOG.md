@@ -11,6 +11,10 @@ release PR is what stamps them.
 
 ### Added
 
+- **`standardFontDataUrl` and `cMapUrl` reach pdf.js.** `PdfEngine.getDocument` could not carry them, so no reader could pass them whatever it did. They go through untouched, and a key the caller left out is left out rather than passed as `undefined`: pdf.js takes the key as given and resolves it against a base that does not exist outside a browser.
+
+  **And what it does not do, because the warning invites the mistake.** Measured on 125 real annual reports: pdf.js prints `Ensure that the standardFontDataUrl API parameter is provided` on every one, three come back with genuinely broken text, and passing the pack changes not one character of any of them. The corruption is a subsetted font whose `ToUnicode` map is absent or wrong - the glyphs are embedded, their mapping to characters is not - and a pack of STANDARD fonts has nothing to say about a custom one. This option silences a warning and serves a document that really does use an unmapped standard font. It rescues nothing that is already lost at the source.
+
 - **A merged column says so: the `merged-column` finding.** The opposite failure to `thin-column`, and the dangerous one. A column the cut never separated is filled on every row, exactly like a good one, so no fill rate can see it: the reading is wrong and silent about being wrong. Read as one figure, one such column produced 97 wrong values out of 162 on a real property schedule, and the merged money column of the corpus loan schedule had been pinned since August 3 with the note that nothing warns.
 
   It fires only when a cell CERTAINLY holds two values: nothing but numbers and separators, and every number carrying its own decimal mark. Without that second condition two integers separated by a space are indistinguishable from ONE number, the space being exactly what French notation puts between thousands - measured, the loose rule fires on 48 % of a column that is perfectly well cut and the strict one on none of it. On the two real geometries of the corpus: 93 to 94 % on the column that really is two, on each of the four table pages, and not one finding anywhere else.
