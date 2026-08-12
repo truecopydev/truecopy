@@ -1,13 +1,14 @@
 /*
  * truecopy - a reading you can certify against the document it came from.
  *
- * Eight mechanisms, in the order a document meets them:
+ * Nine mechanisms, in the order a document meets them:
  *
  *   open       bytes -> pages -> rows, with the caps, the deadline, the release
  *   notation   how the page writes a number and a date, never what they mean
  *   classify   is this the kind of document expected, precedence included
  *   columns    what each column contains, counted once
  *   roles      what each column is, deduced from that
+ *   records    which rows belong to the same record, when a row is not one
  *   signature  which rows break the table's own type signature
  *   schema     the fields, the formats, the count a reading must satisfy
  *   explain    what all of the above decided, in words, when it went wrong
@@ -80,6 +81,15 @@ export { cellAt, columnCount, dominantKind, profileColumns } from './columns.js'
 
 export type { RoleRule } from './roles.js';
 export { assignRoles, dominantKinds } from './roles.js';
+
+export type {
+	RecordBlock,
+	RecordDoubt,
+	RecordFinding,
+	Records,
+	RecordsOptions
+} from './records.js';
+export { recordsFrom, spineWidthOf } from './records.js';
 
 export type { KindThreshold, SignatureOptions, RowAnomaly } from './signature.js';
 export { findRowAnomalies, sharesByKind, thresholdsFor } from './signature.js';

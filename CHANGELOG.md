@@ -11,6 +11,36 @@ release PR is what stamps them.
 
 ### Added
 
+- **`records`: which rows belong to the same record, when a row is not one.**
+  The ninth mechanism, and the one three consumer applications had each written
+  separately. In a great many real documents a record occupies two or three
+  PRINTED rows - a street on one line, the figures on the next, the postcode on
+  a third - and every mechanism here worked on the printed row, so one row per
+  record undercounts by three to five times without a word.
+
+  `recordsFrom(rows)` returns `records`, `loose` and `findings`. What joins two
+  rows is one sentence: a table has a SPINE, the rows carrying its full width,
+  and a narrower row joins the nearest spine it fits BESIDE - every column it
+  fills being a column that spine leaves empty.
+
+  That second half is the whole difference from the rule everyone writes first,
+  and a count cannot see it. Attaching each fragment to its nearest spine gets
+  the same number of records on both measured documents and swallows twenty-
+  three page-furniture rows INTO records on one of them: a page header sits one
+  row from a spine, so proximity takes it. It cannot fill a column the spine
+  leaves empty, so compatibility refuses it.
+
+  Nothing is ever grouped away: every row comes back in a record or in `loose`.
+  On a table where a record IS a row it returns one record per row and changes
+  nothing, which is the case it was measured against. And it says
+  `spine-not-sharp` rather than guess when a record that leaves a column empty
+  is as wide as a rich fragment - a real property of some documents that no
+  threshold removes, and the point at which a caller who knows its document
+  takes over.
+
+  Measured in `truecopydev/corpus`, `npm run banc-records`, on two real
+  geometries whose judged answers are opposite.
+
 - **`accentFree`, which was already here in private.** Lower-cases a text and
   strips its accents, so two spellings of one label compare equal. It served the
   month-name lookup and nothing else could reach it, yet every reader that
