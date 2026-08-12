@@ -9,6 +9,12 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`few-spines`: almost nothing was grouped, and now it says so.** A spine belongs to a TABLE, and a whole document handed to `recordsFrom` flat has its width set by the widest row printed anywhere in it. Measured on a real annual report: 3115 rows, a widest row of eight, and SEVEN records - while the same document read page by page gives eleven hundred. The answer came back almost empty and said nothing, which is the one failure this library exists to prevent.
+
+  The threshold is measured on 20 real reports, both ways round: handed a document flat the share of rows reaching the full width is 0,5 % at the median and under two per cent on 90 % of them, handed one page at a time it is 30 % at the median and under two on 3 % of them. A doubt that misfires on three pages in a hundred is the right trade against silence on an empty answer.
+
 ## [1.0.4] - 2026-08-12
 
 ### Added

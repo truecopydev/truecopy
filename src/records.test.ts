@@ -164,6 +164,37 @@ describe('recordsFrom', () => {
 		expect(recordsFrom([])).toEqual({ records: [], loose: [], findings: [] });
 	});
 
+	it('says when almost nothing is a spine, instead of coming back empty', () => {
+		/*
+		 * The mistake this catches is one call, and it is the likeliest one: a
+		 * spine belongs to a TABLE, and a whole document handed over flat has its
+		 * width set by the widest row printed anywhere in it. Measured on a real
+		 * annual report - 3115 rows, a widest row of eight, SEVEN records - while
+		 * the same document read page by page gives eleven hundred.
+		 *
+		 * Without this the answer comes back almost empty and says nothing, which
+		 * is the one failure this library exists to prevent.
+		 */
+		const narrow = ['a', '', '', ''];
+		const wide = ['a', 'b', 'c', 'd'];
+		const rows = [...Array.from({ length: 200 }, () => narrow), wide];
+		const { records, loose, findings } = recordsFrom(rows);
+		expect(records).toHaveLength(1);
+		expect(loose.length).toBeGreaterThan(190);
+		const few = findings.find((one) => one.code === 'few-spines');
+		expect(few?.spineWidth).toBe(3);
+		expect(few?.shareOfSpines).toBeCloseTo(1 / 201, 4);
+		expect(few?.message).toMatch(/group each page/);
+	});
+
+	it('says nothing of the kind about a table whose rows do reach its width', () => {
+		// A doubt that fires everywhere says nothing. Measured on real pages, the
+		// share is 30 % at the median, and only three pages in a hundred fall
+		// under the bar this uses.
+		const rows = Array.from({ length: 20 }, () => ['a', 'b', 'c', 'd']);
+		expect(recordsFrom(rows).findings.map((one) => one.code)).toEqual([]);
+	});
+
 	it('says when the spine is not sharp instead of picking a side', () => {
 		/*
 		 * The limit that the corpus measured and that no threshold removes: a

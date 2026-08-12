@@ -49,16 +49,34 @@ export type RecordDoubt =
 	| 'spine-not-sharp'
 	/** No row reaches the full width: there is no spine to group around, and
 	 *  every row is returned on its own. */
-	| 'no-spine';
+	| 'no-spine'
+	/**
+	 * Almost no row reaches the full width, so the width was learned from a
+	 * handful of outliers and nearly everything came back loose.
+	 *
+	 * The shape of this mistake is one call, and it is the likeliest one: a
+	 * spine belongs to a TABLE, and a whole document handed over flat has its
+	 * width set by the widest row printed anywhere in it. Measured on a real
+	 * annual report - 3115 rows, a widest row of eight, and SEVEN records - and
+	 * the same document read page by page gives eleven hundred.
+	 *
+	 * Without this the answer comes back almost empty and says nothing, which is
+	 * the failure this library exists to prevent. `readTable` returns `pages`
+	 * for exactly this: group each page, not the flattened document.
+	 */
+	| 'few-spines';
 
 /** One doubt, in both forms: the code to act on, the sentence to show. */
 export interface RecordFinding {
 	readonly code: RecordDoubt;
 	readonly message: string;
-	/** The width a complete row was taken to have, for `spine-not-sharp`. */
+	/** The width a complete row was taken to have. */
 	readonly spineWidth?: number;
 	/** How many rows sit within one cell of that width, for `spine-not-sharp`. */
 	readonly nearMisses?: number;
+	/** Share of the non-empty rows that reach the spine width, for
+	 *  `few-spines`. */
+	readonly shareOfSpines?: number;
 }
 
 export interface RecordBlock {
@@ -122,6 +140,20 @@ const SLACK = 1;
  * will move; what will not is the denominator and the reason for the doubt.
  */
 const NEAR_MISS_PER_SPINE = 0.1;
+
+/**
+ * Under this share of non-empty rows reaching the full width, the width was
+ * learned from outliers rather than from the table.
+ *
+ * Measured on 20 real annual reports, both ways round. Handed a whole document
+ * flat, the share is 0,5 % at the median and under two on 90 % of them; handed
+ * one page at a time it is 30 % at the median and under two on 3 % of them. Two
+ * per cent is where those two populations stop overlapping.
+ *
+ * A doubt that misfires on three pages in a hundred is the right trade against
+ * an answer that comes back almost empty and says nothing.
+ */
+const FEW_SPINES_BELOW = 0.02;
 
 const filledColumns = (row: readonly string[]): Set<number> => {
 	const columns = new Set<number>();
@@ -245,6 +277,29 @@ export function recordsFrom(
 
 	const nearMisses = widths.filter((width) => width === spineWidth - 1).length;
 	const spines = isSpine.filter(Boolean).length;
+
+	/*
+	 * Almost no spine means the width was learned from outliers, and the answer
+	 * is about to come back almost empty. Saying so is the whole point: an empty
+	 * answer that says nothing is the failure this library exists to prevent.
+	 *
+	 * Against the NON-EMPTY rows, because a blank row reaches no width and would
+	 * only dilute the count.
+	 */
+	const withText = widths.filter((width) => width > 0).length;
+	const shareOfSpines = spines / withText;
+	if (shareOfSpines < FEW_SPINES_BELOW) {
+		findings.push({
+			code: 'few-spines',
+			message:
+				`Only ${spines} of ${withText} non-empty rows reach the full width of ${spineWidth}, so that ` +
+				'width came from a handful of rows and nearly everything will come back loose. If these rows ' +
+				'are a whole document, group each page instead: a spine belongs to a table.',
+			spineWidth,
+			shareOfSpines
+		});
+	}
+
 	if (nearMisses / spines > NEAR_MISS_PER_SPINE) {
 		findings.push({
 			code: 'spine-not-sharp',
