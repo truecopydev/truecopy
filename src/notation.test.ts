@@ -208,6 +208,26 @@ describe('readLeadingDate', () => {
 		expect(readLeadingDate('1er mardi 2026', FRENCH)).toBeNull();
 	});
 
+	it('reads a year the text layer broke across spaces', () => {
+		// `28 mai 202 6` came out of readTable on a real filing, from a page that
+		// prints `28 mai 2026`. readNumber has always read through those spaces;
+		// the date did not, which was an inconsistency rather than a policy.
+		expect(readLeadingDate('28 mai 202 6', FRENCH)?.date.getFullYear()).toBe(2026);
+		expect(readLeadingDate('28 mai 2 0 2 6', FRENCH)?.date.getFullYear()).toBe(2026);
+		expect(readLeadingDate('28 mai 202 6', FRENCH)?.length).toBe(12);
+	});
+
+	it('refuses an amount a month name happens to precede', () => {
+		// A statement row: a day, a month, and a sum. Its four digits make 1234,
+		// which is a calendar year and never a date on such a page. Trusting a
+		// repaired run as far as a whole one turns every amount printed after a
+		// month name into a date, silently.
+		expect(readLeadingDate('25 janv. 1 234,56', FRENCH)).toBeNull();
+		expect(readLeadingDate('25 janv. 3 100,00', FRENCH)).toBeNull();
+		// A contiguous year followed by an amount still reads, exactly as before.
+		expect(readLeadingDate('25 janv. 2026 300,00', FRENCH)?.date.getFullYear()).toBe(2026);
+	});
+
 	it('reads a month written out, accents and full stop included', () => {
 		expect(readLeadingDate('25 janv. 2026 GROCERIES', FRENCH)?.date.getMonth()).toBe(0);
 		expect(readLeadingDate('25 févr 2026', FRENCH)?.date.getMonth()).toBe(1);
