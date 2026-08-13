@@ -9,6 +9,14 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A lone zero in front of a mark is a decimal point, not a group of thousands.** `readNumber('0,280')` came back as two hundred and eighty. The rule that decides the mark is counting - three digits behind it is a group of thousands - and three digits is exactly what `0,280` shows. No group of thousands begins with a zero, which is the rule `wellGrouped` already states one field over, and it settles this without counting anything.
+
+  A thousandfold error, on money, and silent: 280 is a well formed figure that closes every arithmetic it enters, so nothing downstream can catch it. Met on a fidelity premium a listed company prints as `0,280 euro par action`, in a document that prints its ordinary dividend as `2,80` two lines above.
+
+- **A day carrying its ordinal is a date.** `readLeadingDate('1er janvier 2026')` returned null, and so did `1st January 2026`: the pattern let the day be followed by whitespace and by nothing else. The ordinal is a suffix on the day and can never be a month, so reading it is not guessing - and refusing it loses a date the page states plainly. The Spanish and Portuguese `1º` is the same shape and is deliberately left out: nothing measured carries it, and a pattern nobody has exercised is a pattern nobody has checked.
+
 ### Added
 
 - **`few-spines`: almost nothing was grouped, and now it says so.** A spine belongs to a TABLE, and a whole document handed to `recordsFrom` flat has its width set by the widest row printed anywhere in it. Measured on a real annual report: 3115 rows, a widest row of eight, and SEVEN records - while the same document read page by page gives eleven hundred. The answer came back almost empty and said nothing, which is the one failure this library exists to prevent.
