@@ -385,8 +385,35 @@ const LEADING_DAY_MONTH = /^(\d{1,2})[/\-.](\d{1,2})(?!\d)/;
  * been read that carries it, and a pattern nobody has exercised is a pattern
  * nobody has checked.
  */
-const LEADING_NAMED =
-	/^(\d{1,2})(?:er|re|st|nd|rd|th|e)?\s{1,4}([\p{L}.]{3,12})\.?\s{1,4}(\d{4})/iu;
+const LEADING_NAMED = new RegExp(
+	`^(\\d{1,2})(?:er|re|st|nd|rd|th|e)?\\s{1,4}([\\p{L}.]{3,12})\\.?\\s{1,4}(\\d(?:[${IN_NUMBER}]?\\d){3})`,
+	'iu'
+);
+
+/**
+ * The year those four digits hold, or null when they are not one.
+ *
+ * A text layer breaks a glyph run apart. `28 mai 202 6` is what `readTable`
+ * produced on a real filing, from a page that prints `28 mai 2026`, and reading
+ * through those spaces is a rule this file already applies to numbers:
+ * `IN_NUMBER` exists for it, and `readNumber('202 6')` has always returned 2026.
+ * A date reading the same run as no year at all was an inconsistency rather than
+ * a policy.
+ *
+ * Digits gathered ACROSS a space are held to a plausible band and contiguous
+ * ones are not, and that asymmetry is the whole safety of this. `25 janv. 1
+ * 234,56` is a statement row carrying an amount and no year at all: its four
+ * digits make 1234, which is a calendar year and never a date on such a page.
+ * Trusting a repaired run as far as a whole one turns every amount printed after
+ * a month name into a date, silently, on exactly the documents a consumer of
+ * this library reads most. Contiguous digits behave as they always did, so no
+ * reading that was right can start coming back different.
+ */
+const yearOf = (written: string): number | null => {
+	if (/^\d{4}$/.test(written)) return Number(written);
+	const year = Number(written.replace(/\D/g, ''));
+	return year >= 1900 && year <= 2099 ? year : null;
+};
 
 /** A date, and the text it took, or null when the shape matched but the numbers
  *  do not make a day. */
@@ -421,7 +448,9 @@ function fromNamedMonth(text: string, notation: Notation): LeadingDate | null {
 	if (!match || !notation.months) return null;
 	const month = notation.months[accentFree(match[2]).replace('.', '')];
 	if (month === undefined) return null;
-	return dateOfLength(makeDate(Number(match[3]), month, Number(match[1])), match[0].length);
+	const year = yearOf(match[3]);
+	if (year === null) return null;
+	return dateOfLength(makeDate(year, month, Number(match[1])), match[0].length);
 }
 
 /**
