@@ -37,6 +37,20 @@ describe('readNumber', () => {
 		expect(readNumber('1.234')).toBe(1234);
 	});
 
+	it('does not read a lone zero in front of a mark as a group of thousands', () => {
+		// Measured on a fidelity premium the document prints as `0,280 euro par
+		// action`. Three digits behind the mark is exactly what a thousands group
+		// looks like, so counting alone returned two hundred and eighty - a
+		// thousandfold error that closes every arithmetic it enters. No group of
+		// thousands begins with a zero, which settles it without counting.
+		expect(readNumber('0,280')).toBe(0.28);
+		expect(readNumber('0.280')).toBe(0.28);
+		expect(readNumber('0,000000')).toBe(0);
+		// And it changes nothing where the leading digits are not a lone zero.
+		expect(readNumber('1,280')).toBe(1280);
+		expect(readNumber('10,280')).toBe(10280);
+	});
+
 	it('takes the decimal mark the document settled, instead of counting', () => {
 		// `1,234` is one thousand two hundred and thirty-four in Luxembourg and one
 		// point two three four in Paris. Five characters do not decide that; the
@@ -179,6 +193,19 @@ describe('readLeadingDate', () => {
 
 	it('does not hunt for a day and month in a line that starts with neither', () => {
 		expect(readLeadingDate('GROCERIES 25/01', FRENCH, 2026)).toBeNull();
+	});
+
+	it('reads a day carrying the ordinal a document glues to the first of a month', () => {
+		// `1er janvier` in French, `1st January` in English. The suffix belongs to
+		// the day and is never a month, so reading it is not guessing - and
+		// refusing it loses a date the page states plainly.
+		expect(readLeadingDate('1er janv. 2026 GROCERIES', FRENCH)?.date.getDate()).toBe(1);
+		expect(readLeadingDate('1er janv. 2026 GROCERIES', FRENCH)?.length).toBe(14);
+		expect(readLeadingDate('1re janv. 2026', FRENCH)?.date.getDate()).toBe(1);
+		expect(readLeadingDate('1ER JANV. 2026', FRENCH)?.date.getDate()).toBe(1);
+		// Still nothing when the letters are a word rather than an ordinal: the
+		// month table decides, and it has no entry for them.
+		expect(readLeadingDate('1er mardi 2026', FRENCH)).toBeNull();
 	});
 
 	it('reads a month written out, accents and full stop included', () => {

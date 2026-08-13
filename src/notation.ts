@@ -111,6 +111,19 @@ function normaliseSeparators(text: string): string {
 	const last = Math.max(lastComma, lastDot);
 	if (last < 0) return text;
 
+	/*
+	 * A group of thousands never begins with a zero - the rule `wellGrouped`
+	 * states one field over - so a separator with nothing but zeros in front of it
+	 * is the decimal one, whatever follows it. Counting alone cannot see this:
+	 * three digits behind the mark is exactly what a thousands group looks like,
+	 * so `0,280` came back as two hundred and eighty. A thousandfold error, on a
+	 * figure a person acts upon, and silent - the value is well formed and closes
+	 * every arithmetic it enters. Measured on a fidelity premium of 0,280 euro
+	 * per share, printed that way by the document itself.
+	 */
+	const ahead = text.slice(0, last);
+	if (/^0+$/.test(ahead)) return `${ahead}.${text.slice(last + 1)}`;
+
 	const behind = text.length - last - 1;
 	// Not a decimal: the separator is a thousands mark, and what follows it is
 	// part of the number. Keeping only what came before turns 27.800 into 27.
@@ -358,9 +371,22 @@ export interface LeadingDate {
 const ISO = /^(\d{4})-(\d{2})-(\d{2})/;
 const LEADING_DELIMITED = /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/;
 const LEADING_DAY_MONTH = /^(\d{1,2})[/\-.](\d{1,2})(?!\d)/;
-/** `\p{L}` and not a range of Latin letters: a month name is a word, in
- *  whichever alphabet the document is set in. */
-const LEADING_NAMED = /^(\d{1,2})\s{1,4}([\p{L}.]{3,12})\.?\s{1,4}(\d{4})/u;
+/**
+ * `\p{L}` and not a range of Latin letters: a month name is a word, in
+ * whichever alphabet the document is set in.
+ *
+ * The suffix is the ordinal a document glues to the first of a month: French
+ * prints `1er janvier`, English `1st January`. It is a suffix on the day and
+ * never a month, so reading it is not guessing - and refusing it silently loses
+ * a date the page states plainly, which is the failure that costs most.
+ *
+ * Only the two alphabets whose ordinals were measured are here. The Spanish and
+ * Portuguese `1º` is the same shape and is deliberately left out: nothing has
+ * been read that carries it, and a pattern nobody has exercised is a pattern
+ * nobody has checked.
+ */
+const LEADING_NAMED =
+	/^(\d{1,2})(?:er|re|st|nd|rd|th|e)?\s{1,4}([\p{L}.]{3,12})\.?\s{1,4}(\d{4})/iu;
 
 /** A date, and the text it took, or null when the shape matched but the numbers
  *  do not make a day. */
