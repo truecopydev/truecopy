@@ -225,6 +225,17 @@ has to be repeated: it takes the three methods and drives them.
   in Node.
 - Regular expressions run over whole documents line by line. Bound every
   quantifier.
+- **`\w` and `\b` are ASCII in JavaScript, whatever the document is written in.**
+  `/d[ée]tach\w+/` does not match `détaché` and `/fix\w+/` does not match `fixé`:
+  the suffix is an accented letter, and `\w` is `[A-Za-z0-9_]`. Nothing fails -
+  the pattern compiles, runs, and returns a plausible fraction of the matches,
+  which then reads as a fact about the corpus rather than a defect in the rule.
+  Measured on a set of French filings: the ASCII form found 23 % of the dates the
+  `\p{L}` form found, and the gap looked like documents that simply did not state
+  a date. Write `\p{L}` with the `u` flag, or fold with `accentFree` first.
+  The same trap with a full stop instead of an accent: a pattern that closes with
+  `\b` after an abbreviation finds nothing in `trim.`, because there is no word
+  boundary between a full stop and the end of the line.
 - Reach for `explainDocument(document, { signature, roles })` FIRST when a
   reading comes out wrong. It prints the cut, what each column holds and which
   rows were dropped, as text that goes into a terminal, a CI log or a test.

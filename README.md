@@ -184,6 +184,19 @@ readLeadingDate('25 janv. 2026 GROCERIES', { dateOrder: 'DMY', months });
 
 It says `null` rather than guess. On figures somebody will act upon, a refusal costs a correction and a wrong reading costs a decision.
 
+**None of this needs a PDF.** `truecopy/notation` takes strings, so an API field, an HTML scrape or a pasted email gets the same reading as a page, and `pdfjs-dist` is never loaded. It is the layer worth reaching for before writing a pattern of your own - because the pattern everybody writes instead has a defect nobody sees:
+
+```ts
+import { accentFree } from 'truecopy/notation';
+
+// `\w` is [A-Za-z0-9_] in JavaScript, whatever the document is written in.
+/d[ée]tach\w+/.test('détaché'); // false - the suffix is an accented letter
+/d[ée]tach\p{L}*/u.test('détaché'); // true
+accentFree('Détaché'); // 'detache' - or fold first and compare plainly
+```
+
+Nothing fails there: the pattern compiles, runs, and returns a plausible fraction of the matches, which then reads as a fact about the documents rather than a defect in the rule.
+
 ## A refusal you can say in your own language
 
 ```ts
