@@ -15,6 +15,10 @@ release PR is what stamps them.
 
   A thousandfold error, on money, and silent: 280 is a well formed figure that closes every arithmetic it enters, so nothing downstream can catch it. Met on a fidelity premium a listed company prints as `0,280 euro par action`, in a document that prints its ordinary dividend as `2,80` two lines above.
 
+- **A year the text layer broke across spaces is still a year.** `28 mai 202 6` is what `readTable` produced on a real filing, from a page that prints `28 mai 2026`, and `readLeadingDate` read it as no date at all. `IN_NUMBER` exists one field over for exactly this and `readNumber('202 6')` has always returned 2026, so the date was inconsistent with the number rather than careful.
+
+  Digits gathered across a space are held to 1900-2099 and contiguous ones are not, and that asymmetry is the whole safety of it: `25 janv. 1 234,56` is a statement row carrying an amount and no year, its four digits make 1234, and trusting a repaired run as far as a whole one would turn every amount printed after a month name into a date. Contiguous digits behave exactly as before, so no reading that was right comes back different.
+
 - **A day carrying its ordinal is a date.** `readLeadingDate('1er janvier 2026')` returned null, and so did `1st January 2026`: the pattern let the day be followed by whitespace and by nothing else. The ordinal is a suffix on the day and can never be a month, so reading it is not guessing - and refusing it loses a date the page states plainly. The Spanish and Portuguese `1º` is the same shape and is deliberately left out: nothing measured carries it, and a pattern nobody has exercised is a pattern nobody has checked.
 
 ### Added
