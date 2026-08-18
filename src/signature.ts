@@ -63,11 +63,23 @@ const DEFAULT_MINIMUM_ROWS = 5;
  *     thresholdsFor(['date', 'amount', 'text'], 0.6)
  *     { ...thresholdsFor(['amount', 'text'], 0.6),
  *       date: { share: 0.6, emptyIsAnomalyAbove: 0.7 } }
+ *
+ * It sets `share` and nothing else. A kind left out of the list gets no
+ * threshold at all rather than a default one, and a kind that needs
+ * `emptyIsAnomalyAbove` is written out beside the spread, as above - which is
+ * the special case this exists to leave room for, not one it can express.
  */
 export const thresholdsFor = (kinds: string[], share: number): Record<string, KindThreshold> =>
 	Object.fromEntries(kinds.map((kind) => [kind, { share }]));
 
-/** The share of each kind on its own, which is what `dominantKind` reads. */
+/**
+ * The share of each kind on its own, which is what `dominantKind` reads.
+ *
+ * It drops `emptyIsAnomalyAbove`, and that is the whole point: the two
+ * mechanisms do not ask the same question. Naming a column asks how much of it
+ * is one kind; judging a cell asks how much emptiness the column tolerates. A
+ * caller that wants both keeps the `SignatureOptions` it already has.
+ */
 export const sharesByKind = (options: SignatureOptions): Record<string, number> =>
 	Object.fromEntries(
 		Object.entries(options.thresholds).map(([kind, threshold]) => [kind, threshold.share])

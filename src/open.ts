@@ -67,6 +67,16 @@ export interface Limits {
 	deadlineMilliseconds: number;
 }
 
+/**
+ * What protects a browser tab, and nothing beyond it.
+ *
+ * 20 MB, 40 pages and 30 seconds are sized for a file a person just dropped on
+ * a page and is waiting on. They are deliberately too small for an ingestion:
+ * two consumers reading annual reports settled on 80 to 200 MB and 600 to 2000
+ * pages, and a script that keeps these defaults refuses its own corpus with
+ * `too-large`. Raise them explicitly rather than reading a refusal as an
+ * unreadable document.
+ */
 export const DEFAULT_LIMITS: Limits = {
 	maximumBytes: 20 * 1024 * 1024,
 	maximumPages: 40,

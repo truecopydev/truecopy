@@ -21,7 +21,7 @@
  * if the description is looked for first.
  */
 
-import { dominantKind, type ColumnProfile } from './columns.js';
+import type { ColumnProfile } from './columns.js';
 
 export interface RoleRule<Role extends string> {
 	role: Role;
@@ -94,10 +94,3 @@ export function assignRoles<Role extends string>(
 
 	return assigned;
 }
-
-/** The kind of every column at once, for a caller that wants the raw reading
- *  rather than roles of its own. */
-export const dominantKinds = (
-	profiles: ColumnProfile[],
-	thresholds: Record<string, number>
-): (string | null)[] => profiles.map((profile) => dominantKind(profile, thresholds));

@@ -246,6 +246,15 @@ function spineFor(
  * `loose`, and a document with no spine at all comes back one record per row
  * rather than empty. The mechanism can be wrong about where a fragment belongs;
  * it is never allowed to be silent about a row.
+ *
+ * FOR A TABLE, NEVER FOR A DOCUMENT, and the difference costs records rather
+ * than raising a doubt. The spine is a WIDTH: rows of the table's own width
+ * carry a record, narrower ones are its fragments. That holds for a schedule
+ * printed as one table and breaks for a document whose entries are located by
+ * something else - an address, a heading, a date. Measured against a reader
+ * that walks such a document by its anchors: 2 309 records here against 2 900
+ * there, on the same 125 files. When the entries are found by what they say
+ * rather than by how wide they are, this is not the mechanism.
  */
 export function recordsFrom(
 	rows: readonly (readonly string[])[],

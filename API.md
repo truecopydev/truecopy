@@ -9,7 +9,7 @@ everything it re-exports counts as used and a name nobody imports stays green
 forever. Here, adding one is a line in a diff.
 
 ```text
-16 entry points, 65 values, 58 types
+16 entry points, 60 values, 58 types
 a name reachable through its own entry point and through the barrel is listed twice
 
 truecopy
@@ -32,7 +32,6 @@ truecopy
   type   ColumnProfile
   type   CompileOptions
   value  compilePattern
-  value  compilePatterns
   value  conforms
   type   ContractOptions
   value  contractReport
@@ -44,14 +43,12 @@ truecopy
   value  DEFAULT_LIMITS
   value  describeAnomaly
   type   Discrepancy
-  value  discrepancyOf
   type   Document
   value  documentFrom
   value  documentFromText
   type   DocumentKind
   value  documentWithoutSubstance
   value  dominantKind
-  value  dominantKinds
   type   Doubt
   value  explainDocument
   type   ExplainOptions
@@ -109,7 +106,6 @@ truecopy
   type   RecordsOptions
   type   Refusal
   type   Requirement
-  value  requirementHolds
   type   ReviewableRow
   type   RoleRule
   type   Row
@@ -128,7 +124,6 @@ truecopy
   type   TextPage
   value  thresholdsFor
   value  toRawPattern
-  value  toRawPatterns
   type   Unreadable
   value  UnreadableDocument
   value  validate
@@ -189,7 +184,6 @@ truecopy/classify
   type   DocumentKind
   type   PatternSet
   type   Requirement
-  value  requirementHolds
 
 truecopy/columns
   value  cellAt
@@ -201,7 +195,6 @@ truecopy/columns
 
 truecopy/roles
   value  assignRoles
-  value  dominantKinds
   type   RoleRule
 
 truecopy/labels
@@ -245,17 +238,14 @@ truecopy/schema
 truecopy/pattern
   type   CompileOptions
   value  compilePattern
-  value  compilePatterns
   value  countMatches
   value  NEVER_MATCHES
   type   RawPattern
   value  toRawPattern
-  value  toRawPatterns
 
 truecopy/contract
   value  checkExtraction
   type   Discrepancy
-  value  discrepancyOf
   type   Extraction
   value  readDocument
   type   Reader

@@ -1,23 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import {
-	NEVER_MATCHES,
-	compilePattern,
-	compilePatterns,
-	countMatches,
-	toRawPattern,
-	toRawPatterns
-} from './pattern.js';
+import { NEVER_MATCHES, compilePattern, countMatches, toRawPattern } from './pattern.js';
 
 describe('a pattern travelling as data', () => {
 	it('goes out and comes back unchanged', () => {
 		const raw = toRawPattern(/sol(de|d)/i);
 		expect(raw).toEqual({ source: 'sol(de|d)', flags: 'i' });
 		expect(compilePattern(raw).test('SOLDE')).toBe(true);
-	});
-
-	it('handles whole lists both ways', () => {
-		const patterns = [/a/, /b/i];
-		expect(compilePatterns(toRawPatterns(patterns)).map((p) => p.source)).toEqual(['a', 'b']);
 	});
 
 	it('adds the case-insensitive flag when the profile forgot it', () => {

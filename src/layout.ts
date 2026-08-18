@@ -207,6 +207,12 @@ export const cellsOf = (page: TextPage, boundaries?: number[]): string[][] =>
  * One function for two jobs, because a row and a cell are the same question
  * asked of different items: a row is all of them, a cell is the ones that fell
  * into one column.
+ *
+ * The box is the outer edge of the items given and nothing more: it says
+ * nothing about the gaps inside it, and it has no height, because a page holds
+ * no line height - `y` is the baseline the items share. A caller drawing a
+ * band picks its own. The unit is the page's, so a box from a PDF is in points
+ * and a box from a paste is in characters; the two never mix in one `Place`.
  */
 export function placeOf(items: PositionedItem[], page: number): Place | null {
 	if (items.length === 0) return null;

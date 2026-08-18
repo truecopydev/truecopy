@@ -66,23 +66,16 @@ export {
 } from './notation.js';
 
 export type { RawPattern, CompileOptions } from './pattern.js';
-export {
-	NEVER_MATCHES,
-	compilePattern,
-	compilePatterns,
-	countMatches,
-	toRawPattern,
-	toRawPatterns
-} from './pattern.js';
+export { NEVER_MATCHES, compilePattern, countMatches, toRawPattern } from './pattern.js';
 
 export type { PatternSet, Requirement, DocumentKind } from './classify.js';
-export { classifyDocument, requirementHolds } from './classify.js';
+export { classifyDocument } from './classify.js';
 
 export type { ColumnProfile, ProfileOptions } from './columns.js';
 export { cellAt, columnCount, dominantKind, profileColumns } from './columns.js';
 
 export type { RoleRule } from './roles.js';
-export { assignRoles, dominantKinds } from './roles.js';
+export { assignRoles } from './roles.js';
 
 export type {
 	RecordBlock,
@@ -123,7 +116,7 @@ export type {
 	Verdict,
 	ReadResult
 } from './contract.js';
-export { checkExtraction, discrepancyOf, readDocument } from './contract.js';
+export { checkExtraction, readDocument } from './contract.js';
 
 export type { CorpusCase, CheckResult, ContractOptions, PlacedWord } from './kit.js';
 export {

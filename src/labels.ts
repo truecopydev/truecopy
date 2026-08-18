@@ -18,7 +18,7 @@
  * WHAT IT REFUSES TO DO. Pick. Handing back one value would mean deciding
  * between two readings of a layout, which is the plausible-but-wrong answer
  * argued against everywhere else here. The list goes to `SelfCheck.declared`,
- * and `discrepancyOf` keeps the one that fits - so the document decides, not a
+ * and `readDocument` keeps the one that fits - so the document decides, not a
  * rule about how far a number usually sits from its heading.
  *
  * THE ONE RULE THAT COSTS A READING WHEN IT IS MISSING. A search stops at the
@@ -177,6 +177,16 @@ export function labelledValues(
  * headers is exactly the document nobody should read on a hunch: either the
  * predicate is too loose or the table carries two of that column, and picking
  * the first would be a silent answer to a question nobody asked.
+ *
+ * WHERE IT DOES NOT APPLY, and it was measured. This reads ONE table: rows cut
+ * against one set of boundaries. Handed the flattened rows of a whole document,
+ * it answers `null` far more often than it is wrong to - a 43-page annual
+ * report reprints its heading on pages the cut does not align, so the same
+ * logical column lands at several indices and every one of them matches. On a
+ * corpus of 125 such reports, 24 carried a heading a caller could find; this
+ * refused 12 of them, and was right on at least some - the heading it refused
+ * sat on a narrative page, above a column the schedule leaves empty. For a
+ * document, cut it page by page with `Table.pages` and ask once per page.
  */
 export function columnOfHeader(
 	rows: readonly (readonly string[])[],

@@ -148,7 +148,7 @@ export interface ReadResult<Entry, Header> {
 const refusalWhenNothingRead = <Entry, Header>(reading: Reading<Entry, Header>): Refusal | null =>
 	reading.records.length === 0 ? NOTHING_READ : null;
 
-export function discrepancyOf(check: SelfCheck): Discrepancy | null {
+function discrepancyOf(check: SelfCheck): Discrepancy | null {
 	if ('nothing' in check) return null;
 	if (check.declared.length === 0) return null;
 	let closest = { amount: check.read - check.declared[0], declared: check.declared[0] };

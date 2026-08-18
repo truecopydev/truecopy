@@ -42,7 +42,7 @@ export interface DocumentKind<Name extends string> {
 const setHolds = (text: string, set: PatternSet): boolean =>
 	set.all.every((pattern) => countMatches(text, pattern) >= (set.occurrences ?? 1));
 
-export function requirementHolds(text: string, requirement: Requirement): boolean {
+function requirementHolds(text: string, requirement: Requirement): boolean {
 	const holds = requirement.anyOf.some((set) => setHolds(text, set));
 	return requirement.absent === true ? !holds : holds;
 }
