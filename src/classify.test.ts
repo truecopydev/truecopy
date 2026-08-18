@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyDocument, requirementHolds, type DocumentKind } from './classify.js';
+import { classifyDocument, type DocumentKind } from './classify.js';
 
 /*
  * These kinds reproduce the precedence of a real filing of financial documents:
@@ -71,8 +71,10 @@ describe('classifyDocument', () => {
 	});
 
 	it('demands several occurrences when the kind asks for them', () => {
-		const requirement = { anyOf: [{ all: [/\btrimestre\b/i], occurrences: 2 }] };
-		expect(requirementHolds('one trimestre only', requirement)).toBe(false);
-		expect(requirementHolds('a trimestre, then another trimestre', requirement)).toBe(true);
+		const quarterly: DocumentKind<'quarterly'>[] = [
+			{ name: 'quarterly', requires: [{ anyOf: [{ all: [/\btrimestre\b/i], occurrences: 2 }] }] }
+		];
+		expect(classifyDocument('one trimestre only', quarterly)).toBeNull();
+		expect(classifyDocument('a trimestre, then another trimestre', quarterly)).toBe('quarterly');
 	});
 });

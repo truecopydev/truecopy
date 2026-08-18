@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cellAt, columnCount, dominantKind, profileColumns } from './columns.js';
-import { assignRoles, dominantKinds, type RoleRule } from './roles.js';
+import { assignRoles, type RoleRule } from './roles.js';
 
 const IS_DATE = /^\d{2}\/\d{2}(?:\/\d{4})?$/;
 const IS_AMOUNT = /^-?\d+(?:[ .]\d{3})*,\d{2}$/;
@@ -97,10 +97,6 @@ describe('dominantKind', () => {
 		expect(dominantKind(weakestFirst, { date: 0.5, text: 0.5 })).toBe('text');
 		const strongestFirst = { shareOfKind: { text: 0.9, date: 0.6 }, shareFilled: 1 };
 		expect(dominantKind(strongestFirst, { date: 0.5, text: 0.5 })).toBe('text');
-	});
-
-	it('reads a whole table at once', () => {
-		expect(dominantKinds(profiles, { date: 0.5, text: 0.5 })).toEqual(['date', 'text', null, null]);
 	});
 });
 

@@ -44,6 +44,10 @@ const DEFAULT_SAMPLE_LIMIT = 200;
 export const cellAt = (row: readonly string[], column: number): string =>
 	(row[column] ?? '').trim();
 
+/** The widest row, which is the only honest column count for a ragged table:
+ *  a row shorter than the widest is a row with empty cells at the end, never a
+ *  table with fewer columns. Counting the first row instead loses every column
+ *  a page prints only further down. */
 export const columnCount = (rows: string[][]): number =>
 	rows.reduce((widest, row) => Math.max(widest, row.length), 0);
 

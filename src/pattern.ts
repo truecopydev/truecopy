@@ -65,19 +65,20 @@ export function compilePattern(raw: RawPattern, options: CompileOptions = {}): R
 	}
 }
 
-export const compilePatterns = (raw: RawPattern[], options?: CompileOptions): RegExp[] =>
-	raw.map((one) => compilePattern(one, options));
-
 /** The wire form of a pattern, to generate or export a profile. */
 export const toRawPattern = (pattern: RegExp): RawPattern => ({
 	source: pattern.source,
 	flags: pattern.flags
 });
 
-export const toRawPatterns = (patterns: RegExp[]): RawPattern[] => patterns.map(toRawPattern);
-
-/** Count what a pattern matches in a text, whether or not it was written
- *  global. */
+/**
+ * Count what a pattern matches in a text, whether or not it was written global.
+ *
+ * Non-overlapping, because that is what `String.match` counts: `/aa/` finds one
+ * match in `aaa`, not two. A caller counting occurrences to decide what a
+ * document is wants exactly that; a caller measuring coverage of a text does
+ * not, and this is not the function for it.
+ */
 export function countMatches(text: string, pattern: RegExp): number {
 	const flags = pattern.flags.includes('g') ? pattern.flags : pattern.flags + 'g';
 	return text.match(new RegExp(pattern.source, flags))?.length ?? 0;

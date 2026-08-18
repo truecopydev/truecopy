@@ -9,6 +9,29 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Removed
+
+- **Five exports nobody imports leave the public surface: `compilePatterns`, `dominantKinds`, `toRawPatterns`, `discrepancyOf`, `requirementHolds`.** 65 values became 60; no type was touched. Every one of the five was measured against six repositories that install this package, and none of them names any of the five. The three plural helpers were one-line loops over a singular that stays - `compilePattern`, `toRawPattern`, `dominantKind` - and `map` writes them in the caller's own file. The other two are steps inside a public function and are still there, unexported: `classifyDocument` runs the requirement, `readDocument` picks the closest announced total.
+
+  **This is why the first digit moved**, and it is the only reason: code importing one of those five names stops compiling. Nothing reads differently, no default changed, and every other name is where it was. An application that imports none of the five upgrades by changing the number.
+
+  What the same measurement did NOT justify, and it is the more useful half: 81 of 123 exports were imported by nobody, and 49 of those 81 are types. A type is annotated, never called, so counting imports says nothing about whether it can go. Asked of the compiler instead - which types a living export's signature drags in behind it - **38 of the 49 came back reachable**. `OpenOptions` is in that list: it is the options type of `readTable` and of `openDocument`, the two most used entries of the package. Removing types on the strength of the import count would have taken the middle out of the library.
+
+### Added
+
+- **`few-spines`: almost nothing was grouped, and now it says so.** A spine belongs to a TABLE, and a whole document handed to `recordsFrom` flat has its width set by the widest row printed anywhere in it. Measured on a real annual report: 3115 rows, a widest row of eight, and SEVEN records - while the same document read page by page gives eleven hundred. The answer came back almost empty and said nothing, which is the one failure this library exists to prevent.
+
+  The threshold is measured on 20 real reports, both ways round: handed a document flat the share of rows reaching the full width is 0,5 % at the median and under two per cent on 90 % of them, handed one page at a time it is 30 % at the median and under two on 3 % of them. A doubt that misfires on three pages in a hundred is the right trade against silence on an empty answer.
+
+### Changed
+
+- **Nine exports now say where they stop.** No behaviour moved; the sentence above the declaration did. Two of the nine are worth reading before the next upgrade, because both bounds were measured against a real corpus of 125 annual reports rather than reasoned out:
+
+  - **`columnOfHeader` reads ONE table, not a whole document.** Handed the flattened rows of a 43-page report it answers `null` far more often than it should: the heading is reprinted on pages the cut does not align, the same logical column lands at several indices, and several matching columns is exactly what it refuses. Of 125 reports, 24 carried a heading a caller could find and this refused 12 of them. Cut the document with `Table.pages` and ask once per page.
+  - **`recordsFrom` groups a table, never a document located by what it says.** The spine is a WIDTH. Against a reader that walks the same 125 files by their addresses instead: 2 309 records here, 2 900 there. When the entries are found by an address, a heading or a date rather than by how wide the row is, this is not the mechanism - and it does not raise a doubt about it, it just returns fewer.
+
+  The other seven: `DEFAULT_LIMITS` (sized for a browser tab, refuses an ingestion corpus), `columnCount`, `countMatches` (non-overlapping), `sharesByKind`, `thresholdsFor` (sets `share` and nothing else), `describeAnomaly` (one cell, never a verdict on the row), `conforms` (one record, not the count a schema demands), `placeOf` (no height, and the page's own unit).
+
 ### Fixed
 
 - **A lone zero in front of a mark is a decimal point, not a group of thousands.** `readNumber('0,280')` came back as two hundred and eighty. The rule that decides the mark is counting - three digits behind it is a group of thousands - and three digits is exactly what `0,280` shows. No group of thousands begins with a zero, which is the rule `wellGrouped` already states one field over, and it settles this without counting anything.

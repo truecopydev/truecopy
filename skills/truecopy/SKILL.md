@@ -135,7 +135,7 @@ const surface = columnOfHeader(rows, (cell) => /\(en m2\)/i.test(cell));
   a heading, and a list of words meaning "total" would be a domain shipped in a
   parser.
 - **It hands back a LIST and will not pick.** That list is what
-  `SelfCheck.declared` takes, and `discrepancyOf` keeps the one that fits, so the
+  `SelfCheck.declared` takes, and `readDocument` keeps the one that fits, so the
   document decides instead of a rule about how far a number sits from a heading.
 - **A search stops at the next label**, which is not a detail: two headings
   printed close together otherwise let the second one's figure count for the

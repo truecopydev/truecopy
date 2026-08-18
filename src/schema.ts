@@ -109,7 +109,15 @@ function outOfFormat(value: number, field: Field): boolean {
 const conformingCount = (kept: object[], key?: string): number =>
 	key ? new Set(kept.map((record) => valueIn(record, key))).size : kept.length;
 
-/** Does the record carry every required field, each within its format? */
+/**
+ * Does the record carry every required field, each within its format?
+ *
+ * One record, and only its own fields: it knows nothing of how many records a
+ * schema demands, nor of the key that makes them distinct. Those are properties
+ * of a reading rather than of a row, and `validate` is where they are checked.
+ * A caller filtering rows one by one wants this one; a caller judging a whole
+ * extraction wants that one.
+ */
 export function conforms(schema: Schema, record: object): boolean {
 	for (const [name, field] of Object.entries(schema.fields)) {
 		const value = valueIn(record, name);

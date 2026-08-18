@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkExtraction, discrepancyOf, readDocument, type Reader } from './contract.js';
+import { checkExtraction, readDocument, type Reader } from './contract.js';
 import type { Document } from './document.js';
 import { openDocument } from './open.js';
 import { documentFromText, pageFrom, documentFrom } from './layout.js';
@@ -90,19 +90,44 @@ const TOY_PDF = pdfWithText([
 	{ word: '6', x: 400, y: 680 }
 ]);
 
-describe('discrepancyOf', () => {
-	it('returns nothing when the document announces nothing', () => {
-		expect(discrepancyOf({ nothing: 'none' })).toBeNull();
-		expect(discrepancyOf({ declared: [], read: 3, unit: 'points' })).toBeNull();
+/*
+ * A reader whose self-check hands back every total the page could be announcing,
+ * which is what `labelledValues` produces: a label with several candidate cells
+ * under it. The skeleton has to settle on one, and this is the only way to see
+ * from the outside which one it settles on.
+ */
+const announcing = (declared: number[]): Reader<Line, Header> => ({
+	...toy,
+	repair: undefined,
+	selfCheck(_document, reading) {
+		return {
+			declared,
+			read: reading.records.reduce((sum, line) => sum + line.value, 0),
+			unit: 'points'
+		};
+	}
+});
+
+describe('the gap between a reading and what its document announces', () => {
+	const nineRead = text('A\t4', 'B\t5');
+
+	it('finds no gap when the document announces no candidate at all', () => {
+		// An empty list is not a total of zero: nothing was announced, so there is
+		// nothing to contradict, and the reading comes back sound.
+		const result = readDocument(nineRead, announcing([]));
+		expect(result.discrepancy).toBeNull();
+		expect(result.verdict).toBe('read');
 	});
 
 	it('keeps the smallest gap among the announced values', () => {
-		expect(discrepancyOf({ declared: [20, 8], read: 9, unit: 'points' })).toMatchObject({
+		expect(readDocument(nineRead, announcing([20, 8])).discrepancy).toMatchObject({
 			amount: 1,
 			declared: 8
 		});
-		// And keeps the first when it is already the best.
-		expect(discrepancyOf({ declared: [9, 20], read: 9, unit: 'points' })).toMatchObject({
+	});
+
+	it('keeps the first when it is already the best', () => {
+		expect(readDocument(nineRead, announcing([9, 20])).discrepancy).toMatchObject({
 			amount: 0,
 			declared: 9
 		});

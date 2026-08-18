@@ -69,7 +69,14 @@ function fit(text: string, width: number): string {
 
 const percent = (share: number): string => `${Math.round(share * 100)}%`;
 
-/** The anomaly, in the words of someone looking at the page. */
+/**
+ * The anomaly, in the words of someone looking at the page.
+ *
+ * English, and columns numbered from zero as the rows are. It writes one
+ * sentence about one cell and never a verdict about the row: an application
+ * that wants to say the row is unusable decides that itself, from how many
+ * anomalies it got back.
+ */
 export function describeAnomaly(anomaly: RowAnomaly): string {
 	if (anomaly.cause === 'wrong-kind') {
 		return `column ${anomaly.column} is not ${anomaly.expected}`;
