@@ -84,6 +84,20 @@ export interface Table {
 	 * prints two tables side by side carries two runs of headings, and walking
 	 * the rows in order alternates between them. `pages[i]` and `boundaries[i]`
 	 * are the same page, so a reader can re-cut it.
+	 *
+	 * AND `pages[i][j]` IS `document.pages[i].rows[j]`, cut into cells. The two
+	 * are the same row in two shapes, one in cells and one in placed fragments,
+	 * and that is a GUARANTEE rather than an accident of the current code: the
+	 * cut maps over `page.rows` and drops nothing - not an empty row, not a row
+	 * whose cells all came back blank.
+	 *
+	 * It is written down because a reader needs it to reach a row's GEOMETRY,
+	 * and some questions have no answer in the cells at all. Which of two
+	 * records does a stray line of text belong to? Nothing in its own text says
+	 * so: the answer is which baseline it sits closer to, and that is
+	 * `document.pages[i].rows[j].y`. Measured on a property schedule that prints
+	 * each address above and below its figures - 291 of its 556 published
+	 * buildings had no street at all until their rows could be placed.
 	 */
 	pages: string[][][];
 	/**

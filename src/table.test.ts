@@ -66,6 +66,31 @@ describe('readTable', () => {
 		expect(pages.flat()).toEqual(rows);
 		expect(boundaries).toHaveLength(pages.length);
 	});
+
+	it('keeps every cut row on the geometric row it came from', async () => {
+		// A reader that has to place a stray line of text - which of two records
+		// does it belong to? - finds no answer in the cells. The answer is which
+		// baseline it sits closer to, so `pages[i][j]` has to be
+		// `document.pages[i].rows[j]`, with nothing dropped in between and the
+		// rows still descending down the page.
+		const bundle = new File(
+			[
+				pdfWithPages([
+					[at('a', 50, 700), at('b', 200, 700), at('suite', 50, 686)],
+					[at('c', 50, 700), at('d', 200, 700)]
+				])
+			],
+			'lot.pdf',
+			{ type: 'application/pdf' }
+		);
+		const { pages, document } = await readTable(bundle);
+		expect(pages.map((page) => page.length)).toEqual(
+			document.pages.map((page) => page.rows.length)
+		);
+		const [haut, bas] = document.pages[0]?.rows ?? [];
+		expect(haut?.y).toBeGreaterThan(bas?.y ?? 0);
+		expect(pages[0]?.[1]?.[0]).toBe('suite');
+	});
 });
 
 describe('what readTable refuses to vouch for', () => {

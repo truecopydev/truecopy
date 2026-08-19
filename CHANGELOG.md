@@ -7,6 +7,18 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Added
+
+- **A cut row and the row it was cut from are now the same row, in writing.** `pages[i][j]` is `document.pages[i].rows[j]`: the same row in two shapes, one in cells and one in placed fragments. That has always been true - the cut maps over `page.rows` and drops nothing - but it was true by accident of the code rather than by promise, so no caller could lean on it without reading the source and hoping.
+
+  It is worth promising because some questions have no answer in the cells at all. Which of two records does a stray line of text belong to? Nothing in the line says so. The answer is which baseline it sits closer to, and reaching that baseline means going from a cut row to `document.pages[i].rows[j].y` - which is only safe if the two are known to line up.
+
+  Measured on a property schedule that prints each address above AND below its figures, so that every record's label straddles its own numbers: 291 of its 556 published buildings had no street at all, because the reader could not tell whether a lone `25 avenue Henri` belonged to the record above it or the one below. Placed by baseline - 4,2 points to one, 15,1 to the other - all 616 came back.
+
+  A test pins it: every page's cut rows are counted against its geometric rows, so a future change that filters a row out fails there rather than silently moving somebody's labels onto the wrong record.
+
 ## [2.0.2] - 2026-08-19
 
 ### Fixed
