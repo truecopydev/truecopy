@@ -421,6 +421,20 @@ describe('the cut that keeps what comes back', () => {
 		expect(cells.every((row) => row.length === 3)).toBe(true);
 	});
 
+	it('keeps the wider cells when right edges are declined', () => {
+		/*
+		 * The same page, the cut a caller pinned. A reader that learned to split a
+		 * shared cell itself relies on the two figures arriving together; declining
+		 * right edges is the cut exactly as it was before they were read, bands and
+		 * boundaries included, never a third behaviour.
+		 */
+		const page = pageFrom(1, 595, 842, welded);
+		const cut = boundariesFromRecurrence(page.rows, undefined, undefined, false);
+		const cells = page.rows.map((row) => rowToCells(row, cut));
+		expect(cells[0]).toEqual(['LABEL', '167 2 076 683']);
+		expect(cells.every((row) => row.length === 2)).toBe(true);
+	});
+
 	it('cuts where the rows agree, not where the header overhangs', () => {
 		/*
 		 * TWO FLUSH-RIGHT COLUMNS, AND A HEADER WORD WIDER THAN THE FIGURES IT

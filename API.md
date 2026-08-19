@@ -9,7 +9,7 @@ everything it re-exports counts as used and a name nobody imports stays green
 forever. Here, adding one is a line in a diff.
 
 ```text
-16 entry points, 60 values, 58 types
+16 entry points, 60 values, 59 types
 a name reachable through its own entry point and through the barrel is listed twice
 
 truecopy
@@ -121,6 +121,7 @@ truecopy
   value  spineWidthOf
   type   StandardSchema
   type   Table
+  type   TableOptions
   type   TextPage
   value  thresholdsFor
   value  toRawPattern
@@ -163,6 +164,7 @@ truecopy/table
   type   Finding
   value  readTable
   type   Table
+  type   TableOptions
 
 truecopy/notation
   value  accentFree

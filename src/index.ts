@@ -49,7 +49,7 @@ export {
 	rowsFrom
 } from './layout.js';
 
-export type { Doubt, Finding, Table } from './table.js';
+export type { Doubt, Finding, Table, TableOptions } from './table.js';
 export { readTable } from './table.js';
 
 export type { DecimalMark, Notation, FoundNumber, LeadingDate } from './notation.js';

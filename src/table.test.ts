@@ -333,4 +333,49 @@ describe('what readTable refuses to vouch for', () => {
 		expect(warnings).toEqual([]);
 		expect(rows).toHaveLength(4);
 	});
+
+	it('keeps the wider cells when right edges are declined', async () => {
+		/*
+		 * A paste rather than a PDF, because a paste's geometry is exact: an item's
+		 * width IS its length, so the case is pinned to the character instead of to
+		 * a font's metrics.
+		 *
+		 * Two flush-right figure columns, ending at character 20 and at character
+		 * 40. Their left edges move with the digit count and five wide values chain
+		 * the two columns into ONE band, so only the right edges recurring at 20
+		 * separate them. Declining right edges is the cut as it was before they
+		 * were read: the two figures come back in one cell, which is exactly what a
+		 * reader that learned to split the shared cell itself relies on.
+		 */
+		const lineAt = (pieces: [number, string][]): string =>
+			pieces.reduce((line, [x, text]) => line.padEnd(x, ' ') + text, '');
+		const lines: string[] = [];
+		for (let i = 0; i < 17; i++) {
+			const a = '9'.repeat(4 + (i % 6));
+			const b = '8'.repeat(12);
+			lines.push(
+				lineAt([
+					[0, 'aa'],
+					[20 - a.length, a],
+					[40 - b.length, b]
+				])
+			);
+		}
+		// The bridge: values wide enough to chain the two columns' left edges into
+		// one band, on rows whose first column stays empty so nothing overlaps.
+		for (const left of [18, 20, 22, 24, 26]) {
+			lines.push(
+				lineAt([
+					[0, 'aa'],
+					[left, '7'.repeat(40 - left)]
+				])
+			);
+		}
+		const paste = new File([lines.join('\n')], 'paste.txt', { type: 'text/plain' });
+
+		const cut = await readTable(paste);
+		const wide = await readTable(paste, { rightEdges: false });
+		expect(cut.rows[0]).toEqual(['aa', '9999', '888888888888']);
+		expect(wide.rows[0]).toEqual(['aa', '9999 888888888888']);
+	});
 });

@@ -73,6 +73,12 @@ Three fields decide how you write the rest, and each has a wrong first instinct:
 - **`keepPage`, on a long document.** `openDocument(file, { keepPage: (n) => n >= 313 })`.
   Opening a page is 99 % of what a reading costs, `maximumPages` cuts at the end
   only, and the kept pages keep their own numbers.
+- **`rightEdges: false`, when a reader learned the wider cells.** The cut reads
+  right edges inside a band, which separates flush-right figure columns; a
+  reader that splits a shared cell itself - two tables printed side by side -
+  relied on those cells arriving whole. `readTable(file, { rightEdges: false })`
+  is the cut exactly as it was before right edges were read. It is a
+  compatibility pin, not a tuning knob: never hunt documents with it.
 
 ## When a row is not a record
 
