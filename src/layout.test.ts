@@ -389,6 +389,97 @@ describe('the cut that keeps what comes back', () => {
 		expect(boundariesFromRecurrence(pageFrom(1, 595, 842, []).rows)).toEqual([]);
 	});
 
+	/*
+	 * A COLUMN OF FIGURES IS SET FLUSH RIGHT, and its left edge never recurs: it
+	 * moves with the digit count. Two such columns fall into ONE band as soon as
+	 * the widest value of the second reaches back towards the first, and nothing
+	 * in the left edges tells them apart afterwards. Measured on page 27 of a
+	 * real property schedule, 72 rows: the right edges of its five figure columns
+	 * come back on 62 to 65 rows each while the left edges of the same columns
+	 * scatter over seven bands, none reaching 31. A surface and a price landed in
+	 * one cell on 126 of that document's 233 rows.
+	 */
+	const FIGURES: [string, number, string, number][] = [
+		['167', 20, '2 076 683', 78],
+		['93', 15, '580 000', 60],
+		['1157', 20, '1 520 000', 45],
+		['12', 12, '2 160 000', 35],
+		['82', 12, '1 222 929', 30]
+	];
+
+	const welded = FIGURES.flatMap(([surface, large, prix, largePrix], i) => [
+		item('LABEL', 50, 700 - i * 20, 60),
+		item(surface, 400 - large, 700 - i * 20, large),
+		item(prix, 480 - largePrix, 700 - i * 20, largePrix)
+	]);
+
+	it('splits two flush-right columns that one wide value welded together', () => {
+		const page = pageFrom(1, 595, 842, welded);
+		const cut = boundariesFromRecurrence(page.rows);
+		const cells = page.rows.map((row) => rowToCells(row, cut));
+		expect(cells[0]).toEqual(['LABEL', '167', '2 076 683']);
+		expect(cells.every((row) => row.length === 3)).toBe(true);
+	});
+
+	it('splits nothing when the ends of a column do not recur', () => {
+		// A column of text ends at a different x on every row. There is no edge
+		// that comes back, so there is nothing to cut on - which is the whole
+		// reason the left edge was read alone for so long.
+		const largeurs = [10, 30, 50, 70, 90];
+		const page = pageFrom(
+			1,
+			595,
+			842,
+			largeurs.flatMap((large, i) => [
+				item('TEXTE', 380, 700 - i * 20, large),
+				item('1 000', 500 - (30 + i * 10), 700 - i * 20, 30 + i * 10)
+			])
+		);
+		// The one boundary left is the left edges' own, between the two columns.
+		expect(boundariesFromRecurrence(page.rows)).toEqual([405]);
+	});
+
+	it('cuts nothing where a row prints across the cut', () => {
+		// Three section lines span both figure columns, exactly as a sub-total
+		// does. A gutter that three rows out of eight walk through is not a
+		// gutter.
+		const page = pageFrom(1, 595, 842, [
+			...welded,
+			...[0, 1, 2].map((i) => item('Sous-total du secteur', 380, 600 - i * 20, 70))
+		]);
+		// Only the boundary the left edges already gave, in front of the figures.
+		expect(boundariesFromRecurrence(page.rows)).toEqual([215]);
+	});
+
+	it('cuts nothing in front of a lone value', () => {
+		// One row carries a figure to the right of the column; the others carry
+		// nothing there. A value is not a column, so there is nothing to bound.
+		const page = pageFrom(1, 595, 842, [
+			...[10, 12, 14, 16, 18, 20, 12, 14].map((large, i) =>
+				item('167', 400 - large, 700 - i * 20, large)
+			),
+			item('2 076 683', 405, 620, 40)
+		]);
+		expect(boundariesFromRecurrence(page.rows)).toEqual([]);
+	});
+
+	it('cuts nothing between two words of the same run', () => {
+		// Short words, one gap apart, so the whole run is a single band and their
+		// ends recur exactly as a column of figures would. What tells the two
+		// apart is what comes next: a column starts a gap further on, a word does
+		// not.
+		const mots = ['ABC', 'DEF', 'GHI', 'JKL'];
+		const page = pageFrom(
+			1,
+			595,
+			842,
+			[0, 1, 2, 3, 4].flatMap((ligne) =>
+				mots.map((mot, rang) => item(mot, 50 + rang * 18, 700 - ligne * 20, 15))
+			)
+		);
+		expect(boundariesFromRecurrence(page.rows)).toEqual([]);
+	});
+
 	it('keeps everything when nothing recurs enough to judge by', () => {
 		// Asked for a support no band can reach, it says so by keeping them all
 		// rather than by returning an empty cut: "I cannot tell" is not "no
