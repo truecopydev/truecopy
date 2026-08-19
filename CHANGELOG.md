@@ -35,6 +35,20 @@ release PR is what stamps them.
 
   A test pins it: every page's cut rows are counted against its geometric rows, so a future change that filters a row out fails there rather than silently moving somebody's labels onto the wrong record.
 
+### Fixed
+
+- **A cut inside a band could fall between two groups of a thousand.** A cut needs a gutter: no row may start printing just right of it, and that window opened one point past the cut rather than at it - which exempted the tightest adjacency a page can print, the one most certainly not a gutter. A PDF draws `1 358 522` as three items, and the space between two groups of a thousand is a few tenths of a point wide; the rows agreed on the right edge of `358`, nothing was printed across it, and the boundary landed inside the number.
+
+  The window now opens AT the cut. Measured over 125 annual reports, 398 989 rows, counting only the pairs that cannot be read any other way - a cell already split by thousands, followed by a group of three:
+
+  |                                     | before right edges | 2.0.2   | this    |
+  | ----------------------------------- | ------------------ | ------- | ------- |
+  | filled cells                        | 736 181            | 761 595 | 758 884 |
+  | cells holding several glued numbers | 20 852             | 15 475  | 15 431  |
+  | numbers cut in two                  | 593                | 1 242   | 762     |
+
+  The gain of 2.0.2 on glued cells is kept, and 480 of the 649 numbers it cut are given back.
+
 ## [2.0.2] - 2026-08-19
 
 ### Fixed
