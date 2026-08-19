@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-08-20
+
 ### Added
 
 - **`readTable(file, { measuredSpaces: true })` spaces a cell as the page printed it.** An engine hands one cell over as several items, and nothing in them says which ones were printed apart: a filing draws `1 207 773 393` as five items, because the run breaks wherever glyph spacing changes. One space between all of them reads `1 2 07 773 393` - a number no reader parses and no check catches, since every digit is there in the right order.
