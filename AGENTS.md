@@ -45,6 +45,31 @@ Two of those checks are unusual and are load-bearing:
 - `api` and `skill` regenerate the published surface. A drift there means the
   documentation and the packaged agent skill no longer describe the code.
 
+## Changing a reading
+
+The cut, the notation, the records and the table are shared by several
+consumers, and a change there moves OTHER projects' readings: that is what a
+shared reading layer means, and it is the one place where a locally green gate
+proves too little. Three rules, all paid for on the same day:
+
+- **A fix measured on one document family is not done.** The 2.0.1 cut was
+  measured over a 125-document corpus of one shape and improved every number it
+  was aimed at - and regressed a consumer whose readers had learned the wider
+  cells of pages printing two tables side by side. Before merging a change
+  that can move a reading (layout, notation, records, table), replay the
+  corpus AND the consumer benches; the private corpus repo carries the harness
+  and knows where they live. A regression there is a finding to resolve before
+  the merge, not after it.
+- **A change in cutting behaviour never arrives as a new default.** It arrives
+  as an option - `rightEdges` is the shape to copy - and a consumer adopts it
+  when its own bench is green. RELEASING.md already calls a new default a
+  major; majors are not cut here, so the option is not the polite path, it is
+  the only one.
+- **A layout only one consumer meets belongs to that consumer's reader.** This
+  library carries what recurs across document families: the pipeline, the
+  geometry, the notation, the checks around a reading. Absorbing every
+  particular layout one project hits is how a general cut becomes nobody's.
+
 ## Git
 
 - `main` is the only long branch. Work goes through `feature/*`, `fix/*`,
