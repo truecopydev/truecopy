@@ -11,6 +11,12 @@ release PR is what stamps them.
 
 ### Added
 
+- **`readTable(file, { measuredSpaces: true })` spaces a cell as the page printed it.** An engine hands one cell over as several items, and nothing in them says which ones were printed apart: a filing draws `1 207 773 393` as five items, because the run breaks wherever glyph spacing changes. One space between all of them reads `1 2 07 773 393` - a number no reader parses and no check catches, since every digit is there in the right order.
+
+  The two joins in `layout.ts` disagreed about it and both were wrong on the same page: `joinRow` glues everything, so the date one row up reads `31juillet`; `rowToCells` spaces everything, so the figure comes out ungrouped. Neither had anything to go on. The page does, in the gap between where one item ends and the next begins - measured on that filing at 0,00 point where glyphs touch and 3,6 to 3,8 where a thousands separator or a word space stands, on characters 6,7 points wide. A quarter of a character clears both by a wide margin and, unlike a fixed number of points, does not depend on the font size.
+
+  No width is no measurement: a row assembled without geometry - a paste, a CSV, an OCR line handed over whole - keeps its one space between items, having no gaps to read. `document.text` is not touched at all; the option moves cell text only, which is why it is a knob and not a new default.
+
 - **`truecopy/cite`: the rows a model cited, and whether they really carry each value.** A model that turns cells into records fails one invisible way: it returns a plausible value the document never printed - a town deduced from a postcode, a rounded figure - and that reads exactly like a successful extraction. The deterministic answer is a protocol, and it now ships instead of being rewritten by every consumer: `numberedRows` gives the model rows it can cite, `citedText` assembles what a record claims to have read, and `carriesText` / `carriesNumber` look every value up in THOSE rows and nowhere else. The model cannot produce a fact; it can only point at one.
 
   Checking against the whole document was already possible and is the trap this closes: on a two-hundred-page document almost any figure is printed somewhere, so `checkExtraction`'s document-wide lookup validates values the cited rows never carried. It stays what it is - the arithmetic check against what the document declares - and the citation check now stands beside it.
