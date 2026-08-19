@@ -421,6 +421,55 @@ describe('the cut that keeps what comes back', () => {
 		expect(cells.every((row) => row.length === 3)).toBe(true);
 	});
 
+	it('cuts where the rows agree, not where the header overhangs', () => {
+		/*
+		 * TWO FLUSH-RIGHT COLUMNS, AND A HEADER WORD WIDER THAN THE FIGURES IT
+		 * NAMES. Measured on page 13 of a property schedule: the first column's
+		 * figures all end at 502, its two header words end at 508 and 511, and the
+		 * second column's widest value starts at 511. Taking the far end of the
+		 * right-edge cluster puts the cut at 511, where the second column is
+		 * already printing, and the four conditions then refuse it - so the two
+		 * columns stayed welded and every row carried both surfaces in one cell.
+		 */
+		const larges = new Set([0, 1]);
+		const page = pageFrom(1, 595, 842, [
+			...Array.from({ length: 20 }, (_, i) => {
+				const large = 5 + (i % 8);
+				const largeTotale = larges.has(i) ? 24 : 12;
+				return [
+					item('LIBELLE', 60, 700 - i * 14, 80),
+					item('240', 502 - large, 700 - i * 14, large),
+					item('310', 535 - largeTotale, 700 - i * 14, largeTotale)
+				];
+			}).flat(),
+			item('Surface', 482, 730, 26),
+			item('habitation', 478, 716, 33)
+		]);
+		const cut = boundariesFromRecurrence(page.rows);
+		expect(cut).toContain(502);
+		const cells = page.rows.map((row) => rowToCells(row, cut));
+		expect(cells.at(-1)).toEqual(['LIBELLE', '240', '310']);
+	});
+
+	it('stops walking down once no column ends there', () => {
+		/*
+		 * The walk down the cluster is not a search for any gutter: it stops as
+		 * soon as too few rows end at the candidate. Here the only edge that comes
+		 * back is refused - the second column starts right after it - and the one
+		 * below it is a single row's word end. A cut needs a column on each side,
+		 * and one row is not a column.
+		 */
+		const page = pageFrom(1, 595, 842, [
+			...Array.from({ length: 10 }, (_, i) => [
+				item('LIBELLE', 60, 700 - i * 20, 80),
+				item('455', 455 - (10 + i), 700 - i * 20, 10 + i),
+				item('500', 500 - (30 + i), 700 - i * 20, 30 + i)
+			]).flat(),
+			item('x', 437, 700, 8)
+		]);
+		expect(boundariesFromRecurrence(page.rows)).toEqual([248]);
+	});
+
 	it('splits nothing when the ends of a column do not recur', () => {
 		// A column of text ends at a different x on every row. There is no edge
 		// that comes back, so there is nothing to cut on - which is the whole

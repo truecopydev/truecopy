@@ -174,15 +174,54 @@ function cutsInside(band: Band, perRow: PositionedItem[][], needed: number, gap:
 
 	const cuts: number[] = [];
 	for (const cluster of bandsOf(rights, gap)) {
-		if (rowsReaching(perRow, cluster, (item) => item.x + item.width) < needed) continue;
-		const cut = cluster.to;
-		if (rowsAcross(perRow, cut) >= needed) continue;
-		if (rowsReaching(perRow, { from: cut + 1, to: cut + gap }, (item) => item.x) >= needed)
-			continue;
-		if (rowsReaching(perRow, { from: cut, to: band.to }, (item) => item.x) < needed) continue;
-		cuts.push(cut);
+		if (rowsReaching(perRow, cluster, rightEdge) < needed) continue;
+		const cut = agreedCut(cluster, rights, band, perRow, needed, gap);
+		if (cut !== undefined) cuts.push(cut);
 	}
 	return cuts;
+}
+
+const rightEdge = (item: PositionedItem): number => item.x + item.width;
+const leftEdge = (item: PositionedItem): number => item.x;
+
+/**
+ * The furthest right edge inside a cluster THAT THE ROWS AGREE ON.
+ *
+ * A cluster is not one edge: it is every right edge no column gap apart, and
+ * the widest thing over a column is never one of its values. A header label
+ * overhangs the figures it names, a footnote mark sits past the last of them,
+ * and both join the cluster and push its far end into the next column. Cutting
+ * at that end cuts where the neighbour is already printing, the conditions
+ * below then refuse it, and the two columns stay welded.
+ *
+ * Measured on page 13 of a property schedule, 93 rows: two surface columns
+ * whose right edges come back on 29 rows each, and between them the header's
+ * own words, ending 4 and 7 points past the last figure. The cluster ran to
+ * 520, by which point the right column is printing; the edge the rows agree on
+ * is 504, and the gutter is there. All 635 rows of that document carried both
+ * surfaces in one cell.
+ *
+ * So the candidates are walked from the right, and the first that is a gutter
+ * wins. The walk stops as soon as too few rows reach the candidate at all:
+ * below that no column ends, and a cut needs a column on each side of it.
+ */
+function agreedCut(
+	cluster: Band,
+	rights: number[],
+	band: Band,
+	perRow: PositionedItem[][],
+	needed: number,
+	gap: number
+): number | undefined {
+	const candidates = [...new Set(rights.filter((at) => within(at, cluster)))].reverse();
+	for (const cut of candidates) {
+		if (rowsReaching(perRow, { from: cluster.from, to: cut }, rightEdge) < needed) return undefined;
+		if (rowsAcross(perRow, cut) >= needed) continue;
+		if (rowsReaching(perRow, { from: cut + 1, to: cut + gap }, leftEdge) >= needed) continue;
+		if (rowsReaching(perRow, { from: cut, to: band.to }, leftEdge) < needed) continue;
+		return cut;
+	}
+	return undefined;
 }
 
 /** How many rows print something ACROSS a position. Zero is a gutter, and a
