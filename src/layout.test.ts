@@ -114,6 +114,26 @@ describe('rows', () => {
 		]);
 	});
 
+	it('does not cut between two groups of a thousand', () => {
+		// The same trap a fraction of a point wide, which is where a PDF really
+		// sets it: "1 358 522" drawn as three items, 0.4 point apart. The rows
+		// agree on the right edge of "358" and nothing is printed across it, so
+		// only the gutter test can refuse the cut - and it can only refuse it if
+		// its window opens at the cut itself.
+		const page = pageFrom(1, 595, 842, [
+			item('Paris', 50, 700, 30),
+			item('1', 300, 700, 5),
+			item('358', 305.4, 700, 14),
+			item('522', 319.8, 700, 14),
+			item('Lyon', 50, 680, 25),
+			item('2', 300, 680, 5),
+			item('417', 305.4, 680, 14),
+			item('468', 319.8, 680, 14)
+		]);
+		expect(boundariesFromRecurrence(page.rows).filter((at) => at > 300 && at < 334)).toEqual([]);
+		expect(page.rows[0].text).toBe('Paris' + '\t' + '1358522');
+	});
+
 	it('cuts a row against boundaries it is given', () => {
 		const page = pageFrom(1, 595, 842, [item('2019', 50, 700), item('4', 400, 700)]);
 		expect(rowToCells(page.rows[0], [200])).toEqual(['2019', '4']);

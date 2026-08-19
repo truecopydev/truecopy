@@ -156,7 +156,17 @@ const within = (at: number, band: Band): boolean => at >= band.from && at <= ban
  * recur on as many rows as a band does, or one long cell would open a column.
  * Nothing may be printed ACROSS the cut. Nothing may START just after it
  * either, and that is what separates a column from a run of words: columns are
- * set a gap apart, words follow each other closely. And a real column has to
+ * set a gap apart, words follow each other closely. That window opens AT the
+ * cut and not a point past it, which reads like a detail and is not: the
+ * tightest adjacency a page can print is the one most certainly not a gutter.
+ * Measured on page 85 of a property schedule, 725 rows: a PDF draws
+ * "1 358 522" as three items, and the space between two groups of a thousand
+ * is a fraction of a point wide. Starting the window one point past the cut
+ * exempted exactly that space, the rows agreed on the right edge of "358",
+ * and the cut fell inside the number. Corpus of 398 989 rows: 5 125 numbers
+ * split in two, against 2 763 before right edges were read at all.
+ *
+ * And a real column has to
  * begin at or after the cut, or it bounds nothing - a lone value to the right
  * of a table is not a column.
  *
@@ -226,7 +236,7 @@ function agreedCut(
 	for (const cut of candidates) {
 		if (rowsReaching(perRow, { from: cluster.from, to: cut }, rightEdge) < needed) return undefined;
 		if (rowsAcross(perRow, cut) >= needed) continue;
-		if (rowsReaching(perRow, { from: cut + 1, to: cut + gap }, leftEdge) >= needed) continue;
+		if (rowsReaching(perRow, { from: cut, to: cut + gap }, leftEdge) >= needed) continue;
 		if (rowsReaching(perRow, { from: cut, to: band.to }, leftEdge) < needed) continue;
 		return cut;
 	}
