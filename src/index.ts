@@ -1,7 +1,7 @@
 /*
  * truecopy - a reading you can certify against the document it came from.
  *
- * Ten mechanisms, in the order a document meets them:
+ * Eleven mechanisms, in the order a document meets them:
  *
  *   open       bytes -> pages -> rows, with the caps, the deadline, the release
  *   notation   how the page writes a number and a date, never what they mean
@@ -12,6 +12,7 @@
  *   labels     which cells could be the value a label announces
  *   signature  which rows break the table's own type signature
  *   schema     the fields, the formats, the count a reading must satisfy
+ *   cite       the rows a model cited, and whether they carry each value
  *   explain    what all of the above decided, in words, when it went wrong
  *
  * Around them: `contract` says what an honest reading looks like, `kit` makes it
@@ -101,6 +102,8 @@ export type {
 	StandardSchema
 } from './schema.js';
 export { conforms, schemaOf, validate, validateWith } from './schema.js';
+
+export { carriesNumber, carriesText, citedText, numberedRows } from './cite.js';
 
 export type { ExplainOptions } from './explain.js';
 export { describeAnomaly, explainDocument, explainRows } from './explain.js';

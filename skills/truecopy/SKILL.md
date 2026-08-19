@@ -174,10 +174,53 @@ reading that produced no record.
 The pipeline enforces one rule: **a reading that contradicts its document never
 comes back as `read`.**
 
-## Checking rows that came from a model
+## Rows a model extracted: check the citations, then the totals
 
-Nothing in the pipeline asks where a reading came from, so rows an LLM returned
-go through the same check as rows a reader produced. That is one call:
+Nothing in the pipeline asks where a reading came from, so rows a model
+returned go through the same discipline as rows a reader produced. Two checks
+apply, and they answer different questions: was each value READ or invented,
+and does the total close.
+
+**The literal check first, and it needs the model to cite.** The model never
+sees the PDF: it receives the rows this library cut, NUMBERED, and returns
+records that cite the row numbers they came from. Every value is then looked up
+in those rows and nowhere else - a model checked this way cannot produce a
+fact, only point at one:
+
+```ts
+import { numberedRows, citedText, carriesText, carriesNumber } from 'truecopy/cite';
+import { decimalMarkOf } from 'truecopy/notation';
+
+const prompt = rules + '\n' + numberedRows(page); // what the model sees
+// it returns records like { rows: [12, 13], town: 'EVRY', surface: '1 655' }
+
+const mark = decimalMarkOf(document.text);
+const source = citedText(page, record.rows); // ONLY the cited rows
+carriesText(source, record.town); // all its words, in order
+carriesNumber(source, record.surface, mark); // the page's own numbers
+```
+
+Both lookups exist in exactly this shape because the naive forms were measured
+and failed: a contiguous-substring search refused 104 of one real document's
+111 records (a layout throws the tail of a name past the figure columns, word
+order intact), and flattening the source into digits found a figure three times
+in a row that carries no such figure at all.
+
+Three decisions stay yours, and they are policy rather than mechanics:
+
+- **which fields are text and which are figures.** A month-worded date is TEXT:
+  `avril 2025` is carried as words, and whether it converts to a date is a
+  separate question that must not cost the record.
+- **which field ANCHORS the record** - the one whose failure discards the
+  record whole, because everything else becomes unattributable without it.
+- **every other failed field is dropped and COUNTED, never kept silently and
+  never fatal.** Measured: refusing whole records on one paraphrased label cost
+  54 records whose address, surface and four amounts were all verified.
+
+**Then the arithmetic check.** It is document-wide, so it cannot see an
+invented value that the document happens to print somewhere else - that is what
+the citation check above closes - but it is the one that says whether the
+reading is COMPLETE:
 
 ```ts
 import { checkExtraction, openDocument } from 'truecopy';
