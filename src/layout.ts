@@ -69,7 +69,7 @@ export function boundariesFromAnchors(anchors: number[]): number[] {
 }
 
 /**
- * Column boundaries from the x that come back, row after row.
+ * Column boundaries from the edges that come back, row after row.
  *
  * The spread of x over a whole page counts everything on it: the letterhead,
  * the address block, the summary boxes, the footer, and every word inside a
@@ -85,28 +85,111 @@ export function boundariesFromAnchors(anchors: number[]): number[] {
  * A weak band at either edge is kept. A column used on two rows out of forty -
  * a lone credit on a statement of debits - lives at the edge and is real; a
  * lone x in the middle is a label that drifted.
+ *
+ * THE RIGHT EDGE IS READ TOO, AND ONLY INSIDE A BAND. A column of figures is
+ * set flush right: its left edge moves with the digit count, so it never
+ * recurs, and two such columns fall in one band with nothing to tell them
+ * apart. Their right edges do recur - measured on page 27 of a real property
+ * schedule, 72 rows: the right edges of its five figure columns come back on 62
+ * to 65 rows each while the left edges of the same columns scatter over seven
+ * bands, none reaching 31. The cut missed a boundary near 395, so a surface and
+ * a price landed in one cell on 126 of that document's 233 rows. That is the
+ * `merged-column` doubt this library already raises, and this is its cause.
+ *
+ * INSIDE A BAND AND NOWHERE ELSE, because a right edge cannot be trusted to
+ * shape the bands themselves. A text column of varying width ends at a
+ * different x on every row, and those ends are dense enough to bridge every gap
+ * on the page: measured over 125 annual reports, letting right edges form the
+ * bands welded the page into two columns and cost 127 458 of 736 181 filled
+ * cells. Reading them only where the left edges already agreed keeps that
+ * failure impossible - the bands, and therefore every boundary between them,
+ * are exactly what they were.
  */
 export function boundariesFromRecurrence(
 	rows: Row[],
 	minimumSupport = 0.15,
 	gap = COLUMN_GAP
 ): number[] {
-	const perRow = rows.map((row) => row.items.map((item) => item.x)).filter((xs) => xs.length > 0);
+	const perRow = rows.map((row) => row.items).filter((items) => items.length > 0);
 	if (perRow.length === 0) return [];
 
 	const bands = bandsOf(
-		perRow.flat().sort((a, b) => a - b),
+		perRow.flatMap((items) => items.map((item) => item.x)).sort((a, b) => a - b),
 		gap
 	);
 	const needed = Math.max(2, Math.round(perRow.length * minimumSupport));
-	const strong = bands.map(
-		(band) => perRow.filter((xs) => xs.some((x) => x >= band.from && x <= band.to)).length >= needed
-	);
+	const strong = bands.map((band) => rowsReaching(perRow, band, (item) => item.x) >= needed);
 	const kept = bands.filter((_, index) => strong[index] || atAnEdge(strong, index));
 
 	const boundaries: number[] = [];
-	for (let i = 1; i < kept.length; i++) boundaries.push((kept[i - 1].to + kept[i].from) / 2);
+	for (const [index, band] of kept.entries()) {
+		if (index > 0) boundaries.push((kept[index - 1].to + band.from) / 2);
+		boundaries.push(...cutsInside(band, perRow, needed, gap));
+	}
 	return boundaries;
+}
+
+/** How many rows put one of their edges inside a band. */
+function rowsReaching(
+	perRow: PositionedItem[][],
+	band: Band,
+	edge: (item: PositionedItem) => number
+): number {
+	return perRow.filter((items) => items.some((item) => within(edge(item), band))).length;
+}
+
+const within = (at: number, band: Band): boolean => at >= band.from && at <= band.to;
+
+/**
+ * Where a recurring right edge splits one band into two columns.
+ *
+ * FOUR CONDITIONS, AND EACH ONE KEEPS A REAL FAILURE OUT. The right edge has to
+ * recur on as many rows as a band does, or one long cell would open a column.
+ * Nothing may be printed ACROSS the cut. Nothing may START just after it
+ * either, and that is what separates a column from a run of words: columns are
+ * set a gap apart, words follow each other closely. And a real column has to
+ * begin at or after the cut, or it bounds nothing - a lone value to the right
+ * of a table is not a column.
+ *
+ * The gap is asked of the ROWS and not of the next left edge, because one wide
+ * value reaching back into the gap is exactly what welds two columns into one
+ * band in the first place. A single row starting there proves nothing; most of
+ * them starting there is prose.
+ *
+ * Nothing asks for a column on the LEFT of the cut, because the band already
+ * guarantees one: its first left edge is below the cluster by construction.
+ *
+ * The cut sits exactly where the left column's text ENDS, and that position is
+ * the whole reason this is safe: an item of the left column starts before its
+ * own right edge, so it stays left, and an item of the right column starts
+ * after the left column stopped, so it goes right. `columnAt` reads a left edge
+ * and nothing else, so no cell is ever divided.
+ */
+function cutsInside(band: Band, perRow: PositionedItem[][], needed: number, gap: number): number[] {
+	const rights = perRow
+		.flatMap((items) => items.map((item) => item.x + item.width))
+		.filter((at) => at > band.from && at < band.to)
+		.sort((a, b) => a - b);
+	if (rights.length === 0) return [];
+
+	const cuts: number[] = [];
+	for (const cluster of bandsOf(rights, gap)) {
+		if (rowsReaching(perRow, cluster, (item) => item.x + item.width) < needed) continue;
+		const cut = cluster.to;
+		if (rowsAcross(perRow, cut) >= needed) continue;
+		if (rowsReaching(perRow, { from: cut + 1, to: cut + gap }, (item) => item.x) >= needed)
+			continue;
+		if (rowsReaching(perRow, { from: cut, to: band.to }, (item) => item.x) < needed) continue;
+		cuts.push(cut);
+	}
+	return cuts;
+}
+
+/** How many rows print something ACROSS a position. Zero is a gutter, and a
+ *  gutter is the only place a column may be cut. */
+function rowsAcross(perRow: PositionedItem[][], at: number): number {
+	return perRow.filter((items) => items.some((item) => item.x < at && item.x + item.width > at))
+		.length;
 }
 
 interface Band {

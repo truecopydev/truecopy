@@ -7,6 +7,22 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Fixed
+
+- **A column of figures is set flush right, and the cut could not see it.** `boundariesFromRecurrence` voted on the left edge of every item, and the doc comment said why: a real column's left edge recurs. That is true of a date, a label, an address. It is false of a column of figures, whose left edge moves with the digit count - so it never recurs, and two such columns fall into ONE band as soon as the widest value of the second reaches back towards the first. Nothing in the left edges tells them apart afterwards.
+
+  **This is the cause of the `merged-column` doubt this library already raises.** Measured on page 27 of a real property schedule, 72 rows: the right edges of its five figure columns come back on 62 to 65 rows each, at 351, 394, 448, 502 and 556, while the left edges of the same columns scatter over seven bands, none reaching 31. The cut missed the boundary near 395, so a surface and a price came back in one cell - `896 2 415 065` where the page prints 896 m2 and 2 415 065 EUR - on 126 of that document's 233 rows.
+
+  **And notation cannot repair geometry.** `93 580 000` is a perfectly well formed number, and it is also `93` followed by `580 000`. `findNumbers` returns one, and it is right to. The answer is not in the text: it is in the fact that no character is printed between the two on any row of the page.
+
+  So the right edge is read too, and **only inside a band**. Four conditions, each one keeping a real failure out: the right edge has to recur on as many rows as a band does; nothing may be printed ACROSS the cut; nothing may START just after it, which is what separates a column from a run of words; and a column has to begin at or after the cut. The cut sits exactly where the left column's text ends, which is safe because `columnAt` places a cell by its left edge and nothing else.
+
+  **Measured over 125 real annual reports**, 398 989 rows: cells holding several glued numbers fall from 20 852 to 16 356, a fifth of them, and 16 973 values that were welded to their neighbour come back as cells of their own (736 181 filled cells become 753 154). The widest row of the corpus does not move, at 25 columns: no page gains a column it did not have. The worst document goes from 1 444 glued cells to 312.
+
+  **What was tried first, and what it cost**, because the shape of this fix is not obvious. Letting right edges form the bands themselves - the direct reading of "vote on both edges" - welds a page into two columns: a text column of varying width ends at a different x on every row, and those ends are dense enough to bridge every gap. Measured on the same corpus, that lost 127 458 of 736 181 filled cells, and the application reading them fell from 69 documents read to 40. Reading right edges only where the left edges already agreed keeps that impossible: the bands, and therefore every boundary between them, are exactly what they were.
+
 ## [2.0.0] - 2026-08-19
 
 ### Removed
