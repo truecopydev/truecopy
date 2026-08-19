@@ -7,6 +7,18 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Fixed
+
+- **A cluster of right edges is not one edge, and its far end belongs to the header.** 2.0.1 taught the cut to read right edges inside a band. It then took the cut at the far end of the recurring cluster - and a cluster is every right edge no column gap apart, so the widest thing over a column joins it. The widest thing over a column of figures is never one of its values: it is the word that names them. A header label overhangs its figures, a footnote mark sits past the last of them, and both push the cluster's end into the next column. The cut then lands where the neighbour is already printing, the four conditions correctly refuse it, and the two columns stay welded - the exact failure 2.0.1 set out to fix.
+
+  **Measured on page 13 of a real property schedule, 93 rows.** Two surface columns, "Surface habitation" and "Surface totale". Their figures end at 502 and 535, each on 29 rows. Between them: the header's own words, ending at 508 and 511, and a footnote at 520 - one row each. The cluster ran from 502 to 520, so the cut was proposed at 520, by which point the right column has been printing for nine points; the condition that nothing may start just after a cut then refused it, and every one of that document's 635 rows carried both surfaces in one cell, as `240 240`.
+
+  So the candidates are walked from the right, and the first one that is a gutter wins. The walk stops as soon as too few rows reach the candidate at all: below that point no column ends, and a cut needs a column on each side of it. Nothing else changes - the four conditions are the same four, applied to more than one candidate.
+
+  **Measured over the same 125 annual reports**, 398 989 rows: 8 441 more values come back as cells of their own (753 154 filled cells become 761 595), and cells holding several glued numbers fall from 16 356 to 15 475. The widest row of the corpus does not move, at 25 columns: no page gains a column it did not have. In the application reading them, that one schedule's surface column went from 97 097 545 against a printed total of 256 338 - three hundred and seventy-nine times its own total, because two three-digit surfaces read as one six-digit number - to 254 214, within 0.83 % of what the document prints.
+
 ## [2.0.1] - 2026-08-19
 
 ### Fixed
