@@ -318,29 +318,87 @@ export function rowsFrom(items: PositionedItem[], boundaries: number[]): Row[] {
 	});
 }
 
+/**
+ * Whether two neighbouring items of one cell were printed apart.
+ *
+ * A PDF hands over a cell as several items, and nothing in them says which ones
+ * were separated by a space: "1 207 773 393" arrives as "1", "2", "07", "773",
+ * "393", because the engine breaks a run wherever the glyph spacing changes.
+ * Joining those with a space gives "1 2 07 773 393" and joining them with
+ * nothing gives "31juillet" one row higher. Both are wrong on the same page.
+ *
+ * The page itself holds the answer, in the gap between where one item ends and
+ * the next begins. Measured on a filing that prints a date and three ten-digit
+ * figures: 0,00 point where the glyphs touch, 3,6 to 3,8 where a thousands
+ * separator or a word space stands, on characters 6,7 points wide. A quarter of
+ * a character clears both by a wide margin and does not depend on the font
+ * size, which a fixed number of points would.
+ */
+function printedApart(before: PositionedItem, after: PositionedItem): boolean {
+	// No width is no measurement, and a guess is worse than the plain answer:
+	// a row assembled without geometry - a paste, a CSV, an OCR line - carries
+	// zero widths and every item at the same x, so every gap reads as nought
+	// and the whole row would run together into one word.
+	if (before.width <= 0) return true;
+	const gap = after.x - (before.x + before.width);
+	const perCharacter = before.width / Math.max(1, before.text.length);
+	return gap > perCharacter / 4;
+}
+
+/**
+ * Join the items of one cell, spacing them as the page did.
+ *
+ * Without geometry there is nothing to measure - a paste, a CSV, a row handed
+ * over whole - and one space between items is the only thing left to say.
+ */
+function joinCell(items: readonly PositionedItem[], measured: boolean): string {
+	return items
+		.map((item, i) => {
+			const before = items[i - 1];
+			if (!before) return item.text;
+			return (measured && !printedApart(before, item) ? '' : ' ') + item.text;
+		})
+		.join('');
+}
+
 /** Cut a row against boundaries: the page's, or the ones a reader built from a
  *  header row of its own. */
-export function rowToCells(row: Row, boundaries: number[]): string[] {
-	const cells: string[][] = Array.from({ length: boundaries.length + 1 }, () => []);
+export function rowToCells(row: Row, boundaries: number[], measuredSpaces = false): string[] {
+	const columns = Array.from({ length: boundaries.length + 1 }, (_, at) => at);
 	/*
 	 * A row with no geometry still has its text. Rows built from plain text - a
 	 * paste, a CSV, an OCR line handed over whole - carry no positioned items, and
 	 * cutting them by x would hand back a table of the right shape holding
 	 * nothing. Uncut is an answer, and the reading says so; empty is a lie.
 	 */
-	if (row.items.length === 0) cells[0].push(row.text);
-	else for (const item of row.items) cells[columnAt(item.x, boundaries)].push(item.text);
-	return cells.map((parts) => parts.join(' ').replace(/\s+/g, ' ').trim());
+	if (row.items.length === 0) return columns.map((at) => (at === 0 ? tidy(row.text) : ''));
+	return columns.map((at) =>
+		tidy(
+			joinCell(
+				row.items.filter((item) => columnAt(item.x, boundaries) === at),
+				measuredSpaces
+			)
+		)
+	);
 }
+
+/** One space between words, none around them. */
+const tidy = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
 /**
  * A page as a table of cells: every row, cut into columns. This is the shape
  * `profileColumns`, `findRowAnomalies` and `explainRows` all take.
  *
  * `boundaries` overrides the page's own, for a reader that cut the page itself.
+ * `measuredSpaces` spaces the items of a cell as the page printed them rather
+ * than one space apart.
  */
-export const cellsOf = (page: TextPage, boundaries?: number[]): string[][] =>
-	page.rows.map((row) => rowToCells(row, boundaries ?? page.columnBoundaries));
+export const cellsOf = (
+	page: TextPage,
+	boundaries?: number[],
+	measuredSpaces = false
+): string[][] =>
+	page.rows.map((row) => rowToCells(row, boundaries ?? page.columnBoundaries, measuredSpaces));
 
 /**
  * Where a group of items sits, or `null` when the group is empty.

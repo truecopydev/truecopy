@@ -134,6 +134,46 @@ describe('rows', () => {
 		expect(page.rows[0].text).toBe('Paris' + '\t' + '1358522');
 	});
 
+	/*
+	 * An engine hands a cell over as several items, and nothing in them says
+	 * which were printed apart. A filing prints "1 207 773 393" as five items:
+	 * the thousands separators are real gaps, the break inside "207" is not.
+	 * One space between all of them reads "1 2 07 773 393", a number no reader
+	 * can parse and no check can catch - every digit is there, in order.
+	 */
+	it('spaces a cell as the page printed it, when asked', () => {
+		const chiffres = [
+			item('1', 187.1, 700, 6.72),
+			item('2', 197.6, 700, 6.72),
+			item('07', 204.3, 700, 13.32),
+			item('773', 221.3, 700, 20.03),
+			item('393', 245, 700, 20.16)
+		];
+		const page = pageFrom(1, 595, 842, chiffres);
+		expect(rowToCells(page.rows[0], [], true)).toEqual(['1 207 773 393']);
+		// Off, the reading does not move: the knob exists so a consumer adopts
+		// it when its own bench is green, not the day it upgrades.
+		expect(rowToCells(page.rows[0], [], false)).toEqual(['1 2 07 773 393']);
+	});
+
+	it('keeps a word space that the page really printed', () => {
+		const page = pageFrom(1, 595, 842, [
+			item('de droits de', 453.2, 700, 66.71),
+			item('vote', 523.4, 700, 24.47)
+		]);
+		expect(rowToCells(page.rows[0], [], true)).toEqual(['de droits de vote']);
+	});
+
+	/*
+	 * A row with no geometry has no gaps to measure: a paste, a CSV, an OCR
+	 * line handed over whole. One space is the only thing left to say, and the
+	 * knob must not turn it into none.
+	 */
+	it('spaces items one apart when there is nothing to measure', () => {
+		const page = pageFrom(1, 595, 842, [item('deux', 50, 700, 0), item('mots', 50, 700, 0)]);
+		expect(rowToCells(page.rows[0], [], true)).toEqual(['deux mots']);
+	});
+
 	it('cuts a row against boundaries it is given', () => {
 		const page = pageFrom(1, 595, 842, [item('2019', 50, 700), item('4', 400, 700)]);
 		expect(rowToCells(page.rows[0], [200])).toEqual(['2019', '4']);

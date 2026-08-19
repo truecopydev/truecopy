@@ -306,6 +306,22 @@ export interface TableOptions extends OpenOptions {
 	/** Read right edges inside a band, cutting flush-right figure columns
 	 *  apart. On unless declined. */
 	rightEdges?: boolean;
+	/**
+	 * Space the items of a cell as the page printed them, instead of one space
+	 * apart. Off unless asked for.
+	 *
+	 * An engine breaks a cell into items wherever glyph spacing changes, and a
+	 * single space between them turns "1 207 773 393" into "1 2 07 773 393" -
+	 * a number no reader can parse and no check can catch, since every digit is
+	 * there in the right order. On, the gap on the page decides, so items that
+	 * touch stay joined and items a space apart stay apart.
+	 *
+	 * It moves cell text, so it arrives as a knob and not as a new default:
+	 * a reader whose patterns learned the run-together form keeps it until its
+	 * own bench says otherwise. Rows built without geometry are unaffected,
+	 * having no gaps to measure, and `document.text` is not touched at all.
+	 */
+	measuredSpaces?: boolean;
 }
 
 /**
@@ -340,7 +356,7 @@ export async function readTable(file: File, options: TableOptions = {}): Promise
 			gapFor(page.unit),
 			options.rightEdges ?? true
 		);
-		const cells = cellsOf(page, cut);
+		const cells = cellsOf(page, cut, options.measuredSpaces ?? false);
 		boundaries.push(cut);
 		pages.push(cells);
 		findings.push(...complainAbout(page, cells, cut, mark));
