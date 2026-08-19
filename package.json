@@ -97,6 +97,10 @@
 			"types": "./dist/schema.d.ts",
 			"import": "./dist/schema.js"
 		},
+		"./cite": {
+			"types": "./dist/cite.d.ts",
+			"import": "./dist/cite.js"
+		},
 		"./pattern": {
 			"types": "./dist/pattern.d.ts",
 			"import": "./dist/pattern.js"

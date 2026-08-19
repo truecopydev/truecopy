@@ -9,7 +9,7 @@ everything it re-exports counts as used and a name nobody imports stays green
 forever. Here, adding one is a line in a diff.
 
 ```text
-16 entry points, 60 values, 59 types
+17 entry points, 64 values, 59 types
 a name reachable through its own entry point and through the barrel is listed twice
 
 truecopy
@@ -18,12 +18,15 @@ truecopy
   value  boundariesFromAnchors
   value  boundariesFromRecurrence
   type   Candidate
+  value  carriesNumber
+  value  carriesText
   type   Cell
   value  cellAt
   value  cellsOf
   value  checkContract
   value  checkExtraction
   type   CheckResult
+  value  citedText
   value  classifyDocument
   value  columnAt
   value  columnBoundaries
@@ -72,6 +75,7 @@ truecopy
   type   Look
   value  NEVER_MATCHES
   type   Notation
+  value  numberedRows
   value  numberToken
   value  openDocument
   type   OpenOptions
@@ -236,6 +240,12 @@ truecopy/schema
   type   StandardSchema
   value  validate
   value  validateWith
+
+truecopy/cite
+  value  carriesNumber
+  value  carriesText
+  value  citedText
+  value  numberedRows
 
 truecopy/pattern
   type   CompileOptions

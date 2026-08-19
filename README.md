@@ -263,6 +263,26 @@ The five laws a reader is written to:
 4. **The reader proposes, the person confirms.** The correction is part of the product, not the recovery path.
 5. **Every quantifier is bounded.** These patterns run over a whole document, line by line.
 
+## When a model does the reading
+
+A model that turns cells into records fails one visible way - it misses a record - and one invisible way: it returns a **plausible value the document never printed**. A town deduced from a postcode, a rounded figure, a recomposed date, each reading exactly like a successful extraction. That failure has a deterministic answer, and it does not need a better model:
+
+**The model never sees the PDF.** It receives the rows this library cut, numbered. It returns records that **cite the row numbers** they came from. And every value is then looked up in those rows and nowhere else - so the model cannot produce a fact, only point at one the document already carries.
+
+```ts
+import { numberedRows, citedText, carriesText, carriesNumber } from 'truecopy/cite';
+
+const prompt = rules + '\n' + numberedRows(page); // what the model sees
+const source = citedText(page, record.rows); // what it claims to have read
+
+carriesText(source, record.town); // all its words, in order - never a substring
+carriesNumber(source, record.surface, mark); // the page's numbers - never a digit soup
+```
+
+Both lookups were measured against their naive forms on a real corpus before they were written this way. A contiguous substring refused 104 of one document's 111 records, because layouts throw the tail of a name past the figure columns - the words are all there, in order, never in one piece. And flattening the source into one run of digits found a surface **three times** in a row that carries no such figure: a guard that looked strong exactly where it protected nothing.
+
+What stays yours is policy, not mechanics: which fields are figures, which single field anchors a record, and the rule that a failed side field is dropped and counted rather than fatal. `checkExtraction` (`truecopy/contract`) is the arithmetic half - the sum of what came back, against the totals the document declares about itself.
+
 ## The kit that makes it compulsory
 
 An interface is dodged with a `return null`; an assertion is not. Drop the kit into your gate with a corpus of your own:
@@ -329,6 +349,7 @@ Each one is also its own entry point, so a project that wants one pays for one.
 | [`labels.ts`](src/labels.ts)       | `labels`     | which cells could be the value a label announces, closest first                       |
 | [`signature.ts`](src/signature.ts) | `signature`  | which rows break the table's own type signature                                       |
 | [`schema.ts`](src/schema.ts)       | `schema`     | the fields, formats and count a reading must satisfy                                  |
+| [`cite.ts`](src/cite.ts)           | `cite`       | the rows a model cited, and whether they really carry each value                      |
 | [`explain.ts`](src/explain.ts)     | `explain`    | what all of the above decided, in words                                               |
 | [`pattern.ts`](src/pattern.ts)     | `pattern`    | domain knowledge as **data**, compiled behind a ReDoS guard                           |
 | [`contract.ts`](src/contract.ts)   | `contract`   | what an honest reading looks like                                                     |
