@@ -104,11 +104,20 @@ export function boundariesFromAnchors(anchors: number[]): number[] {
  * cells. Reading them only where the left edges already agreed keeps that
  * failure impossible - the bands, and therefore every boundary between them,
  * are exactly what they were.
+ *
+ * AND THE RIGHT EDGES CAN BE DECLINED, because a finer cut is not a free one.
+ * A reader tuned to the wider cells - one that learned to split a shared cell
+ * itself, on a page printing two tables side by side - loses the row it relied
+ * on when a cut lands inside it. `rightEdges: false` keeps the bands and their
+ * boundaries and skips the cuts inside them, which is exactly the cut as it
+ * was before right edges were read at all. A change in how a page is cut never
+ * arrives as a new default: it arrives as an option, and the default stays.
  */
 export function boundariesFromRecurrence(
 	rows: Row[],
 	minimumSupport = 0.15,
-	gap = COLUMN_GAP
+	gap = COLUMN_GAP,
+	rightEdges = true
 ): number[] {
 	const perRow = rows.map((row) => row.items).filter((items) => items.length > 0);
 	if (perRow.length === 0) return [];
@@ -124,7 +133,7 @@ export function boundariesFromRecurrence(
 	const boundaries: number[] = [];
 	for (const [index, band] of kept.entries()) {
 		if (index > 0) boundaries.push((kept[index - 1].to + band.from) / 2);
-		boundaries.push(...cutsInside(band, perRow, needed, gap));
+		if (rightEdges) boundaries.push(...cutsInside(band, perRow, needed, gap));
 	}
 	return boundaries;
 }

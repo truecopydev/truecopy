@@ -11,6 +11,10 @@ release PR is what stamps them.
 
 ### Added
 
+- **Right edges can be declined: `readTable(file, { rightEdges: false })` is the cut exactly as it was before 2.0.1.** Reading right edges inside a band cuts a page finer, and a finer cut is not free for every reader: one that learned the WIDER cells - splitting a shared cell itself, on pages printing two tables side by side - loses the row it relied on when a cut lands inside it. Measured on a real fund report of that shape: six sections that closed on the wider cells stopped closing on the finer ones, because the row carrying one position of EACH table came back as neither.
+
+  So the finer cut is declinable, and the refusal `it will never grow a second cut` still holds: same vote, same bands, same thresholds - `false` only skips the cuts inside a band, it never adds a third behaviour. `boundariesFromRecurrence` takes the same flag. The default does not move; a change in how a page is cut never arrives as a new default, it arrives as an option a consumer adopts when its own bench is green.
+
 - **A cut row and the row it was cut from are now the same row, in writing.** `pages[i][j]` is `document.pages[i].rows[j]`: the same row in two shapes, one in cells and one in placed fragments. That has always been true - the cut maps over `page.rows` and drops nothing - but it was true by accident of the code rather than by promise, so no caller could lean on it without reading the source and hoping.
 
   It is worth promising because some questions have no answer in the cells at all. Which of two records does a stray line of text belong to? Nothing in the line says so. The answer is which baseline it sits closer to, and reaching that baseline means going from a cut row to `document.pages[i].rows[j].y` - which is only safe if the two are known to line up.

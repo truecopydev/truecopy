@@ -291,6 +291,24 @@ function pagesOutOfStep(perPage: number[]): Finding[] {
 }
 
 /**
+ * How a table is read, on top of how the document is opened.
+ *
+ * `rightEdges` is the one knob the cut has, and it exists for compatibility
+ * rather than tuning: reading right edges inside a band cuts a page finer, and
+ * a reader that learned the WIDER cells - one that splits a shared cell itself,
+ * on a page printing two tables side by side - loses the row it relied on when
+ * a cut lands inside it. `false` restores the cut exactly as it was before
+ * right edges were read at all, so such a reader upgrades without its readings
+ * moving. It is not a per-document setting to hunt with: a reading that only
+ * lands with it off is a reader built on the wider cells, not a better cut.
+ */
+export interface TableOptions extends OpenOptions {
+	/** Read right edges inside a band, cutting flush-right figure columns
+	 *  apart. On unless declined. */
+	rightEdges?: boolean;
+}
+
+/**
  * Rows and cells out of a file, with no configuration at all.
  *
  * This is the shortest thing that works, and it is deliberately not the only
@@ -298,7 +316,7 @@ function pagesOutOfStep(perPage: number[]): Finding[] {
  * acts on them - `findRowAnomalies`, `validate` and `readDocument` are what turn
  * a reading into one that checks itself.
  */
-export async function readTable(file: File, options: OpenOptions = {}): Promise<Table> {
+export async function readTable(file: File, options: TableOptions = {}): Promise<Table> {
 	const document = await openDocument(file, options);
 	// Read once, off the whole document, because that is what settles it: five
 	// characters do not say whether `1,234` is a thousand or a fraction, and a
@@ -316,7 +334,12 @@ export async function readTable(file: File, options: OpenOptions = {}): Promise<
 		 * the table never had. Measured by the page's own ruler - points on a page,
 		 * characters in a paste, the field's index in a delimited file.
 		 */
-		const cut = boundariesFromRecurrence(page.rows, undefined, gapFor(page.unit));
+		const cut = boundariesFromRecurrence(
+			page.rows,
+			undefined,
+			gapFor(page.unit),
+			options.rightEdges ?? true
+		);
 		const cells = cellsOf(page, cut);
 		boundaries.push(cut);
 		pages.push(cells);
