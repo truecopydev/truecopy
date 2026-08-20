@@ -42,6 +42,7 @@ jobs:
   config:
     name: Config
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       can_review: ${{ steps.flags.outputs.can_review }}
     steps:
@@ -53,6 +54,7 @@ jobs:
     needs: [config]
     if: needs.config.outputs.can_review == 'true' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       pull-requests: write

@@ -24,6 +24,7 @@ permissions:
 jobs:
   gate:
     runs-on: ubuntu-latest
+    timeout-minutes: 10 # a hung job would otherwise bill until the 6h ceiling
     steps:
       # Actions are pinned to a commit, with the tag in a comment. A tag is a
       # pointer its owner can move: `@v7` today and `@v7` tomorrow can be
@@ -98,6 +99,7 @@ jobs:
   # the commit that removes it is the one that draws attention to it.
   gitleaks:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
