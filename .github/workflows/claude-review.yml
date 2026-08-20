@@ -31,6 +31,13 @@ concurrency:
   group: claude-review-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
+# Default for every job in this file, which is the minimal-permissions invariant
+# above made explicit. The `review` job widens it deliberately; `config` only
+# writes one flag to GITHUB_OUTPUT and needs nothing. CodeQL
+# actions/missing-workflow-permissions, 2026-08-20.
+permissions:
+  contents: read
+
 jobs:
   config:
     name: Config
