@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-08-23
+
 ### Added
 
 - **`truecopy-mcp`: the reading as an MCP server, over stdio.** An agent with a terminal already had `npx truecopy`, and one that can import a module had the library. Neither is what most assistants are: a host that speaks MCP reaches a tool call and nothing else, so the pipeline was unreachable from the place it is most needed - the model that has just been handed somebody's statement and has no way to check what it read.
