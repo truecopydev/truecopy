@@ -13,10 +13,10 @@ A parser that returns a plausible-looking table from a document it misread is wo
 ## Try it on your worst document, right now
 
 ```sh
-npx truecopy a-statement.pdf
+npx -y -p truecopy -p pdfjs-dist truecopy a-statement.pdf
 ```
 
-No install, no project, no line of code. It prints the cut it made, what each column holds, how often it is filled, and then, on its own, **what it could not vouch for**.
+No install, no project, no line of code. The engine is named on the line because it is an **optional** peer dependency and npm does not fetch one on its own: a project that only ever reads a paste or a CSV never downloads a PDF reader, and for those `npx truecopy the-file.csv` is the whole command. Left out on a PDF it says `no-engine` rather than guessing. It prints the cut it made, what each column holds, how often it is filled, and then, on its own, **what it could not vouch for**.
 
 ```
 page 1 - cut at 68, 229, 356, 411, 490
@@ -401,6 +401,32 @@ await openDocument(file, { workerSrc, maximumPages: 200 });
 ```
 
 A batch script raises the limits, and is meant to: `DEFAULT_LIMITS` (20 MB, 40 pages, 30 s) protects a browser tab, not an ingestion that runs once a year. Two consumers reading annual reports settled on 80 to 200 MB and 600 to 2000 pages. Reach for `keepPage` before `maximumPages`: it cuts at the right end of a long document.
+
+## Use it from an assistant, with nothing installed
+
+An agent holding a terminal already has the command above, and one that can import a module has the library. Neither is what most assistants are: a host that speaks MCP reaches a tool call and nothing else. So the same pipeline is an MCP server, over stdio, on the machine the document is already on.
+
+```json
+{
+	"mcpServers": {
+		"truecopy": {
+			"command": "npx",
+			"args": ["-y", "-p", "truecopy", "-p", "pdfjs-dist", "truecopy-mcp"]
+		}
+	}
+}
+```
+
+Two tools, and the second is the one that is hard to get anywhere else:
+
+- **`read_table`** turns a PDF, a CSV, a TSV or a saved paste into rows: the cut, how often each column is filled, the rows numbered, and what the reading **could not vouch for**. Bounded at 200 rows a call, and what it left is counted rather than dropped.
+- **`check_citations`** takes the records a model claims to have read, each citing the rows it came from, and says which values the cited rows do not print. A JSON number is checked as a figure with the document's own decimal mark, a JSON string as its words in order. It answers "was this read or invented", never "is this complete", and it says so.
+
+**Nothing is uploaded, because there is nowhere to upload it to.** The server runs where the file already is, makes no network call, and opens no file it was not handed. A statement, a payslip and a career record are the worst documents there are to send anywhere, and a server has nothing to compute on them that this does not compute in place. Set `TRUECOPY_MCP_ROOT` and it opens nothing outside that directory, symbolic links resolved before the check.
+
+It speaks the 2026-07-28 revision and the ones before it, so a host that opens with `initialize` and a host that goes straight to `server/discover` both work.
+
+Serving these tools from something larger - a server of your own, another transport - is [`truecopy/mcp`](src/mcp.ts): `TOOLS` are the descriptors, and `respond` answers one JSON-RPC message given a way to turn a path into a `File`.
 
 ## For a coding agent
 

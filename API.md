@@ -9,7 +9,7 @@ everything it re-exports counts as used and a name nobody imports stays green
 forever. Here, adding one is a line in a diff.
 
 ```text
-17 entry points, 64 values, 59 types
+18 entry points, 68 values, 61 types
 a name reachable through its own entry point and through the barrel is listed twice
 
 truecopy
@@ -45,6 +45,7 @@ truecopy
   value  decimalMarkOf
   value  DEFAULT_LIMITS
   value  describeAnomaly
+  value  describeDoubts
   type   Discrepancy
   type   Document
   value  documentFrom
@@ -55,6 +56,7 @@ truecopy
   type   Doubt
   value  explainDocument
   type   ExplainOptions
+  value  explainReading
   value  explainRows
   type   Extraction
   value  failures
@@ -270,8 +272,10 @@ truecopy/contract
 
 truecopy/explain
   value  describeAnomaly
+  value  describeDoubts
   value  explainDocument
   type   ExplainOptions
+  value  explainReading
   value  explainRows
 
 truecopy/kit
@@ -285,4 +289,10 @@ truecopy/kit
   value  pdfWithPages
   value  pdfWithText
   type   PlacedWord
+
+truecopy/mcp
+  type   McpCapabilities
+  type   McpResponse
+  value  respond
+  value  TOOLS
 ```

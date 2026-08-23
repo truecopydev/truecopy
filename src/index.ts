@@ -106,7 +106,13 @@ export { conforms, schemaOf, validate, validateWith } from './schema.js';
 export { carriesNumber, carriesText, citedText, numberedRows } from './cite.js';
 
 export type { ExplainOptions } from './explain.js';
-export { describeAnomaly, explainDocument, explainRows } from './explain.js';
+export {
+	describeAnomaly,
+	describeDoubts,
+	explainDocument,
+	explainReading,
+	explainRows
+} from './explain.js';
 
 export type {
 	SelfCheck,
