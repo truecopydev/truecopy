@@ -79,9 +79,10 @@ Each is also its own entry point (`truecopy/signature`), and the package is side
 - `truecopy/roles` - what each column IS, deduced from that
 - `truecopy/signature` - which rows break the table's own type signature
 - `truecopy/schema` - `validateWith` takes ANY Standard Schema (zod, valibot, arktype), so a row type declared there is not declared again. `schemaOf` + `RecordOf<typeof schema>`: one declaration yields the check AND the record type. A schema is pure data, so it survives JSON.
-- `truecopy/explain` - `explainDocument(document, { signature, roles })` returns TEXT showing the cut, what each column holds, and which rows were dropped and why. Reach for this first when a reading comes out wrong.
+- `truecopy/explain` - `explainDocument(document, { signature, roles })` returns TEXT showing the cut, what each column holds, and which rows were dropped and why. Reach for this first when a reading comes out wrong. `explainReading(table)` is the same thing for a `readTable` result, explained with the cut that reading actually used, and `describeDoubts(warnings)` words the doubts the way every surface here words them.
 - `truecopy/contract` - `readDocument` (the reader you write), and `checkExtraction({ records, amountOf, declared, unit })` for rows that already exist, whoever produced them. Same verdict, one call: it rounds the sum to the document's precision and flags every row carrying a figure the document does not contain anywhere.
 - `truecopy/kit` - `checkContract` + `contractReport`: six rules a reading must hold, run in your own test suite against a corpus of your own.
+- `truecopy/mcp` - the same pipeline as an MCP server over stdio, for an assistant that can call a tool but cannot install a package: `read_table` and `check_citations`, run by `npx -y -p truecopy -p pdfjs-dist truecopy-mcp`. `TOOLS` and `respond` are exported for a server of your own. No file leaves the machine; `TRUECOPY_MCP_ROOT` confines what may be opened.
 
 ## What it will never do
 
@@ -92,7 +93,7 @@ Do not reach for it here, and do not ask for it to be added - these are refusals
 - Not a CSV parser. It splits on tab, semicolon, pipe or comma, only where the count recurs line after line, and hands a quoted file back WHOLE with a warning rather than half-parsing it. Use a real CSV library; this door is for a paste, an export, an OCR line.
 - Not a validation library. `schemaOf` bounds a reading; anything richer belongs to zod or valibot, and `validateWith` takes theirs.
 - It opens no format on its own. PDFs go through `pdfjs-dist`, an OPTIONAL peer dependency. No OCR engine, no spreadsheet, no office format.
-- It touches no filesystem, no network and no clock you did not pass in - it runs in a browser. `npx truecopy` is the one exception, and it is a command, not the library.
+- It touches no filesystem, no network and no clock you did not pass in - it runs in a browser. The two COMMANDS are the exception, `npx truecopy` and `truecopy-mcp`, and a command is not the library: even the MCP server keeps the rule, since the path it opens is handed to it from outside.
 - One cut, one set of thresholds, three rulers. A format needing its own algorithm needs its own library.
 
 ## Traps worth knowing

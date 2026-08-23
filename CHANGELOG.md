@@ -9,6 +9,35 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`truecopy-mcp`: the reading as an MCP server, over stdio.** An agent with a terminal already had `npx truecopy`, and one that can import a module had the library. Neither is what most assistants are: a host that speaks MCP reaches a tool call and nothing else, so the pipeline was unreachable from the place it is most needed - the model that has just been handed somebody's statement and has no way to check what it read.
+
+  ```json
+  {
+  	"mcpServers": {
+  		"truecopy": {
+  			"command": "npx",
+  			"args": ["-y", "-p", "truecopy", "-p", "pdfjs-dist", "truecopy-mcp"]
+  		}
+  	}
+  }
+  ```
+
+  Two tools. `read_table` turns a PDF, a CSV, a TSV or a saved paste into rows and reports what the reading could not vouch for, bounded at 200 rows a call with what it left COUNTED rather than dropped. `check_citations` takes the records a model claims to have read, each citing the rows it came from, and says which values the cited rows do not print: a JSON number is checked as a figure with the document's own decimal mark, a JSON string as its words in order. Neither description stops at what its tool does - a description is the prompt a host puts in front of a model, and one that says "reads tables from PDFs" has taught the opposite of this library.
+
+  OVER STDIO AND NOT OVER HTTP, which is the whole design and not a limitation. A statement, a payslip and a career record are the worst documents there are to upload, and there is nothing a server could compute on them that this does not compute where the file already sits: the reading is deterministic and makes no network call, so an endpoint would add a copy of somebody's document to the world and buy nothing with it. `TRUECOPY_MCP_ROOT` confines what may be opened when the host is not to be trusted with a path, on the resolved path so that a link inside the root cannot walk back out of it.
+
+  Two generations of the protocol are in service and this answers both. Up to 2025-11-25 a client opens with `initialize`; from 2026-07-28 the protocol is stateless, that method is gone from the schema, and a client either probes `server/discover` or simply calls. Answering only the newer one would go silent against every client shipped before July 2026, and none of the three costs anything to keep.
+
+- **`truecopy/mcp`, for a server of your own.** `TOOLS` are the descriptors and `respond` answers one JSON-RPC message, given a way to turn a path into a `File`. The module touches no filesystem, no stream and no clock: `bin/truecopy-mcp.mjs` is the half that talks to the world, and it is thin enough to read in one sitting. Same split as the parsers, and for the same reason - what decides is tested, and what touches the world is small.
+
+- **`explainReading(table)` and `describeDoubts(warnings)`.** A READING explained, where `explainDocument` explains a DOCUMENT: the difference is the cut, since `readTable` cuts on what recurs rather than on the page's own spread of x, and explaining a result without those boundaries makes the heading and the cells tell two different stories. `describeDoubts` words the doubts, including the two sentences an EMPTY list gets - "nothing looked wrong from the shape of this page" and "that is not the same as this reading is right" - which existed only inside `bin/truecopy.mjs` until now. The command and the MCP server print the same two functions, so the sentence a person is left with cannot depend on which surface printed it.
+
+### Changed
+
+- **`ExplainOptions.boundariesOf` may return `undefined`**, and a page it returns nothing for keeps its own cut. A widening: every existing implementation still satisfies the type, and it removes a fallback no caller could reach.
+
 ## [2.0.3] - 2026-08-20
 
 ### Added

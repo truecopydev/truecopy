@@ -16,6 +16,7 @@
 import { columnCount, profileColumns, dominantKind, type ColumnProfile } from './columns.js';
 import type { CoordinateUnit, Document, Row, TextPage } from './document.js';
 import { rowToCells } from './layout.js';
+import type { Table } from './table.js';
 import { assignRoles, type RoleRule } from './roles.js';
 import {
 	findRowAnomalies,
@@ -44,8 +45,11 @@ export interface ExplainOptions {
 	 * over all of it invents columns the table never had - so `readTable` cuts on
 	 * what recurs instead, and hands the boundaries back. Passing them here is
 	 * what makes the heading and the cells tell the same story.
+	 *
+	 * A page this returns nothing for keeps its own cut, so a caller holding a
+	 * cut for some pages and not others does not have to invent one.
 	 */
-	boundariesOf?: (page: TextPage) => number[];
+	boundariesOf?: (page: TextPage) => number[] | undefined;
 	/**
 	 * Naming the kind of a cell turns on everything the reading judged by: what
 	 * each column contains, and which rows break the signature. Left out, the cut
@@ -213,4 +217,53 @@ export function explainDocument(document: Document, options: ExplainOptions = {}
 		`${document.origin}, ${document.pages.length} page(s), ${rows} row(s)`,
 		...pages.flatMap((page) => pageLines(page, options))
 	].join('\n');
+}
+
+/**
+ * The doubts a reading came back with, worded once.
+ *
+ * An EMPTY list is not silence: it gets two sentences of its own, because
+ * "nothing to report" is the exact place a reader concludes the reading is
+ * right, and it is a much smaller claim than that. Every surface that prints a
+ * reading prints this - the command, the MCP server - so the sentence a person
+ * is left with cannot differ from one to the next.
+ */
+export function describeDoubts(warnings: readonly string[]): string {
+	if (warnings.length === 0) {
+		return [
+			'nothing looked wrong from the shape of this page.',
+			'that is not the same as "this reading is right".'
+		].join('\n');
+	}
+	return [
+		'what this reading cannot vouch for:',
+		...warnings.map((warning) => `  - ${warning}`)
+	].join('\n');
+}
+
+/**
+ * A READING explained, where `explainDocument` explains a DOCUMENT.
+ *
+ * The difference is the cut. A page carries a letterhead, an address block and
+ * a footer, and the spread of x over all of it invents columns the table never
+ * had, so `readTable` cuts on what recurs instead and hands the boundaries
+ * back. Explained without them the heading and the cells tell two different
+ * stories, which is the one thing a report like this must never do.
+ *
+ * The doubts are NOT appended here, so that a caller can put something of its
+ * own between the two and still finish on them: `describeDoubts` is beside
+ * this, and every caller ends with it.
+ */
+export function explainReading(table: Table, options: ExplainOptions = {}): string {
+	const { document, boundaries } = table;
+	/*
+	 * Keyed on the page's POSITION in the reading and never on its number: the
+	 * two agree only when every page was opened, and `keepPage` is precisely the
+	 * option that makes them differ.
+	 */
+	const cuts = new Map(document.pages.map((page, index) => [page.pageNumber, boundaries[index]]));
+	return explainDocument(document, {
+		...options,
+		boundariesOf: (page) => cuts.get(page.pageNumber)
+	});
 }

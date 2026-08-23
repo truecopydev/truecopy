@@ -18,7 +18,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { explainDocument } from '../dist/explain.js';
+import { describeDoubts, explainReading } from '../dist/explain.js';
 import { readTable } from '../dist/table.js';
 import { UnreadableDocument } from '../dist/open.js';
 
@@ -84,31 +84,12 @@ async function run(argv) {
 		return 0;
 	}
 
-	const { document, warnings, boundaries } = table;
 	/*
-	 * The cut readTable actually used, so the heading and the cells agree. Keyed
-	 * on the page's position in the reading and NOT on its number: they are the
-	 * same only when every page was opened, and `keepPage` is precisely the
-	 * option that makes them differ.
+	 * The reading and then its doubts, in that order and from the library rather
+	 * than from here: the MCP server prints the same two pieces, and the sentence
+	 * a person is left with must not depend on which surface printed it.
 	 */
-	const cuts = new Map(document.pages.map((page, index) => [page.pageNumber, boundaries[index]]));
-	const explained = explainDocument(document, {
-		boundariesOf: (page) => cuts.get(page.pageNumber)
-	});
-	process.stdout.write(`${explained}\n`);
-
-	/*
-	 * The warnings come last and on their own, because they are the reason this
-	 * library exists. An empty list is not a promise that the reading is right:
-	 * it says nothing looked wrong from the shape of the page.
-	 */
-	if (warnings.length === 0) {
-		process.stdout.write('\nnothing looked wrong from the shape of this page.\n');
-		process.stdout.write('that is not the same as "this reading is right".\n');
-	} else {
-		process.stdout.write('\nwhat this reading cannot vouch for:\n');
-		for (const warning of warnings) process.stdout.write(`  - ${warning}\n`);
-	}
+	process.stdout.write(`${explainReading(table)}\n\n${describeDoubts(table.warnings)}\n`);
 	return 0;
 }
 
