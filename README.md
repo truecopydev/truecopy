@@ -13,10 +13,10 @@ A parser that returns a plausible-looking table from a document it misread is wo
 ## Try it on your worst document, right now
 
 ```sh
-npx truecopy a-statement.pdf
+npx -y -p truecopy -p pdfjs-dist truecopy a-statement.pdf
 ```
 
-No install, no project, no line of code. It prints the cut it made, what each column holds, how often it is filled, and then, on its own, **what it could not vouch for**.
+No install, no project, no line of code. The engine is named on the line because it is an **optional** peer dependency and npm does not fetch one on its own: a project that only ever reads a paste or a CSV never downloads a PDF reader, and for those `npx truecopy the-file.csv` is the whole command. Left out on a PDF it says `no-engine` rather than guessing. It prints the cut it made, what each column holds, how often it is filled, and then, on its own, **what it could not vouch for**.
 
 ```
 page 1 - cut at 68, 229, 356, 411, 490

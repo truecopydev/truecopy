@@ -38,6 +38,10 @@ release PR is what stamps them.
 
 - **`ExplainOptions.boundariesOf` may return `undefined`**, and a page it returns nothing for keeps its own cut. A widening: every existing implementation still satisfies the type, and it removes a fallback no caller could reach.
 
+### Fixed
+
+- **`npx truecopy a-statement.pdf` does not read a PDF, and the README said it did.** Measured against the published tarball on npm: `pdfjs-dist` is an optional peer dependency, npm does not install one on its own, and the command answers `no-engine` - correctly, and against a page promising "no install, no project, no line of code". The engine is named on the command line now, `npx -y -p truecopy -p pdfjs-dist truecopy a-statement.pdf`, and the CSV form that genuinely needs nothing is shown beside it. The claim was false in the README and in `llms.txt`, which is the file a model reads before writing the command for somebody.
+
 ## [2.0.3] - 2026-08-20
 
 ### Added

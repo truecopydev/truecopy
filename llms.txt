@@ -9,9 +9,14 @@ Install: `npm install truecopy` (Node 20+, ESM only; `pdfjs-dist` is an optional
 ## Try it with no code at all
 
 ```sh
-npx truecopy a-document.pdf          # the cut, the columns, and what is not vouched for
-npx truecopy --json a-document.pdf   # the same reading as data, for a program
+npx -y -p truecopy -p pdfjs-dist truecopy a-document.pdf   # the cut, the columns, and what is not vouched for
+npx -y -p truecopy -p pdfjs-dist truecopy --json a-doc.pdf # the same reading as data, for a program
+npx truecopy a-document.csv                                # a paste or a CSV needs no engine
 ```
+
+`pdfjs-dist` is named on the line because it is an OPTIONAL peer dependency and
+npm does not install one on its own. Left out on a PDF the command answers
+`no-engine`, which is a refusal and not a crash.
 
 Prints the cut, the columns, and what the reading could NOT vouch for. With
 `--json`: the rows, the rows per page, the cut, and the findings with their
