@@ -46,7 +46,22 @@ const { version } = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8'))
  * straight back out of it.
  */
 const ROOT = process.env.TRUECOPY_MCP_ROOT;
-const root = ROOT === undefined || ROOT === '' ? null : realpathSync(resolve(ROOT));
+const root = ROOT === undefined || ROOT === '' ? null : confinement(ROOT);
+
+/*
+ * A confinement that cannot be resolved STOPS the server rather than widening
+ * it. Silently reading everything because a directory was mistyped is the one
+ * outcome nobody would notice, and the raw ENOENT this used to die of names a
+ * path without naming the setting that carries it.
+ */
+function confinement(directory) {
+	try {
+		return realpathSync(resolve(directory));
+	} catch {
+		process.stderr.write(`truecopy-mcp: TRUECOPY_MCP_ROOT is not a directory here: ${directory}\n`);
+		process.exit(1);
+	}
+}
 
 function within(path) {
 	if (root === null) return path;

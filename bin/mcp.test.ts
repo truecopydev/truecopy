@@ -23,7 +23,7 @@ interface Answer {
 function drive(
 	messages: object[],
 	options: { env?: Record<string, string>; split?: boolean } = {}
-): Promise<{ answers: Answer[]; out: string; err: string }> {
+): Promise<{ answers: Answer[]; out: string; err: string; code: number | null }> {
 	return new Promise((resolve, reject) => {
 		const child = spawn(process.execPath, [SERVER], {
 			env: { ...process.env, ...options.env },
@@ -34,12 +34,12 @@ function drive(
 		child.stdout.setEncoding('utf8').on('data', (chunk: string) => (out += chunk));
 		child.stderr.setEncoding('utf8').on('data', (chunk: string) => (err += chunk));
 		child.on('error', reject);
-		child.on('close', () => {
+		child.on('close', (code) => {
 			const answers = out
 				.split('\n')
 				.filter((line) => line.trim() !== '')
 				.map((line) => JSON.parse(line) as Answer);
-			resolve({ answers, out, err });
+			resolve({ answers, out, err, code });
 		});
 
 		const lines = messages.map((message) => `${JSON.stringify(message)}\n`).join('');
@@ -170,6 +170,17 @@ describe('truecopy-mcp', () => {
 			env: { TRUECOPY_MCP_ROOT: STATEMENT.directory }
 		});
 		expect((answers[0].result as { isError?: boolean }).isError).toBeUndefined();
+	});
+
+	it('stops rather than widening when its root cannot be resolved', async () => {
+		// Reading the whole disk because a directory was mistyped is the one
+		// outcome nobody would notice. It fails closed, and it names the setting.
+		const { code, err, answers } = await drive([{ jsonrpc: '2.0', id: 1, method: 'ping' }], {
+			env: { TRUECOPY_MCP_ROOT: join(tmpdir(), 'truecopy-no-such-root') }
+		});
+		expect(code).toBe(1);
+		expect(answers).toEqual([]);
+		expect(err).toContain('TRUECOPY_MCP_ROOT is not a directory here');
 	});
 
 	it('opens nothing outside it', async () => {

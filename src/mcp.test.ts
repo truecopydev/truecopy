@@ -150,7 +150,7 @@ describe('the protocol', () => {
 });
 
 describe('every tool description', () => {
-	it('says what the tool does not prove, and not only what it does', async () => {
+	it('says what the tool does not prove, and not only what it does', () => {
 		// The description is the prompt a host puts in front of a model. One that
 		// says "reads tables" and stops has taught the opposite of this library.
 		const [read, check] = TOOLS;
@@ -158,7 +158,7 @@ describe('every tool description', () => {
 		expect(check.description).toContain('NOWHERE else');
 	});
 
-	it('declares itself read-only and closed, because it is both', async () => {
+	it('declares itself read-only and closed, because it is both', () => {
 		for (const tool of TOOLS) {
 			expect(tool.annotations.readOnlyHint).toBe(true);
 			expect(tool.annotations.openWorldHint).toBe(false);
