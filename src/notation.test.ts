@@ -122,6 +122,33 @@ describe('findNumbers', () => {
 	it('drops a token that matches the shape but holds no number', () => {
 		expect(findNumbers('1'.repeat(400))).toEqual([]);
 	});
+
+	/*
+	 * A COLUMN BOUNDARY IS NOT A THOUSANDS SEPARATOR.
+	 *
+	 * Both cases come from one pension record, on 2026-08-13. Read as single
+	 * numbers they were well formed, so every arithmetic downstream closed and
+	 * nothing could see the mistake: the year showed zero quarters for a full
+	 * year of work, and the site called it a CERTAIN anomaly with a letter of
+	 * claim ready to send. 24 of them on a 39-line career.
+	 */
+	it('never groups thousands across a tab, which delimits columns', () => {
+		const line = `2018\t4\t23000`;
+		expect(findNumbers(line).map((one) => one.value)).toEqual([2018, 4, 23000]);
+	});
+
+	it('closes a grouped number on a non-digit, so loose digits start a new one', () => {
+		// `4 19000` is not a French number: a group of thousands is followed by
+		// another group or by nothing. It read as 4 190 and left `00` behind.
+		expect(findNumbers('4 19000').map((one) => one.value)).toEqual([4, 19000]);
+	});
+
+	it('still groups a number the document really wrote that way', () => {
+		// The guard must not cost a real grouping - this is the reading the two
+		// rules above have to leave untouched.
+		expect(findNumbers('a total of 1 358 522 euros')[0].value).toBe(1358522);
+		expect(findNumbers('28 500,00 paid', 2)[0].value).toBe(28500);
+	});
 });
 
 describe('isOnlyNumber', () => {

@@ -46,7 +46,28 @@ export interface Notation {
  * has no way to know which one. U+202F is what a French PDF puts between
  * thousands, U+00A0 what an HTML export puts there.
  */
-const IN_NUMBER = " \\t\\u00A0\\u202F\\u2009'";
+const AROUND_NUMBER = " \\t\\u00A0\\u202F\\u2009'";
+
+/**
+ * Blanks that may GROUP thousands - the same list, minus the tab.
+ *
+ * A TAB NEVER GROUPS, IT DELIMITS. No typesetter puts a tab between two groups
+ * of thousands; an export puts one between two COLUMNS. Grouping across it
+ * welds a column to its neighbour, and the welded value is well formed, so
+ * every arithmetic it enters closes and nothing downstream can see it.
+ *
+ * Measured on a pension record on 2026-08-13: a tab between four quarters and
+ * a 23 000 EUR salary read as the single number 4 230. The year then showed
+ * zero quarters for a full year of work, and the site called it a CERTAIN
+ * anomaly with a letter of claim ready to send. A 39-line career produced 24
+ * of them.
+ *
+ * The consumer hardened its OWN pattern that day and this library never
+ * learned it, so the other consumers kept the defect - including
+ * `cite.carriesNumber`, the check that exists to catch a model inventing a
+ * figure.
+ */
+const GROUPS_THOUSANDS = " \\u00A0\\u202F\\u2009'";
 
 /**
  * A token that could be a number.
@@ -56,6 +77,16 @@ const IN_NUMBER = " \\t\\u00A0\\u202F\\u2009'";
  * line with no column boundary - reads as `026 300,00`, and a rate written
  * `0,000000 %` yields a bogus `0,00`.
  *
+ * A GROUPED NUMBER CLOSES ON A NON-DIGIT, and that is the second half of the
+ * same defect. A group of thousands is followed by another group or by
+ * nothing - never by loose digits. Without the guard, a single space between
+ * two columns made `4 19000` match `4 190` and leave `00` behind: a number
+ * nobody wrote, and a column silently eaten. Same document family, same day,
+ * same consumer as the tab above.
+ *
+ * The guard sits on the GROUPED branch only. The plain branch must stay open,
+ * or a bare `1234` would stop matching.
+ *
  * The run of spaces after an opening parenthesis is bounded, and generously so.
  * Unbounded, the scan goes quadratic on every line of every document. Bounded
  * tightly, it is worse than quadratic: past the bound the match simply starts
@@ -64,8 +95,9 @@ const IN_NUMBER = " \\t\\u00A0\\u202F\\u2009'";
  */
 export function numberToken(decimals?: number): RegExp {
 	const fraction = decimals === undefined ? `(?:[.,]\\d+)?` : `[.,]\\d{${decimals}}(?!\\d)`;
+	const grouped = `\\d{1,3}(?:[${GROUPS_THOUSANDS}.,]\\d{3})+(?!\\d)`;
 	return new RegExp(
-		`(?<![\\d.,/])[-+]?\\(?[${IN_NUMBER}]{0,12}(?:\\d{1,3}(?:[${IN_NUMBER}.,]\\d{3})+|\\d+)${fraction}\\)?-?`
+		`(?<![\\d.,/])[-+]?\\(?[${AROUND_NUMBER}]{0,12}(?:${grouped}|\\d+)${fraction}\\)?-?`
 	);
 }
 
@@ -386,7 +418,7 @@ const LEADING_DAY_MONTH = /^(\d{1,2})[/\-.](\d{1,2})(?!\d)/;
  * nobody has checked.
  */
 const LEADING_NAMED = new RegExp(
-	`^(\\d{1,2})(?:er|re|st|nd|rd|th|e)?\\s{1,4}([\\p{L}.]{3,12})\\.?\\s{1,4}(\\d(?:[${IN_NUMBER}]?\\d){3})`,
+	`^(\\d{1,2})(?:er|re|st|nd|rd|th|e)?\\s{1,4}([\\p{L}.]{3,12})\\.?\\s{1,4}(\\d(?:[${AROUND_NUMBER}]?\\d){3})`,
 	'iu'
 );
 
