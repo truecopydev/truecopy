@@ -202,3 +202,112 @@ export function columnOfHeader(
 	const [only] = columns;
 	return columns.size === 1 && only !== undefined ? only : null;
 }
+
+/* ------------------------------------------------------------------------- *
+ * THE SAME QUESTION, ON A RUN OF TEXT.
+ *
+ * Everything above needs a grid: a caller who has cells knows which row and
+ * which column a value sits in. A caller who has PROSE has neither, and the
+ * question does not go away with the geometry - a heading and its figure are
+ * still a heading and its figure when the layout has been flattened into one
+ * string, which is what an API field, an OCR pass or a text-layer dump hands
+ * over.
+ *
+ * So the rule that this file exists for - A SEARCH STOPS AT THE NEXT LABEL -
+ * had to be written a fourth time by a fourth caller, and that caller got it
+ * wrong. Its labels were the years of a French dividend table; between each
+ * year and its amount the document prints the PAYMENT DATE, whose own year
+ * then collected the amount. A whole published series came out shifted by one
+ * year, and every value in it was well formed.
+ *
+ * The contract is the one above, minus a dimension. The caller says what a
+ * label looks like and what a value looks like; this walks from each label and
+ * stops at the next one; it hands back candidates and refuses to pick.
+ * ------------------------------------------------------------------------- */
+
+/** Where something sits in a run of text, and what it reads. */
+export interface Span {
+	/** Index of the first character, in the string that was searched. */
+	readonly index: number;
+	/** The text exactly as the document writes it, never parsed. */
+	readonly raw: string;
+}
+
+/** A span that could be the value of a label, and how far from it. */
+export interface TextCandidate extends Span {
+	/** Characters between the end of the label and the start of this value.
+	 *  Zero means they touch. */
+	readonly distance: number;
+}
+
+/** A label found in the text, with the spans that could be its value. */
+export interface Labelling {
+	readonly label: Span;
+	/** Candidates, closest first. Empty is an answer: a label the document
+	 *  leaves without a value is worth saying out loud. */
+	readonly values: readonly TextCandidate[];
+}
+
+export interface SpanOptions {
+	/**
+	 * How many characters to walk past a label before giving up.
+	 *
+	 * UNBOUNDED BY DEFAULT, and that is not laziness: in text the next label IS
+	 * the boundary, and a character budget would be a number nobody measured.
+	 * The one case it guards is the LAST label of a document, which otherwise
+	 * reaches to the end - a caller who knows its own layout narrows it.
+	 */
+	reach?: number;
+}
+
+/** A fresh global copy, so a caller's regex keeps its own `lastIndex`. */
+const scanning = (pattern: RegExp): RegExp =>
+	new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
+
+/** Every match of `pattern`, as spans. Zero-length matches are stepped over
+ *  rather than looped on. */
+function spansOf(text: string, pattern: RegExp): Span[] {
+	const scan = scanning(pattern);
+	const found: Span[] = [];
+	let match: RegExpExecArray | null;
+	while ((match = scan.exec(text)) !== null) {
+		if (match[0].length === 0) {
+			scan.lastIndex += 1;
+			continue;
+		}
+		found.push({ index: match.index, raw: match[0] });
+	}
+	return found;
+}
+
+/**
+ * Every label in a run of text, with the spans that could be its value.
+ *
+ * `labels` and `values` are the caller's patterns, and that is the whole line
+ * this library holds here as above: it does not know a heading from a footnote,
+ * and a list of words that mean "total" would be a domain shipped in a parser.
+ *
+ * A value that OVERLAPS its label is not a candidate. The year inside
+ * "exercice clos le 31 decembre 2024" is part of the label, not the figure that
+ * label announces, and returning it would answer a question nobody asked.
+ */
+export function labelledSpans(
+	text: string,
+	labels: RegExp,
+	values: RegExp,
+	options: SpanOptions = {}
+): Labelling[] {
+	const reach = options.reach ?? Number.POSITIVE_INFINITY;
+	const found = spansOf(text, labels);
+	const candidates = spansOf(text, values);
+
+	return found.map((label, at) => {
+		const from = label.index + label.raw.length;
+		const nextLabel = found[at + 1]?.index ?? text.length;
+		const until = Math.min(nextLabel, from + reach);
+		const values_ = candidates
+			.filter((one) => one.index >= from && one.index + one.raw.length <= until)
+			.map((one) => ({ ...one, distance: one.index - from }));
+		return { label, values: values_ };
+	});
+}

@@ -87,8 +87,18 @@ export type {
 } from './records.js';
 export { recordsFrom, spineWidthOf } from './records.js';
 
-export type { Candidate, Cell, Labelled, LabelOptions, Look } from './labels.js';
-export { columnOfHeader, labelledValues } from './labels.js';
+export type {
+	Candidate,
+	Cell,
+	Labelled,
+	Labelling,
+	LabelOptions,
+	Look,
+	Span,
+	SpanOptions,
+	TextCandidate
+} from './labels.js';
+export { columnOfHeader, labelledSpans, labelledValues } from './labels.js';
 
 export type { KindThreshold, SignatureOptions, RowAnomaly } from './signature.js';
 export { findRowAnomalies, sharesByKind, thresholdsFor } from './signature.js';

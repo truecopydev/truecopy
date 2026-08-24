@@ -9,6 +9,32 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A tab no longer groups thousands, and a grouped number now closes on a non-digit.** Both halves of one defect, both met on a pension record on 2026-08-13, both silent: the welded value is well formed, so every arithmetic it enters closes and nothing downstream can see it.
+
+  ```
+  findNumbers("2018	4	23000")   before  [2018, 4230]        after  [2018, 4, 23000]
+  findNumbers("4 19000")          before  [4190] (00 lost)    after  [4, 19000]
+  findNumbers("1 358 522")        before  [1358522]           after  [1358522]
+  ```
+
+  A tab never groups, it delimits - no typesetter puts one between two groups of thousands, an export puts one between two COLUMNS. And a group of thousands is followed by another group or by nothing, never by loose digits, so `4 19000` was never a French number. Read as single figures they showed zero quarters for a full year of work, and the site called it a CERTAIN anomaly with a letter of claim ready to send: 24 of them on a 39-line career.
+
+  The consumer that met it hardened its OWN pattern that day and this library never learned it, so every other consumer kept the defect - including `cite.carriesNumber`, the check that exists to catch a model inventing a figure.
+
+### Added
+
+- **`labelledSpans`: the value that goes with a label, on a run of TEXT.** `labelledValues` needs a grid, and a caller who has prose has neither rows nor columns - which is what an API field, an OCR pass or a text-layer dump hands over. The question does not go away with the geometry, so the rule this file exists for had to be written a fourth time by a fourth caller, and that caller got it wrong.
+
+  ```js
+  labelledSpans(notice, /exercice clos le d{1,2} p{L}+ d{4}/giu, /d{1,4},d{2} euros/g);
+  ```
+
+  Same contract as its sibling, minus a dimension: the caller says what a label looks like and what a value looks like, the walk stops at the NEXT label, and it hands back candidates rather than picking one. A value overlapping its own label is not a candidate - the year inside "exercice clos le 31 decembre 2024" is part of the label, not the figure it announces.
+
+  What it was written against: a French dividend table prints the PAYMENT DATE between each exercice and its amount, and a caller walking from year to year let the payment year collect the amount. A whole published series came out shifted by one year, every value in it well formed.
+
 ## [2.0.4] - 2026-08-23
 
 ### Added

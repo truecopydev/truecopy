@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { columnOfHeader, labelledValues } from './labels.js';
+import { columnOfHeader, labelledSpans, labelledValues } from './labels.js';
 
 /*
  * The predicates a caller writes, and they are the caller's on purpose: this
@@ -129,5 +129,82 @@ describe('columnOfHeader', () => {
 			['Adresse', '(en m2)']
 		];
 		expect(columnOfHeader(rows, declaresSurface)).toBe(1);
+	});
+});
+
+describe('labelledSpans', () => {
+	/*
+	 * THE DOCUMENT THAT PAID FOR THIS, printed as it prints - the article 243 bis
+	 * table of a French dividend notice. Between each exercice and its amount the
+	 * document writes the PAYMENT DATE, whose own year collected the amount when
+	 * the caller walked from year to year. The whole series came out a year late,
+	 * and every value in it was well formed.
+	 */
+	const NOTICE =
+		"Au titre de l'exercice clos le 31 decembre 2024 5 juin 2025 296 881 806 euros " +
+		'representant un dividende de 3,00 euros par action ' +
+		"Au titre de l'exercice clos le 31 decembre 2023 12 juin 2024 378 029 499,64 euros " +
+		'representant un dividende de 3,82 euros par action ' +
+		"Au titre de l'exercice clos le 31 decembre 2022 7 juin 2023 309 746 684,26 euros " +
+		'representant un dividende de 3,13 euros par action';
+
+	const EXERCICE = /exercice clos le \d{1,2} \p{L}+ \d{4}/giu;
+	const PAR_ACTION = /\d{1,4},\d{2} euros par action/g;
+
+	it('gives each label only what sits before the next one', () => {
+		const read = labelledSpans(NOTICE, EXERCICE, PAR_ACTION);
+		expect(read.map((one) => one.label.raw.slice(-4))).toEqual(['2024', '2023', '2022']);
+		expect(read.map((one) => one.values[0]?.raw)).toEqual([
+			'3,00 euros par action',
+			'3,82 euros par action',
+			'3,13 euros par action'
+		]);
+	});
+
+	it('never hands back a value that overlaps its own label', () => {
+		// The year inside the label is part of the label, not the figure it
+		// announces. Returning it answers a question nobody asked.
+		const read = labelledSpans('exercice 2024 puis 3,00 euros', /exercice \d{4}/g, /\d{1,12}/g);
+		expect(read[0].values.map((one) => one.raw)).toEqual(['3', '00']);
+	});
+
+	it('says out loud that a label has no value beside it', () => {
+		const read = labelledSpans('Total  Sous-total  12,00', /Total|Sous-total/g, /\d{1,12},\d{2}/g);
+		expect(read[0].values).toEqual([]);
+		expect(read[1].values.map((one) => one.raw)).toEqual(['12,00']);
+	});
+
+	it('measures the distance from the end of the label', () => {
+		const read = labelledSpans('Total 12,00', /Total/g, /\d{1,12},\d{2}/g);
+		expect(read[0].values[0].distance).toBe(1);
+	});
+
+	it('bounds the last label, which otherwise reaches the end', () => {
+		const text = 'Total 12,00 and much later 99,00';
+		expect(labelledSpans(text, /Total/g, /\d{1,12},\d{2}/g)[0].values).toHaveLength(2);
+		expect(labelledSpans(text, /Total/g, /\d{1,12},\d{2}/g, { reach: 8 })[0].values).toHaveLength(
+			1
+		);
+	});
+
+	it('leaves the caller regex its own lastIndex', () => {
+		const labels = /Total/g;
+		labels.lastIndex = 3;
+		labelledSpans('Total 12,00', labels, /\d{1,12},\d{2}/g);
+		expect(labels.lastIndex).toBe(3);
+	});
+
+	it('steps over a pattern that can match nothing, rather than looping on it', () => {
+		// A caller writing `\d*` gets an empty match at every position. Advancing
+		// past it is what keeps this from hanging on the first document.
+		const read = labelledSpans('Total 12', /Total/g, /\d*/g);
+		expect(read[0].values.map((one) => one.raw)).toEqual(['12']);
+	});
+
+	it('takes a pattern the caller did not make global', () => {
+		// Without `g` a scan matches once and stops, so every label past the first
+		// would lose its value - a silent half-reading, which is the worst kind.
+		const read = labelledSpans('Total 12,00 Total 13,00', /Total/, /\d{1,12},\d{2}/);
+		expect(read.map((one) => one.values[0]?.raw)).toEqual(['12,00', '13,00']);
 	});
 });
