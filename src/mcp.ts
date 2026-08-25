@@ -31,6 +31,7 @@
  */
 
 import { carriesNumber, carriesText, citedText, numberedRows } from './cite.js';
+import { ORIGINS } from './document.js';
 import { describeDoubts, explainReading } from './explain.js';
 import { decimalMarkOf, type DecimalMark } from './notation.js';
 import { UnreadableDocument } from './open.js';
@@ -158,7 +159,7 @@ export const TOOLS = [
 			type: 'object',
 			properties: {
 				file: { type: 'string' },
-				origin: { type: 'string', enum: ['pdf', 'text', 'image'] },
+				origin: { type: 'string', enum: [...ORIGINS] },
 				rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
 				firstRowNumber: { type: 'integer' },
 				totalRows: { type: 'integer' },

@@ -98,11 +98,24 @@ export interface TextPage {
 	lines?: string[];
 }
 
+/**
+ * What a document was read from.
+ *
+ * A list and not a union written by hand, because it is declared twice: here,
+ * and in the output schema the MCP server advertises. Written twice it drifts,
+ * and a client that validates against the advertised schema then rejects a
+ * perfectly good reading - which is exactly what happened the day `docx` was
+ * added.
+ */
+export const ORIGINS = ['pdf', 'text', 'image', 'docx'] as const;
+
+export type Origin = (typeof ORIGINS)[number];
+
 export interface Document {
 	pages: TextPage[];
 	/** Every row of every page, joined. The reader that works on text alone - a
 	 *  paste grammar, a line reader - needs nothing more than this. */
 	text: string;
-	origin: 'pdf' | 'text' | 'image';
+	origin: Origin;
 	name: string;
 }

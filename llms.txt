@@ -2,7 +2,7 @@
 
 > Read tables out of PDFs, and refuse the readings you cannot trust. TypeScript, ESM, no configuration per issuer: the table is learned from the table.
 
-Use it when a program has to turn a document a person dropped - a PDF, a paste, a CSV, an OCR page - into records that something downstream will act upon. It is not a parser: it is the pipeline and the guarantees around whichever reader you write. It never learns what your documents mean.
+Use it when a program has to turn a document a person dropped - a PDF, a Word document, a paste, a CSV, an OCR page - into records that something downstream will act upon. It is not a parser: it is the pipeline and the guarantees around whichever reader you write. It never learns what your documents mean.
 
 Install: `npm install truecopy` (Node 20+, ESM only; `pdfjs-dist` is an optional peer, needed only for PDFs).
 

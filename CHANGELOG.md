@@ -7,6 +7,41 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Added
+
+- **A Word document is read, and a container is no longer decoded as text.** `openDocument` opens a `.docx`, and refuses by name everything it cannot read instead of handing it to the text reader.
+
+  The refusal is the half that matters. A `.docx` is a ZIP, so the previous door decoded it as UTF-8 and returned **1 147 rows of mojibake**, confidently, with no doubt raised anywhere - the exact failure this library exists to prevent, met on a real corpus of French collective agreements. Any binary did the same: an image, a program, a spreadsheet. They now raise the new `binary` reason, which names what the file is rather than what is missing from it.
+
+  ```js
+  const document = await openDocument(new File([bytes], 'agreement.docx'));
+  document.origin; // 'docx'
+  ```
+
+  What is read is what the document already declares: paragraphs, and table cells on their own grid. Nothing votes on a boundary here - a `.docx` writes its rows and cells down, unlike a page, where the cut has to work them out - so the ruler is `index`, the one a CSV is read with. A cell left empty stays an empty field in its own column, because closing that gap is how the third value of a row ends up under the second header. A cell spanning several columns holds the place of all of them.
+
+  One page, always: Word paginates when it renders, on the fonts and the paper of whoever opens it, so numbering pages off the stored breaks would put a page in a citation that the next reader cannot find.
+
+  No dependency: a ZIP is inflated with `DecompressionStream`, which Node 20 and every browser already have. An entry is bounded as it inflates rather than on its declared size, so a small archive holding a very large part is refused rather than handed to a tab.
+
+  Known limit, and deliberate: a cell merged DOWN a column (`w:vMerge`) reads as empty on the rows that continue it. Word writes the value once, so repeating it would put a value on rows where the document prints none.
+
+- **`docxWithBody` and `docxWithText` in the kit.** A real archive, a real CRC, both compression methods - the same reasoning as `pdfWithText`: a test that hands the parser a string of XML proves nothing about the container the person actually attached.
+
+### Changed
+
+- **A file that is not a PDF is now read through `arrayBuffer()`, where it used to be read through `text()`.** Nothing else could be true of a door that has to tell a container from a sentence: the ZIP signature and the byte order mark are bytes, and `text()` has already thrown them away. A real `File` carries both methods, so no application changes. **A test that stubs `text()` alone stops being exercised**, silently: `relevedecarriere` has one, met on the consumer bench the day this shipped, and it now resolves where it used to reject. Stub `arrayBuffer()` there instead.
+
+### Fixed
+
+- **The MCP server advertised three origins where a reading can carry four.** `read_table` passes `origin` straight through, so a client validating against the advertised schema would have rejected a perfectly good `.docx` reading. The list is now declared once, as `ORIGINS` in `document.ts`, and both the type and the schema derive from it: the next origin cannot be added to one and forgotten in the other.
+
+- **A text file that declares UTF-16 is decoded as UTF-16.** It used to be decoded as UTF-8, which turns a perfectly good export into one line of NUL-riddled mojibake - and, from this release on, would have made it a `binary` refusal instead. The byte order mark is the only thing a plain text file says about itself, so it is now believed.
+
+- **`explainDocument` no longer says a delimiter cut a document that has none.** Two very different documents are measured by index: a CSV, where a delimiter decided, and a Word document, where nothing decided and the cells were copied as the file declares them.
+
 ## [2.0.5] - 2026-08-24
 
 ### Fixed
