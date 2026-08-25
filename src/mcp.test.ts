@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ORIGINS } from './document.js';
 import { pdfWithPages, pdfWithText } from './kit.js';
 import { TOOLS, respond, type McpCapabilities, type McpResponse } from './mcp.js';
 
@@ -395,5 +396,16 @@ describe('check_citations', () => {
 			capabilities
 		);
 		expect(result.structuredContent).toMatchObject({ file: 'one.pdf', checked: 2, carried: 2 });
+	});
+});
+
+describe('the schema the server advertises', () => {
+	it('offers every origin a reading can carry, and no other', () => {
+		// Declared twice - the type and the schema - and the day `docx` was added
+		// to one, the other still said `pdf, text, image`. A client validating
+		// against the advertised schema rejects a perfectly good reading.
+		const read = TOOLS.find((tool) => tool.name === 'read_table');
+		const origin = read?.outputSchema.properties.origin;
+		expect(origin).toEqual({ type: 'string', enum: [...ORIGINS] });
 	});
 });

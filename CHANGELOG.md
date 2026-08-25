@@ -34,6 +34,8 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **The MCP server advertised three origins where a reading can carry four.** `read_table` passes `origin` straight through, so a client validating against the advertised schema would have rejected a perfectly good `.docx` reading. The list is now declared once, as `ORIGINS` in `document.ts`, and both the type and the schema derive from it: the next origin cannot be added to one and forgotten in the other.
+
 - **A text file that declares UTF-16 is decoded as UTF-16.** It used to be decoded as UTF-8, which turns a perfectly good export into one line of NUL-riddled mojibake - and, from this release on, would have made it a `binary` refusal instead. The byte order mark is the only thing a plain text file says about itself, so it is now believed.
 
 - **`explainDocument` no longer says a delimiter cut a document that has none.** Two very different documents are measured by index: a CSV, where a delimiter decided, and a Word document, where nothing decided and the cells were copied as the file declares them.
