@@ -26,6 +26,8 @@ release PR is what stamps them.
 
   No dependency: a ZIP is inflated with `DecompressionStream`, which Node 20 and every browser already have. An entry is bounded as it inflates rather than on its declared size, so a small archive holding a very large part is refused rather than handed to a tab.
 
+  Known limit, and deliberate: a cell merged DOWN a column (`w:vMerge`) reads as empty on the rows that continue it. Word writes the value once, so repeating it would put a value on rows where the document prints none.
+
 - **`docxWithBody` and `docxWithText` in the kit.** A real archive, a real CRC, both compression methods - the same reasoning as `pdfWithText`: a test that hands the parser a string of XML proves nothing about the container the person actually attached.
 
 ### Changed

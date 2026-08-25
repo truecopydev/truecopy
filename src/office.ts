@@ -53,6 +53,16 @@ interface Cell {
 	span: number;
 }
 
+/*
+ * KNOWN, and left alone on purpose: `w:vMerge`, a cell merged DOWN a column,
+ * reads as an empty cell on the rows that continue it. Word writes the value
+ * once and marks the rest as continuations, so repeating it would put a value
+ * on rows where the document prints none - and a reader counting filled cells
+ * would then measure this library rather than the page. A caller that wants
+ * the fill can carry it down itself, on rows it can see. Reconsider it with a
+ * corpus, not with an opinion.
+ */
+
 interface Table {
 	rows: Cell[][];
 	current: Cell[] | null;
