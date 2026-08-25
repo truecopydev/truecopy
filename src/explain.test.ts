@@ -4,6 +4,8 @@ import { documentFrom, documentFromText, pageFrom } from './layout.js';
 import type { PositionedItem } from './document.js';
 import type { RoleRule } from './roles.js';
 import type { SignatureOptions } from './signature.js';
+import { docxWithText } from './kit.js';
+import { openDocument } from './open.js';
 
 /*
  * A toy table with the two things worth seeing: a row missing a cell the column
@@ -171,5 +173,14 @@ describe('describeAnomaly', () => {
 
 	it('says only that it is empty when the column has no kind of its own', () => {
 		expect(describeAnomaly({ cause: 'empty', column: 3 })).toBe('column 3 is empty');
+	});
+});
+
+describe('a document that declares its own cells', () => {
+	it('does not say a delimiter cut it, because none did', async () => {
+		const document = await openDocument(
+			new File([(await docxWithText([['Cadres', '2 100']])) as BlobPart], 'accord.docx')
+		);
+		expect(explainDocument(document)).toContain('cut on the cells the document declares');
 	});
 });

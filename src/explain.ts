@@ -179,22 +179,31 @@ export function explainRows(rows: string[][], options: ExplainOptions = {}): str
  * but the two rulers text brought say which one they are.
  *
  * On a delimited file the numbers themselves say nothing anybody needs: the
- * columns are the fields. So it names what happened instead.
+ * columns are the fields. So it names what happened instead - and it names the
+ * right thing, because two very different documents are measured by index: a
+ * CSV, where a delimiter decided, and a Word document, where nothing decided at
+ * all and the cells were copied as the file declares them.
  */
-function describeCut(cut: number[], unit: CoordinateUnit = 'points'): string {
+function describeCut(
+	cut: number[],
+	unit: CoordinateUnit = 'points',
+	origin: Document['origin']
+): string {
 	if (cut.length === 0) return 'no boundary';
-	if (unit === 'index') return 'cut on the delimiter';
+	if (unit === 'index') {
+		return origin === 'docx' ? 'cut on the cells the document declares' : 'cut on the delimiter';
+	}
 	const at = cut.map((boundary) => Math.round(boundary)).join(', ');
 	return unit === 'characters' ? `cut at characters ${at}` : `cut at ${at}`;
 }
 
-function pageLines(page: TextPage, options: ExplainOptions): string[] {
+function pageLines(page: TextPage, options: ExplainOptions, origin: Document['origin']): string[] {
 	const cut = options.boundariesOf?.(page) ?? page.columnBoundaries;
 	const cellsOf = options.cellsOf ?? ((row: Row) => rowToCells(row, cut));
 	const rows = page.rows.map((row) => cellsOf(row, page));
 	return [
 		'',
-		`page ${page.pageNumber} - ${describeCut(cut, page.unit)}`,
+		`page ${page.pageNumber} - ${describeCut(cut, page.unit, origin)}`,
 		'',
 		explainRows(rows, options)
 	];
@@ -215,7 +224,7 @@ export function explainDocument(document: Document, options: ExplainOptions = {}
 	return [
 		`truecopy - ${document.name}`,
 		`${document.origin}, ${document.pages.length} page(s), ${rows} row(s)`,
-		...pages.flatMap((page) => pageLines(page, options))
+		...pages.flatMap((page) => pageLines(page, options, document.origin))
 	].join('\n');
 }
 

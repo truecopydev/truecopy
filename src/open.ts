@@ -11,6 +11,8 @@
 
 import type { Document, PositionedItem, TextPage } from './document.js';
 import { documentFrom, documentFromText, pageFrom } from './layout.js';
+import { documentFromDocx } from './office.js';
+import { looksLikeArchive, UnreadableArchive } from './zip.js';
 
 /**
  * Why a document could not be opened. Named, never only worded: this library
@@ -25,6 +27,17 @@ export type Unreadable =
 	| 'no-text'
 	/** The deadline ran out. */
 	| 'too-slow'
+	/**
+	 * Bytes that are not text and not a document this library opens: an image, a
+	 * program, an archive that is not a `.docx`, a spreadsheet.
+	 *
+	 * It exists because of what used to happen instead. Anything that was not a
+	 * PDF was decoded as text, so a `.docx` - a ZIP - came back as eleven hundred
+	 * rows of mojibake, confidently, with no doubt raised anywhere. A reading
+	 * that cannot be trusted is refused, and a container is refused before it is
+	 * read, not after a reader has found columns in it.
+	 */
+	| 'binary'
 	/**
 	 * There is no PDF engine to read with: `pdfjs-dist` is not installed and
 	 * none was passed in `options.pdfjs`.
@@ -244,6 +257,83 @@ export function positionedItems(items: unknown[]): PositionedItem[] {
 	return placed;
 }
 
+/** What a `.docx` says it is, when the browser knows. */
+const WORD_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/**
+ * Whether these bytes are text at all.
+ *
+ * A NUL byte is the test every tool that has to guess uses, and it is the right
+ * one: no text encoding this decoder reads puts a NUL in the middle of a
+ * sentence, and every binary format has one in its first kilobytes. The whole
+ * prefix is scanned rather than the first bytes only, because a JPEG opens on
+ * printable characters and a program often does too.
+ */
+function looksLikeText(bytes: Uint8Array): boolean {
+	const prefix = bytes.subarray(0, 8192);
+	return !prefix.includes(0);
+}
+
+/** The label to decode with, when the file says so itself. A byte order mark is
+ *  the only self-declaration a plain text file carries, and decoding UTF-16 as
+ *  UTF-8 is how a perfectly good export comes back as one NUL-riddled line. */
+function encodingOf(bytes: Uint8Array): 'utf-8' | 'utf-16le' | 'utf-16be' | null {
+	if (bytes[0] === 0xff && bytes[1] === 0xfe) return 'utf-16le';
+	if (bytes[0] === 0xfe && bytes[1] === 0xff) return 'utf-16be';
+	return looksLikeText(bytes) ? 'utf-8' : null;
+}
+
+/**
+ * A Word document, or the refusal that names what this really is.
+ *
+ * The extension decides, not the ZIP signature: `.xlsx` and `.pptx` are the same
+ * container, and opening one of them as a Word document would find no body and
+ * say the file was damaged, which sends whoever reads that looking for a repair
+ * that will never work.
+ */
+async function openOffice(bytes: Uint8Array, file: File, limits: Limits): Promise<Document> {
+	if (file.type !== WORD_TYPE && !/\.docx$/i.test(file.name)) {
+		throw new UnreadableDocument(
+			'binary',
+			'This file is an archive, not a document. Of the Office formats I read .docx, and nothing else.'
+		);
+	}
+	try {
+		const document = await withDeadline(
+			documentFromDocx(bytes, file.name, limits.maximumBytes),
+			limits.deadlineMilliseconds
+		);
+		if (document.text.trim() === '') {
+			throw new UnreadableDocument(
+				'no-text',
+				'This document carries no text: what it holds is most likely images.'
+			);
+		}
+		return document;
+	} catch (error) {
+		if (error instanceof UnreadableDocument) throw error;
+		if (error instanceof UnreadableArchive) {
+			if (error.reason === 'entry-absent') {
+				throw new UnreadableDocument(
+					'binary',
+					'This file is an archive with no Word document in it.',
+					{ cause: error }
+				);
+			}
+			if (error.reason === 'entry-too-big') {
+				throw new UnreadableDocument('too-big', 'This document holds more than expected.', {
+					cause: error
+				});
+			}
+		}
+		throw new UnreadableDocument(
+			'not-opened',
+			'I could not open this document. If it is password-protected, save an unprotected copy.',
+			{ cause: error }
+		);
+	}
+}
+
 /** Open a dropped file. The only path. */
 export async function openDocument(file: File, options: OpenOptions = {}): Promise<Document> {
 	const limits = { ...DEFAULT_LIMITS, ...options };
@@ -254,7 +344,18 @@ export async function openDocument(file: File, options: OpenOptions = {}): Promi
 	}
 
 	const looksLikePdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
-	if (!looksLikePdf) return documentFromText(await file.text(), file.name);
+	if (!looksLikePdf) {
+		const bytes = new Uint8Array(await file.arrayBuffer());
+		if (looksLikeArchive(bytes)) return openOffice(bytes, file, limits);
+		const encoding = encodingOf(bytes);
+		if (encoding === null) {
+			throw new UnreadableDocument(
+				'binary',
+				'This file is not text: it is an image, a program, or a format I do not read.'
+			);
+		}
+		return documentFromText(new TextDecoder(encoding).decode(bytes), file.name);
+	}
 
 	try {
 		const document = await withDeadline(

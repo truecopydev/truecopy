@@ -28,7 +28,7 @@ const HELP = `truecopy - see what a reading of your document decides
   npx truecopy explain <file>    the same
   npx truecopy --json <file>     the same reading as data, for a program
 
-  Any file it can open: a PDF, a CSV, a paste saved to disk.
+  Any file it can open: a PDF, a Word document, a CSV, a paste saved to disk.
 `;
 
 /** The arguments, with the verb and the flags dropped. One verb, so it is
@@ -75,7 +75,7 @@ async function run(argv) {
 
 	const bytes = await readFile(path);
 	const file = new File([bytes], basename(path), {
-		type: path.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'text/plain'
+		type: path.toLowerCase().endsWith('.pdf') ? 'application/pdf' : ''
 	});
 
 	const table = await readTable(file);

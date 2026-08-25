@@ -2,7 +2,7 @@
 
 **Extract tables from a PDF in TypeScript, and know when the extraction is wrong.**
 
-Turn a document into rows, and refuse the readings you cannot trust. A PDF, a paste, a CSV, an OCR page: one engine reads all of them.
+Turn a document into rows, and refuse the readings you cannot trust. A PDF, a Word document, a paste, a CSV, an OCR page: one engine reads all of them.
 
 [![npm](https://img.shields.io/npm/v/truecopy)](https://www.npmjs.com/package/truecopy)
 [![gate](https://github.com/truecopydev/truecopy/actions/workflows/gate.yml/badge.svg)](https://github.com/truecopydev/truecopy/actions/workflows/gate.yml)
@@ -383,7 +383,7 @@ A library with no stated limit grows one every release. These are refusals, not 
 - **It will never grow per-issuer configuration.** Tuning settings until one bank comes out right is the approach this library exists to replace. A layout it reads badly is a defect or a documented limit, never a preset.
 - **It will never become a CSV parser.** It splits on four delimiters, and only where the count recurs line after line. A quoted file is handed back whole with a warning, because half-parsing a quoted CSV is exactly the plausible-but-wrong reading argued against everywhere else here. Reach for a real CSV library; this door exists for a paste, an export, an OCR line.
 - **It will never become a validation library.** `schemaOf` bounds a reading: formats, and how many records make a document. Anything richer belongs to Zod or Valibot, and `validateWith` takes theirs rather than competing with it.
-- **It will never open a format on its own.** PDFs go through `pdfjs-dist`, which stays an **optional** peer dependency. No OCR engine, no spreadsheet reader, no office format. You hand over bytes or text.
+- **It will never carry an engine of its own.** PDFs go through `pdfjs-dist`, which stays an **optional** peer dependency; a `.docx` is a ZIP of XML, so it is read with what the platform already has and costs no dependency at all. No OCR engine, no spreadsheet reader, no legacy `.doc`. Anything else, you hand over as bytes or text - and bytes it cannot read are refused by name rather than decoded into mojibake.
 - **It will never touch the filesystem, the network or a clock you did not pass in.** It runs in a browser. `bin/truecopy.mjs` is the single exception, and it is a command, not the library.
 - **It will never grow a second cut.** One vote on which left edges recur, one set of thresholds, three rulers. A format that needs its own algorithm needs its own library.
 

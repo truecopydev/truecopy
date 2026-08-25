@@ -230,3 +230,138 @@ export async function checkContract<Entry, Header>(
 
 	return results;
 }
+
+/**
+ * Build a real `.docx`: a real ZIP, a real CRC, a real body part.
+ *
+ * Same reasoning as `pdfWithText`, and it costs about as much. What a reader
+ * must be able to do is open the file somebody attached to an email, and a test
+ * that hands the parser a string of XML proves none of the container.
+ *
+ * `compress` is not decoration either: Word writes deflated parts and this
+ * builder writes stored ones, so the two paths through the archive reader are
+ * two different code paths and both ship.
+ */
+export async function docxWithBody(
+	bodyXml: string,
+	options: { compress?: boolean } = {}
+): Promise<Uint8Array> {
+	const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${bodyXml}</w:body></w:document>`;
+	const relationships = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`;
+	return archiveOf(
+		[
+			{ name: '_rels/.rels', text: relationships },
+			{ name: 'word/document.xml', text: document }
+		],
+		options.compress ?? false
+	);
+}
+
+/**
+ * The same, from what the document says rather than from its markup.
+ *
+ * A string is a paragraph, an array of strings is a table row: those are the two
+ * shapes a Word document has, and a fixture that spells the XML out for either
+ * of them tests the fixture more than the reader.
+ */
+export const docxWithText = (
+	blocks: (string | string[])[],
+	options: { compress?: boolean } = {}
+): Promise<Uint8Array> => {
+	const escape = (text: string): string =>
+		text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	const paragraph = (text: string): string =>
+		`<w:p><w:r><w:t xml:space="preserve">${escape(text)}</w:t></w:r></w:p>`;
+	const cellXml = (text: string): string => `<w:tc>${paragraph(text)}</w:tc>`;
+	const rowXml = (cells: string[]): string =>
+		`<w:tbl><w:tr>${cells.map(cellXml).join('')}</w:tr></w:tbl>`;
+	const body = blocks
+		.map((block) => (typeof block === 'string' ? paragraph(block) : rowXml(block)))
+		.join('');
+	return docxWithBody(body, options);
+};
+
+/** CRC-32, the one the ZIP format checks its entries with. Table-free: a
+ *  fixture builder runs a handful of times, and the table is more code than the
+ *  loop it saves. */
+function crc32(bytes: Uint8Array): number {
+	let crc = 0xffffffff;
+	for (const byte of bytes) {
+		crc ^= byte;
+		for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+	}
+	return (crc ^ 0xffffffff) >>> 0;
+}
+
+async function deflate(bytes: Uint8Array): Promise<Uint8Array> {
+	const stream = new Blob([bytes as BlobPart])
+		.stream()
+		.pipeThrough(new CompressionStream('deflate-raw'));
+	return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/** A ZIP holding the given files, written the way the format reads: local
+ *  headers, then a central directory, then the end record that points at it. */
+async function archiveOf(
+	files: { name: string; text: string }[],
+	compress: boolean
+): Promise<Uint8Array> {
+	const encoder = new TextEncoder();
+	const parts: Uint8Array[] = [];
+	const directory: Uint8Array[] = [];
+	let offset = 0;
+
+	for (const file of files) {
+		const name = encoder.encode(file.name);
+		const content = encoder.encode(file.text);
+		const stored = compress ? await deflate(content) : content;
+
+		const local = new Uint8Array(30 + name.byteLength);
+		const localView = new DataView(local.buffer);
+		localView.setUint32(0, 0x04034b50, true);
+		localView.setUint16(4, 20, true);
+		localView.setUint16(8, compress ? 8 : 0, true);
+		localView.setUint32(14, crc32(content), true);
+		localView.setUint32(18, stored.byteLength, true);
+		localView.setUint32(22, content.byteLength, true);
+		localView.setUint16(26, name.byteLength, true);
+		local.set(name, 30);
+
+		const entry = new Uint8Array(46 + name.byteLength);
+		const entryView = new DataView(entry.buffer);
+		entryView.setUint32(0, 0x02014b50, true);
+		entryView.setUint16(6, 20, true);
+		entryView.setUint16(10, compress ? 8 : 0, true);
+		entryView.setUint32(16, crc32(content), true);
+		entryView.setUint32(20, stored.byteLength, true);
+		entryView.setUint32(24, content.byteLength, true);
+		entryView.setUint16(28, name.byteLength, true);
+		entryView.setUint32(42, offset, true);
+		entry.set(name, 46);
+
+		parts.push(local, stored);
+		directory.push(entry);
+		offset += local.byteLength + stored.byteLength;
+	}
+
+	const directorySize = directory.reduce((total, entry) => total + entry.byteLength, 0);
+	const end = new Uint8Array(22);
+	const endView = new DataView(end.buffer);
+	endView.setUint32(0, 0x06054b50, true);
+	endView.setUint16(8, files.length, true);
+	endView.setUint16(10, files.length, true);
+	endView.setUint32(12, directorySize, true);
+	endView.setUint32(16, offset, true);
+
+	const all = [...parts, ...directory, end];
+	const size = all.reduce((total, part) => total + part.byteLength, 0);
+	const archive = new Uint8Array(size);
+	let at = 0;
+	for (const part of all) {
+		archive.set(part, at);
+		at += part.byteLength;
+	}
+	return archive;
+}

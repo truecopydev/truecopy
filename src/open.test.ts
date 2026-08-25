@@ -8,7 +8,7 @@ import {
 	type OpenOptions,
 	type PdfEngine
 } from './open.js';
-import { pdfWithPages, pdfWithText } from './kit.js';
+import { docxWithBody, docxWithText, pdfWithPages, pdfWithText } from './kit.js';
 
 describe('withDeadline', () => {
 	it('lets a read that finishes through', async () => {
@@ -239,4 +239,114 @@ describe('positionedItems', () => {
 	it('keeps the width when the engine gives one', () => {
 		expect(positionedItems([from([1, 0, 0, 1, 50, 700], 'MAY', 18)])[0].width).toBe(18);
 	});
+});
+
+describe('openDocument, on what is neither a PDF nor plain text', () => {
+	const WORD_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+	const paragraph = (text: string) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`;
+
+	const reasonOf = async (file: File, options?: OpenOptions): Promise<string> => {
+		try {
+			await openDocument(file, options);
+		} catch (error) {
+			if (error instanceof UnreadableDocument) return error.reason;
+			throw error;
+		}
+		throw new Error('this file was read, and it should not have been');
+	};
+
+	it('reads a real .docx, from the bytes to the rows', async () => {
+		const bytes = await docxWithText(['Accord du 5 juin 2026', ['Employes', '1 800 EUR']]);
+		const document = await openDocument(new File([bytes as BlobPart], 'accord.docx'));
+		expect(document.origin).toBe('docx');
+		expect(document.pages[0].rows.map((row) => row.text)).toEqual([
+			'Accord du 5 juin 2026',
+			'Employes\t1 800 EUR'
+		]);
+	});
+
+	it('takes the type the browser gives, when the name says nothing', async () => {
+		const bytes = await docxWithText(['Accord']);
+		const document = await openDocument(
+			new File([bytes as BlobPart], 'download', { type: WORD_TYPE })
+		);
+		expect(document.origin).toBe('docx');
+	});
+
+	it('refuses a container that is not a Word document, and says which formats it reads', async () => {
+		// The extension decides, not the ZIP signature: .xlsx and .pptx are the
+		// same container, and opening one as a Word document would report damage
+		// rather than the wrong format.
+		const bytes = await docxWithText(['Accord']);
+		const file = new File([bytes as BlobPart], 'comptes.xlsx');
+		expect(await reasonOf(file)).toBe('binary');
+		await expect(openDocument(file)).rejects.toThrow(/\.docx/);
+	});
+
+	it('refuses an archive with no Word document in it', async () => {
+		const bytes = await docxWithText(['Accord']);
+		// Rename the part, in the directory and in the local header both.
+		const renamed = new TextDecoder('latin1')
+			.decode(bytes)
+			.replaceAll('word/document.xml', 'word/document.XXX');
+		const file = new File([Uint8Array.from(renamed, (c) => c.charCodeAt(0)) as BlobPart], 'a.docx');
+		expect(await reasonOf(file)).toBe('binary');
+	});
+
+	it('refuses a .docx that inflates to more than the caller allowed', async () => {
+		// A small file holding a very large part: the reader must not hand a tab a
+		// megabyte it never agreed to.
+		const bytes = await docxWithBody(paragraph('x').repeat(4000), { compress: true });
+		const file = new File([bytes as BlobPart], 'bomb.docx');
+		expect(await reasonOf(file, { maximumBytes: 20_000 })).toBe('too-big');
+	});
+
+	it('refuses a .docx whose bytes are damaged', async () => {
+		const bytes = await docxWithBody(paragraph('Accord'), { compress: true });
+		const damaged = bytes.slice();
+		const view = new DataView(damaged.buffer);
+		// The body is the last entry written, so its local header is the last one,
+		// and its deflate stream starts right after the header and the name.
+		let header = 0;
+		for (let at = 0; at + 4 <= damaged.length; at++) {
+			if (view.getUint32(at, true) === 0x04034b50) header = at;
+		}
+		const stream = header + 30 + view.getUint16(header + 26, true);
+		for (let index = stream; index < stream + 16; index++) damaged[index] ^= 0xff;
+		expect(await reasonOf(new File([damaged as BlobPart], 'accord.docx'))).toBe('not-opened');
+	});
+
+	it('refuses a .docx whose archive is cut short', async () => {
+		// Truncated download: the container opens on PK and has no end record. It
+		// is not a Word document that failed to open, and it is not text either.
+		const bytes = await docxWithText(['Accord']);
+		const cut = bytes.slice(0, bytes.byteLength - 30);
+		expect(await reasonOf(new File([cut as BlobPart], 'accord.docx'))).toBe('not-opened');
+	});
+
+	it('says a .docx carries no text rather than returning an empty reading', async () => {
+		const bytes = await docxWithBody('<w:p/>');
+		expect(await reasonOf(new File([bytes as BlobPart], 'images.docx'))).toBe('no-text');
+	});
+
+	it('refuses bytes that are not text at all', async () => {
+		// A PNG: eight bytes of signature, a NUL among them.
+		const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
+		expect(await reasonOf(new File([png as BlobPart], 'scan.png'))).toBe('binary');
+	});
+
+	it.each([
+		{ order: 'little endian', mark: [0xff, 0xfe], bytes: [0x41, 0x00, 0x09, 0x00, 0x42, 0x00] },
+		{ order: 'big endian', mark: [0xfe, 0xff], bytes: [0x00, 0x41, 0x00, 0x09, 0x00, 0x42] }
+	])(
+		'reads a text file that declares UTF-16, $order, rather than calling it binary',
+		async ({ mark, bytes }) => {
+			// A byte order mark is the only thing a plain text file says about itself,
+			// and decoding one of these as UTF-8 gives a line of NUL-riddled mojibake.
+			const utf16 = new Uint8Array([...mark, ...bytes]);
+			const document = await openDocument(new File([utf16 as BlobPart], 'export.txt'));
+			expect(document.origin).toBe('text');
+			expect(document.text).toBe('A\tB');
+		}
+	);
 });

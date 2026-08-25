@@ -103,6 +103,6 @@ export interface Document {
 	/** Every row of every page, joined. The reader that works on text alone - a
 	 *  paste grammar, a line reader - needs nothing more than this. */
 	text: string;
-	origin: 'pdf' | 'text' | 'image';
+	origin: 'pdf' | 'text' | 'image' | 'docx';
 	name: string;
 }
