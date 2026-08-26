@@ -11,7 +11,7 @@
 
 import type { Document, PositionedItem, TextPage } from './document.js';
 import { documentFrom, documentFromText, pageFrom } from './layout.js';
-import { documentFromDocx } from './office.js';
+import { documentFromDocx, documentFromOdt } from './office.js';
 import { looksLikeArchive, UnreadableArchive } from './zip.js';
 
 /**
@@ -29,7 +29,7 @@ export type Unreadable =
 	| 'too-slow'
 	/**
 	 * Bytes that are not text and not a document this library opens: an image, a
-	 * program, an archive that is not a `.docx`, a spreadsheet.
+	 * program, an archive that is not a `.docx` or a `.odt`, a spreadsheet.
 	 *
 	 * It exists because of what used to happen instead. Anything that was not a
 	 * PDF was decoded as text, so a `.docx` - a ZIP - came back as eleven hundred
@@ -260,6 +260,9 @@ export function positionedItems(items: unknown[]): PositionedItem[] {
 /** What a `.docx` says it is, when the browser knows. */
 const WORD_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
+/** And what a `.odt` says it is. */
+const OPENDOCUMENT_TYPE = 'application/vnd.oasis.opendocument.text';
+
 /**
  * Whether these bytes are text at all.
  *
@@ -284,23 +287,32 @@ function encodingOf(bytes: Uint8Array): 'utf-8' | 'utf-16le' | 'utf-16be' | null
 }
 
 /**
- * A Word document, or the refusal that names what this really is.
+ * Which office format this archive says it is, or nothing.
  *
- * The extension decides, not the ZIP signature: `.xlsx` and `.pptx` are the same
- * container, and opening one of them as a Word document would find no body and
- * say the file was damaged, which sends whoever reads that looking for a repair
- * that will never work.
+ * THE EXTENSION DECIDES, NOT THE ZIP SIGNATURE: `.xlsx`, `.pptx` and `.ods` are
+ * the same container, and opening one of them as a text document would find no
+ * body and say the file was damaged - which sends whoever reads that looking
+ * for a repair that will never work.
  */
+function officeFormatOf(file: File): 'docx' | 'odt' | null {
+	if (file.type === WORD_TYPE || /\.docx$/i.test(file.name)) return 'docx';
+	if (file.type === OPENDOCUMENT_TYPE || /\.odt$/i.test(file.name)) return 'odt';
+	return null;
+}
+
+/** A word processing document, or the refusal that names what this really is. */
 async function openOffice(bytes: Uint8Array, file: File, limits: Limits): Promise<Document> {
-	if (file.type !== WORD_TYPE && !/\.docx$/i.test(file.name)) {
+	const format = officeFormatOf(file);
+	if (format === null) {
 		throw new UnreadableDocument(
 			'binary',
-			'This file is an archive, not a document. Of the Office formats I read .docx, and nothing else.'
+			'This file is an archive, not a document. Of the office formats I read .docx and .odt, and nothing else.'
 		);
 	}
 	try {
+		const read = format === 'docx' ? documentFromDocx : documentFromOdt;
 		const document = await withDeadline(
-			documentFromDocx(bytes, file.name, limits.maximumBytes),
+			read(bytes, file.name, limits.maximumBytes),
 			limits.deadlineMilliseconds
 		);
 		if (document.text.trim() === '') {
@@ -316,7 +328,7 @@ async function openOffice(bytes: Uint8Array, file: File, limits: Limits): Promis
 			if (error.reason === 'entry-absent') {
 				throw new UnreadableDocument(
 					'binary',
-					'This file is an archive with no Word document in it.',
+					'This file is an archive with no word processing document in it.',
 					{ cause: error }
 				);
 			}

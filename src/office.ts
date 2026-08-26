@@ -1,15 +1,21 @@
 /*
- * A Word document, read for what it already says.
+ * An office document, read for what it already says.
  *
  * This is the opposite of a PDF, and that is why it earns its own file. A page
  * holds pieces of text at coordinates and the cut has to work out where the
- * columns were; a `.docx` writes its rows and its cells down. So nothing here
- * votes, guesses a boundary or measures a gap: the grid is copied, and a cell
- * the document leaves empty stays empty in its own place.
+ * columns were; a `.docx` and a `.odt` write their rows and their cells down.
+ * So nothing here votes, guesses a boundary or measures a gap: the grid is
+ * copied, and a cell the document leaves empty stays empty in its own place.
  *
  * That is also why the ruler is `index`. There is no x to measure - the third
- * cell is the third column wherever Word would have drawn it - which is the
- * ruler a CSV is read with, for the same reason.
+ * cell is the third column wherever the editor would have drawn it - which is
+ * the ruler a CSV is read with, for the same reason.
+ *
+ * TWO FORMATS, ONE READING MODEL. Word and OpenDocument disagree about markup
+ * and agree about what a document is: paragraphs, and rows of cells on a grid.
+ * So there are two lexers here and one `Body`. Giving OpenDocument its own file
+ * would have meant its own `Body` too, and two grids that drift apart is the
+ * one thing a shared reading layer must not have.
  */
 
 import type { Document, PositionedItem, Row, TextPage } from './document.js';
@@ -167,9 +173,11 @@ class Body {
 		row.push({ text: '', column: last === undefined ? 0 : last.column + last.span, span: 1 });
 	}
 
-	spanCell(attributes: string): void {
+	/** How many columns the cell being filled holds. A number and not the markup
+	 *  it came from: the two formats spell the same fact differently, and a body
+	 *  that read attributes would have to know both. */
+	spanColumns(span: number): void {
 		const cell = this.cell;
-		const span = Number.parseInt(VALUE.exec(attributes)?.[1] ?? '1', 10);
 		if (cell !== null && Number.isFinite(span) && span > 0) cell.span = span;
 	}
 }
@@ -208,7 +216,8 @@ function textOf(xml: string, from: number, name: string): { text: string; next: 
 const STRUCTURE: Record<string, (body: Body, tag: Tag) => void> = {
 	tab: (body) => body.write('\t'),
 	br: (body) => body.write(' '),
-	gridSpan: (body, tag) => body.spanCell(tag.attributes),
+	gridSpan: (body, tag) =>
+		body.spanColumns(Number.parseInt(VALUE.exec(tag.attributes)?.[1] ?? '1', 10)),
 	p: (body, tag) => {
 		if (tag.closing || tag.empty) body.endParagraph();
 	},
@@ -274,8 +283,17 @@ export async function documentFromDocx(
 	maximumBytes: number
 ): Promise<Document> {
 	const body = await fileFromArchive(bytes, WORD_BODY, maximumBytes);
-	const lines = linesOf(new TextDecoder().decode(body));
+	return documentFromLines(linesOf(new TextDecoder().decode(body)), 'docx', name);
+}
 
+/**
+ * Lines onto the one page an office document has.
+ *
+ * Shared by both formats on purpose: the page a reader gets must not depend on
+ * which editor wrote the file. Word and OpenDocument disagree about markup and
+ * agree about the grid, so the grid is built once.
+ */
+function documentFromLines(lines: string[][], origin: 'docx' | 'odt', name: string): Document {
 	const rows: Row[] = lines.map((fields, index) => {
 		const items: PositionedItem[] = fields
 			.map((field, column) => ({ text: field.trim(), x: column, y: -index, width: 1 }))
@@ -293,5 +311,229 @@ export async function documentFromDocx(
 		columnBoundaries: columnBoundaries(items, gapFor('index')),
 		unit: 'index'
 	};
-	return documentFrom([page], 'docx', name);
+	return documentFrom([page], origin, name);
+}
+
+/** Where OpenDocument puts the body. Fixed by the standard, like Word's, so
+ *  there is nothing to search for. */
+export const OPENDOCUMENT_BODY = 'content.xml';
+
+/**
+ * ANY tag, and not only the ones that carry meaning.
+ *
+ * This is the difference that matters between the two formats. Word puts its
+ * text inside `w:t`, so a lexer can ignore every element it does not know.
+ * OpenDocument prints the character data BETWEEN tags, so an element left
+ * unmatched is copied into the document as though the page had shown it.
+ *
+ * Measured on real deposits before this was widened: an agreement came back
+ * opening on `<draw:custom-shape svg:x="0.47708in" svg:y="0.03681in" ...>`,
+ * because `draw:` was not one of the three namespaces the pattern knew. That is
+ * markup read as a sentence, which is the one failure this library exists to
+ * prevent.
+ *
+ * Comments and processing instructions are matched too, for the same reason.
+ */
+const ODF_TAG = /<[/?!\w][^<>]*>/g;
+
+/** Comments, taken out before the scan rather than during it.
+ *
+ * A comment is the one thing in an XML file that may hold a `<`, so it cannot
+ * be recognised by a pattern that also has to stop at one - and a pattern that
+ * does not stop at one walks the whole file from every `<` it meets, which is
+ * quadratic on a document that opens with a run of them. Removing them first
+ * costs one pass and leaves both patterns linear. */
+const ODF_COMMENT = /<!--[\s\S]*?-->/g;
+
+/**
+ * The name inside a tag, once one has been found.
+ *
+ * A second small pattern rather than one big one: a single expression that also
+ * carried comments and processing instructions was one nobody could read
+ * against the standard.
+ *
+ * The prefix is REQUIRED. Every element of an OpenDocument body carries one, so
+ * a tag without it is not an element of this format: it matches nothing here,
+ * and matching nothing is what tells `<?xml ...?>` and `<!DOCTYPE ...>` apart
+ * from an element too. The tag has still been consumed by then, so nothing of
+ * it is printed as text either way.
+ */
+const ODF_NAME = /^<(\/?)([\w.-]+):([\w.-]+)/;
+
+const REPEATED = /table:number-columns-repeated="(\d+)"/;
+const SPANNED = /table:number-columns-spanned="(\d+)"/;
+const SPACES = /text:c="(\d+)"/;
+
+/**
+ * The subtrees an OpenDocument body carries and does NOT print where they sit.
+ *
+ * Tracked changes is the one that matters: ODF keeps deleted text in the file,
+ * inside `text:tracked-changes`, so a reader walking every character node
+ * quotes sentences the document does not show - and a citation the reader
+ * cannot find on the page is exactly what this library refuses. An annotation
+ * is a comment in the margin. `svg:title` and `svg:desc` are what a screen
+ * reader says about a drawing, not what the drawing prints.
+ *
+ * KNOWN, and left alone like `w:vMerge` above: `text:note-body` is a footnote,
+ * and a footnote IS printed - at the bottom of the page. It sits inline in the
+ * markup, so reading it would drop the note into the middle of the sentence
+ * that calls it, and a reader would find a citation the page never runs
+ * together. Losing it loses text; keeping it in place would invent a sentence.
+ * Reconsider it with a corpus, not with an opinion.
+ *
+ * Qualified names, not local ones: `svg:title` is a caption and `text:title` is
+ * a field that prints the document's own title.
+ */
+const SKIPPED = new Set([
+	'text:tracked-changes',
+	'office:annotation',
+	'text:note-body',
+	'svg:title',
+	'svg:desc'
+]);
+
+/**
+ * How many columns a cell holds, and how many times it repeats.
+ *
+ * They are two different attributes and both are ordinary in a spreadsheet-like
+ * table: `spanned` is one cell covering three columns, `repeated` is the same
+ * empty cell written once instead of forty times. Reading `repeated` as a span
+ * would merge forty columns into one; ignoring it would lose thirty-nine.
+ */
+function cellShape(attributes: string): { span: number; repeat: number } {
+	// The patterns capture digits and nothing else, so what comes back is always
+	// a finite number: only zero has to be turned away, and a cell standing for
+	// no column at all is a cell that stands for itself.
+	const read = (pattern: RegExp): number =>
+		Number.parseInt(pattern.exec(attributes)?.[1] ?? '1', 10) || 1;
+	// A row padded out to a thousand empty columns is a spreadsheet habit, not a
+	// document: past this, the repeat says more about the editor than the table.
+	return { span: read(SPANNED), repeat: Math.min(read(REPEATED), 64) };
+}
+
+/**
+ * The body of an OpenDocument file, becoming lines.
+ *
+ * The one structural difference with Word: text is the character data of a
+ * paragraph, not the content of a run element. So this lexer reads what lies
+ * BETWEEN two tags, which is why the skipped subtrees above have to be jumped
+ * over rather than merely ignored - ignoring the tag would still copy the text
+ * inside it.
+ */
+function odfLinesOf(xml: string): string[][] {
+	// From the body only. What precedes it declares fonts and styles, and a
+	// style name is not something the document printed.
+	const opens = xml.indexOf('<office:body');
+	const source = (opens === -1 ? xml : xml.slice(opens)).replace(ODF_COMMENT, '');
+
+	const body = new Body();
+	ODF_TAG.lastIndex = 0;
+	let at = 0;
+	/*
+	 * WHETHER A PARAGRAPH IS OPEN, and it is the whole reason this lexer can be
+	 * trusted with character data.
+	 *
+	 * In OpenDocument text only ever sits inside a `text:p` or a `text:h`. What
+	 * lies between two structural tags is the file's own indentation, and a
+	 * reader that took it would hand back a first row opening on a newline - and
+	 * on a content.xml some converter pretty-printed, EVERY row would carry the
+	 * indentation of its markup.
+	 */
+	let inParagraph = false;
+	for (let match = ODF_TAG.exec(source); match !== null; match = ODF_TAG.exec(source)) {
+		const whole = match[0];
+		// Whatever lay between the previous tag and this one is what the paragraph
+		// prints, when there is a paragraph to print it.
+		if (inParagraph && match.index > at) {
+			body.write(decodeEntities(source.slice(at, match.index)));
+		}
+		at = match.index + whole.length;
+
+		const named = ODF_NAME.exec(whole);
+		// A processing instruction or a doctype: it took its place in the text and
+		// says nothing about the structure.
+		if (named === null) continue;
+
+		const [, closing, namespace, name] = named;
+		const qualified = `${namespace}:${name}`;
+		const tag: Tag = { closing: closing === '/', empty: whole.endsWith('/>'), attributes: whole };
+		if (!tag.closing && !tag.empty && SKIPPED.has(qualified)) {
+			at = jumpPast(source, `</${qualified}>`, at);
+			ODF_TAG.lastIndex = at;
+			inParagraph = false;
+			continue;
+		}
+		if (name === 'p' || name === 'h') inParagraph = !tag.closing && !tag.empty;
+		odfElement(body, name, tag);
+	}
+	body.endParagraph();
+	return body.lines;
+}
+
+/**
+ * What each element does to the body being read.
+ *
+ * One function for all three shapes of a tag, and not an opening table beside a
+ * closing one: in ODF a cell arrives BOTH ways. `<table:table-cell/>` written
+ * empty is an empty cell that still holds its column, and routing it to a
+ * closing handler is how a row loses three columns and slides its last value
+ * left. Measured on the fixture the day this was written.
+ */
+function odfElement(body: Body, name: string, tag: Tag): void {
+	if (tag.closing) {
+		if (name === 'p' || name === 'h') body.endParagraph();
+		else if (name === 'table') body.closeTable();
+		else if (name === 'table-row') body.closeRow();
+		return;
+	}
+	if (name === 'tab') body.write('\t');
+	else if (name === 'line-break') body.write(' ');
+	else if (name === 's') body.write(' '.repeat(spaceCount(tag.attributes)));
+	else if (name === 'table-cell') openCells(body, tag.attributes);
+	else if (tag.empty) {
+		// An empty `p` is a blank line, and `covered-table-cell` is a place a span
+		// already took: it holds no text and must NOT open a column, or every
+		// later value moves one column right.
+		if (name === 'p' || name === 'h') body.endParagraph();
+	} else if (name === 'table') body.openTable();
+	else if (name === 'table-row') body.openRow();
+}
+
+/** How many spaces `text:s` stands for. Bounded, like the repeat below: a count
+ *  in the thousands describes an editor, not a document. */
+function spaceCount(attributes: string): number {
+	// Same as the cell shape above: the pattern captures digits, so zero is the
+	// only value to turn away, and `text:s` always stands for at least one space.
+	return Math.min(Number.parseInt(SPACES.exec(attributes)?.[1] ?? '1', 10) || 1, 64);
+}
+
+/** Past the end of something that has to be stepped over. A file cut short
+ *  never comes back, so a missing end means the rest of it is not text. */
+function jumpPast(source: string, closing: string, from: number): number {
+	const end = source.indexOf(closing, from);
+	return end === -1 ? source.length : end + closing.length;
+}
+
+/** A cell, and the columns it stands for. */
+function openCells(body: Body, attributes: string): void {
+	const { span, repeat } = cellShape(attributes);
+	for (let copy = 0; copy < repeat; copy++) {
+		body.openCell();
+		body.spanColumns(span);
+	}
+}
+
+/**
+ * An OpenDocument text file as this library's rows.
+ *
+ * One page, for the same reason a `.docx` has one: OpenDocument paginates at
+ * render time, on the fonts and the paper of whoever opens it.
+ */
+export async function documentFromOdt(
+	bytes: Uint8Array,
+	name: string,
+	maximumBytes: number
+): Promise<Document> {
+	const body = await fileFromArchive(bytes, OPENDOCUMENT_BODY, maximumBytes);
+	return documentFromLines(odfLinesOf(new TextDecoder().decode(body)), 'odt', name);
 }

@@ -8,7 +8,7 @@ import {
 	type OpenOptions,
 	type PdfEngine
 } from './open.js';
-import { docxWithBody, docxWithText, pdfWithPages, pdfWithText } from './kit.js';
+import { docxWithBody, docxWithText, odtWithText, pdfWithPages, pdfWithText } from './kit.js';
 
 describe('withDeadline', () => {
 	it('lets a read that finishes through', async () => {
@@ -281,6 +281,34 @@ describe('openDocument, on what is neither a PDF nor plain text', () => {
 		const file = new File([bytes as BlobPart], 'comptes.xlsx');
 		expect(await reasonOf(file)).toBe('binary');
 		await expect(openDocument(file)).rejects.toThrow(/\.docx/);
+	});
+
+	it('reads a .odt, which used to be refused as a container', async () => {
+		// MEASURED on auregistre: 4 767 agreements out of 395 581 came back with no
+		// citation because their document was an .odt, and the only thing standing
+		// between the text and the reader was this dispatch.
+		const bytes = await odtWithText(['Accord relatif a la NAO 2025']);
+		const document = await openDocument(new File([bytes as BlobPart], 'accord.odt'));
+		expect(document.origin).toBe('odt');
+		expect(document.text).toBe('Accord relatif a la NAO 2025');
+	});
+
+	it('takes the OpenDocument type the browser gives, when the name says nothing', async () => {
+		const bytes = await odtWithText(['Accord']);
+		const document = await openDocument(
+			new File([bytes as BlobPart], 'download', { type: 'application/vnd.oasis.opendocument.text' })
+		);
+		expect(document.origin).toBe('odt');
+	});
+
+	it('still refuses a spreadsheet, whichever suite wrote it', async () => {
+		// .ods and .xlsx are the same container as the documents above: the
+		// extension is what decides, and neither of them is a text document.
+		const bytes = await odtWithText(['Accord']);
+		expect(await reasonOf(new File([bytes as BlobPart], 'comptes.ods'))).toBe('binary');
+		await expect(openDocument(new File([bytes as BlobPart], 'comptes.ods'))).rejects.toThrow(
+			/.odt/
+		);
 	});
 
 	it('refuses an archive with no Word document in it', async () => {

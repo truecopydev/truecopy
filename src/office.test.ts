@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { docxWithBody, docxWithText } from './kit.js';
-import { documentFromDocx, WORD_BODY } from './office.js';
+import { docxWithBody, docxWithText, odtWithBody, odtWithText } from './kit.js';
+import { documentFromDocx, documentFromOdt, OPENDOCUMENT_BODY, WORD_BODY } from './office.js';
 
 const read = (bytes: Uint8Array, name = 'accord.docx') => documentFromDocx(bytes, name, 5_000_000);
 
@@ -175,5 +175,269 @@ describe('documentFromDocx', () => {
 
 	it('names the part it went looking for', async () => {
 		expect(WORD_BODY).toBe('word/document.xml');
+	});
+});
+
+/*
+ * OPENDOCUMENT, read onto the SAME grid as Word.
+ *
+ * The tests below deliberately mirror those above: two formats that disagree
+ * about markup must not disagree about what a reader gets, and the only way to
+ * hold that is to ask them the same questions.
+ */
+const readOdt = (bytes: Uint8Array, name = 'accord.odt') => documentFromOdt(bytes, name, 5_000_000);
+
+const odtTextOf = async (blocks: (string | string[])[]): Promise<string[]> => {
+	const document = await readOdt(await odtWithText(blocks));
+	return document.pages[0].rows.map((row) => row.text);
+};
+
+describe('documentFromOdt', () => {
+	it('reads the paragraphs of a real .odt, in order', async () => {
+		const document = await readOdt(await odtWithText(['Article 1', 'Article 2']));
+		expect(document.origin).toBe('odt');
+		expect(document.name).toBe('accord.odt');
+		expect(document.text).toBe('Article 1\nArticle 2');
+	});
+
+	it('reads a deflated part as well as a stored one', async () => {
+		const document = await readOdt(await odtWithText(['Article 1'], { compress: true }));
+		expect(document.text).toBe('Article 1');
+	});
+
+	it('reads a heading, which is a paragraph that carries a level', async () => {
+		const document = await readOdt(
+			await odtWithBody('<text:h text:outline-level="1">Titre I</text:h><text:p>Article 1</text:p>')
+		);
+		expect(document.text).toBe('Titre I\nArticle 1');
+	});
+
+	it('gives the same page as a .docx: one, on the index ruler', async () => {
+		const document = await readOdt(await odtWithText([['A', 'B']]));
+		expect(document.pages).toHaveLength(1);
+		expect(document.pages[0].pageNumber).toBe(1);
+		expect(document.pages[0].unit).toBe('index');
+	});
+
+	it('keeps a table row on its grid, one field per column', async () => {
+		const document = await readOdt(await odtWithText([['Employes', '1 800 EUR', '23 400 EUR']]));
+		expect(document.pages[0].rows[0].items.map((item) => [item.x, item.text])).toEqual([
+			[0, 'Employes'],
+			[1, '1 800 EUR'],
+			[2, '23 400 EUR']
+		]);
+	});
+
+	it('leaves an empty cell empty rather than closing the gap', async () => {
+		const rows = await odtTextOf([
+			['', 'Applique', 'Adapte'],
+			['Autonomie', '30', '60']
+		]);
+		expect(rows).toEqual(['\tApplique\tAdapte', 'Autonomie\t30\t60']);
+	});
+
+	it('reads a span as the columns it covers, and skips the cells it covers', async () => {
+		// `covered-table-cell` is how ODF writes the places a span already took. A
+		// reader that opened a column for each of them would push every later
+		// value one column right.
+		const document = await readOdt(
+			await odtWithBody(
+				'<table:table><table:table-row>' +
+					'<table:table-cell table:number-columns-spanned="2"><text:p>Total</text:p></table:table-cell>' +
+					'<table:covered-table-cell/>' +
+					'<table:table-cell><text:p>1 800</text:p></table:table-cell>' +
+					'</table:table-row></table:table>'
+			)
+		);
+		expect(document.pages[0].rows[0].items.map((item) => [item.x, item.text])).toEqual([
+			[0, 'Total'],
+			[2, '1 800']
+		]);
+	});
+
+	it('writes a repeated empty cell once per column it stands for', async () => {
+		// `number-columns-repeated` is not a span: it is the same cell written
+		// once instead of three times. Reading it as a span would merge three
+		// columns into one.
+		const document = await readOdt(
+			await odtWithBody(
+				'<table:table><table:table-row>' +
+					'<table:table-cell><text:p>A</text:p></table:table-cell>' +
+					'<table:table-cell table:number-columns-repeated="3"/>' +
+					'<table:table-cell><text:p>B</text:p></table:table-cell>' +
+					'</table:table-row></table:table>'
+			)
+		);
+		expect(document.pages[0].rows[0].items.map((item) => [item.x, item.text])).toEqual([
+			[0, 'A'],
+			[4, 'B']
+		]);
+	});
+
+	it('does not quote what the document does not print: a tracked deletion', async () => {
+		// ODF keeps deleted text in the file. Walking every character node would
+		// put a sentence in a citation that nobody can find on the page, which is
+		// the reading this library exists to refuse.
+		const document = await readOdt(
+			await odtWithBody(
+				'<text:tracked-changes><text:changed-region><text:deletion><office:change-info/>' +
+					'<text:p>Une phrase supprimee</text:p></text:deletion></text:changed-region></text:tracked-changes>' +
+					'<text:p>Article 1</text:p>'
+			)
+		);
+		expect(document.text).toBe('Article 1');
+	});
+
+	it('reads a tab and a line break for what they space', async () => {
+		const document = await readOdt(
+			await odtWithBody(
+				'<text:p>Poste<text:tab/>Montant</text:p><text:p>A<text:line-break/>B</text:p>'
+			)
+		);
+		expect(document.pages[0].rows.map((row) => row.text)).toEqual(['Poste\tMontant', 'A B']);
+	});
+
+	it('reads the spaces a paragraph declares by count', async () => {
+		const document = await readOdt(await odtWithBody('<text:p>A<text:s text:c="3"/>B</text:p>'));
+		expect(document.text).toBe('A   B');
+	});
+
+	it('reads text through an inline span, which carries style and not meaning', async () => {
+		const document = await readOdt(
+			await odtWithBody(
+				'<text:p>Une <text:span text:style-name="T1">augmentation</text:span> de 2 %</text:p>'
+			)
+		);
+		expect(document.text).toBe('Une augmentation de 2 %');
+	});
+
+	it('decodes the entities the format writes', async () => {
+		const document = await readOdt(await odtWithText(['SAFRAN ELECTRICAL & POWER']));
+		expect(document.text).toBe('SAFRAN ELECTRICAL & POWER');
+	});
+});
+
+describe('documentFromOdt, on what real deposits carry', () => {
+	it('does not print the markup of a drawing as a sentence', async () => {
+		// MEASURED on the DILA deposits: before the lexer matched every tag, an
+		// agreement came back opening on `<draw:custom-shape svg:x="0.47708in"
+		// ...>`. OpenDocument prints the characters BETWEEN tags, so an element
+		// the lexer does not know is copied out as though the page showed it.
+		const document = await readOdt(
+			await odtWithBody(
+				'<draw:custom-shape svg:x="0.47708in" draw:z-index="0"><draw:text-box>' +
+					'<text:p>ACCORD RELATIF A L EGALITE PROFESSIONNELLE</text:p>' +
+					'</draw:text-box><svg:title/><svg:desc/></draw:custom-shape>' +
+					'<text:p>Article 1</text:p>'
+			)
+		);
+		expect(document.text).toBe('ACCORD RELATIF A L EGALITE PROFESSIONNELLE\nArticle 1');
+	});
+
+	it('says nothing a screen reader was meant to say about a drawing', async () => {
+		const document = await readOdt(
+			await odtWithBody(
+				'<draw:frame><svg:title>Logo de la societe</svg:title>' +
+					'<svg:desc>Un rond bleu</svg:desc></draw:frame><text:p>Article 1</text:p>'
+			)
+		);
+		expect(document.text).toBe('Article 1');
+	});
+
+	it('names the part it went looking for', () => {
+		expect(OPENDOCUMENT_BODY).toBe('content.xml');
+	});
+
+	it('steps over a comment without reading it as text', async () => {
+		const document = await readOdt(
+			await odtWithBody('<!-- relu par le service RH --><text:p>Article 1</text:p>')
+		);
+		expect(document.text).toBe('Article 1');
+	});
+});
+
+describe('documentFromOdt, at the edges of the format', () => {
+	it('reads a lone text:s as the single space it stands for', async () => {
+		const document = await readOdt(await odtWithBody('<text:p>A<text:s/>B</text:p>'));
+		expect(document.text).toBe('A B');
+	});
+
+	it('does not let a count in the thousands stand for a thousand spaces', async () => {
+		// A count that large describes an editor, not a document, and a reader
+		// measuring a gap would then be measuring this library.
+		const wide = await readOdt(await odtWithBody('<text:p>A<text:s text:c="5000"/>B</text:p>'));
+		expect(wide.text).toBe(`A${' '.repeat(64)}B`);
+		// Zero is the only count to turn away: the pattern reads digits, so nothing
+		// else can arrive, and `text:s` always stands for at least one space.
+		const nonsense = await readOdt(await odtWithBody('<text:p>A<text:s text:c="0"/>B</text:p>'));
+		expect(nonsense.text).toBe('A B');
+	});
+
+	it('stops at the end of a file cut short rather than reading its markup', async () => {
+		// A converter that gave up mid-file leaves a subtree that never closes.
+		// Reading on would print the rest of the document inside the skipped one.
+		const document = await readOdt(
+			await odtWithBody('<text:p>Article 1</text:p><text:tracked-changes><text:p>Supprime')
+		);
+		expect(document.text).toBe('Article 1');
+	});
+
+	it('reads an empty paragraph for the break it is, not for a column', async () => {
+		const document = await readOdt(
+			await odtWithBody('<text:p>Article 1</text:p><text:p/><text:p>Article 2</text:p>')
+		);
+		expect(document.text).toBe('Article 1\nArticle 2');
+	});
+
+	it('prints nothing of a tag it does not know, markup or text', async () => {
+		// Every element of an OpenDocument body is prefixed, so a bare tag is not
+		// one of this format's - and text only ever sits inside a paragraph, which
+		// this one never opened.
+		const document = await readOdt(await odtWithBody('<p>Ceci</p><text:p>Article 1</text:p>'));
+		expect(document.text).toBe('Article 1');
+	});
+});
+
+describe('documentFromOdt, a cell that stands for no column', () => {
+	it('gives a repeat of zero its own single column', async () => {
+		// `table:number-columns-repeated="0"` is a cell standing for no column at
+		// all, which is not a thing a grid can hold: it stands for itself.
+		const document = await readOdt(
+			await odtWithBody(
+				'<table:table><table:table-row>' +
+					'<table:table-cell table:number-columns-repeated="0"><text:p>A</text:p></table:table-cell>' +
+					'<table:table-cell><text:p>B</text:p></table:table-cell>' +
+					'</table:table-row></table:table>'
+			)
+		);
+		expect(document.pages[0].rows[0].items.map((item) => [item.x, item.text])).toEqual([
+			[0, 'A'],
+			[1, 'B']
+		]);
+	});
+});
+
+describe('documentFromOdt, when the body is not where it should be', () => {
+	it('reads the whole part rather than nothing', async () => {
+		// A converter that wrote no `office:body`. Reading from the top costs the
+		// style declarations, which carry no text, and it is the only alternative
+		// to returning an empty document for a file that plainly has one.
+		const bytes = await odtWithText(['Article 1']);
+		// Renamed in place, so every offset in the archive stays valid.
+		const xml = new TextDecoder('latin1').decode(bytes).replace('<office:body>', '<office:x0dy>');
+		const document = await readOdt(Uint8Array.from(xml, (character) => character.charCodeAt(0)));
+		expect(document.text).toBe('Article 1');
+	});
+});
+
+describe('documentFromOdt, on a content.xml somebody pretty-printed', () => {
+	it('reads the paragraphs and not the indentation around them', async () => {
+		// Editors write content.xml on one line; converters do not always. A reader
+		// that took what lies between two structural tags would give every row the
+		// indentation of its markup.
+		const document = await readOdt(
+			await odtWithBody('\n\t<text:p>Article 1</text:p>\n\t<text:p>Article 2</text:p>\n')
+		);
+		expect(document.text).toBe('Article 1\nArticle 2');
 	});
 });
