@@ -467,3 +467,30 @@ describe('documentFromOdt, on a file that stops in the middle', () => {
 		expect(document.text).toBe('Article 1');
 	});
 });
+
+describe('documentFromOdt, when a skipped subtree sits mid-sentence', () => {
+	it('keeps the end of a sentence that carries a footnote', async () => {
+		// A footnote is anchored INLINE. Closing the paragraph at the anchor drops
+		// the rest of the sentence, which the page really does print: the mirror
+		// of quoting what it does not.
+		const document = await readOdt(
+			await odtWithBody(
+				'<text:p>Les salaires augmentent de 2 %<text:note text:note-class="footnote">' +
+					'<text:note-citation>1</text:note-citation>' +
+					'<text:note-body><text:p>Hors primes.</text:p></text:note-body>' +
+					'</text:note> au 1er janvier.</text:p>'
+			)
+		);
+		expect(document.text).toBe('Les salaires augmentent de 2 %1 au 1er janvier.');
+	});
+
+	it('keeps the end of a sentence that carries a comment in the margin', async () => {
+		const document = await readOdt(
+			await odtWithBody(
+				'<text:p>Article 1<office:annotation><text:p>a revoir</text:p></office:annotation>' +
+					' et sa suite.</text:p>'
+			)
+		);
+		expect(document.text).toBe('Article 1 et sa suite.');
+	});
+});

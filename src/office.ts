@@ -466,8 +466,18 @@ function applyTag(
 	const [, closing, namespace, name] = named;
 	const qualified = `${namespace}:${name}`;
 	const tag: Tag = { closing: closing === '/', empty: whole.endsWith('/>'), attributes: whole };
+	/*
+	 * A SKIPPED SUBTREE IS STEPPED OVER, AND NOTHING ELSE CHANGES.
+	 *
+	 * `inParagraph` is carried across untouched, and the first version of this
+	 * forced it to false - which read as harmless and was not. An annotation and
+	 * a footnote are anchored INLINE, mid-sentence: `<text:p>a sentence<text:note>
+	 * ...</text:note> and its end.</text:p>`. Closing the paragraph at the anchor
+	 * dropped ` and its end.`, text the page really does print. The mirror of the
+	 * failure this reader exists to prevent, and just as bad.
+	 */
 	if (!tag.closing && !tag.empty && SKIPPED.has(qualified)) {
-		return { at: jumpPast(source, `</${qualified}>`, at), inParagraph: false };
+		return { at: jumpPast(source, `</${qualified}>`, at), inParagraph };
 	}
 	odfElement(body, name, tag);
 	const opensParagraph = name === 'p' || name === 'h';
