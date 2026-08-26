@@ -319,33 +319,6 @@ function documentFromLines(lines: string[][], origin: 'docx' | 'odt', name: stri
 export const OPENDOCUMENT_BODY = 'content.xml';
 
 /**
- * ANY tag, and not only the ones that carry meaning.
- *
- * This is the difference that matters between the two formats. Word puts its
- * text inside `w:t`, so a lexer can ignore every element it does not know.
- * OpenDocument prints the character data BETWEEN tags, so an element left
- * unmatched is copied into the document as though the page had shown it.
- *
- * Measured on real deposits before this was widened: an agreement came back
- * opening on `<draw:custom-shape svg:x="0.47708in" svg:y="0.03681in" ...>`,
- * because `draw:` was not one of the three namespaces the pattern knew. That is
- * markup read as a sentence, which is the one failure this library exists to
- * prevent.
- *
- * Comments and processing instructions are matched too, for the same reason.
- */
-const ODF_TAG = /<[/?!\w][^<>]*>/g;
-
-/** Comments, taken out before the scan rather than during it.
- *
- * A comment is the one thing in an XML file that may hold a `<`, so it cannot
- * be recognised by a pattern that also has to stop at one - and a pattern that
- * does not stop at one walks the whole file from every `<` it meets, which is
- * quadratic on a document that opens with a run of them. Removing them first
- * costs one pass and leaves both patterns linear. */
-const ODF_COMMENT = /<!--[\s\S]*?-->/g;
-
-/**
  * The name inside a tag, once one has been found.
  *
  * A second small pattern rather than one big one: a single expression that also
@@ -424,10 +397,9 @@ function odfLinesOf(xml: string): string[][] {
 	// From the body only. What precedes it declares fonts and styles, and a
 	// style name is not something the document printed.
 	const opens = xml.indexOf('<office:body');
-	const source = (opens === -1 ? xml : xml.slice(opens)).replace(ODF_COMMENT, '');
+	const source = opens === -1 ? xml : xml.slice(opens);
 
 	const body = new Body();
-	ODF_TAG.lastIndex = 0;
 	let at = 0;
 	/*
 	 * WHETHER A PARAGRAPH IS OPEN, and it is the whole reason this lexer can be
@@ -440,34 +412,66 @@ function odfLinesOf(xml: string): string[][] {
 	 * indentation of its markup.
 	 */
 	let inParagraph = false;
-	for (let match = ODF_TAG.exec(source); match !== null; match = ODF_TAG.exec(source)) {
-		const whole = match[0];
+
+	/*
+	 * WALKED WITH `indexOf`, NOT SCANNED WITH A PATTERN, and that is a fix rather
+	 * than a taste. A comment is the one thing in XML that may hold a `<`, so it
+	 * cannot be recognised by a pattern that also has to stop at one - and every
+	 * pattern that did not stop at one walked the file again from each `<` it
+	 * met. Both shapes were flagged, one as quadratic on a run of `<!--` and one
+	 * as a sanitiser that leaves what it removes. Here every character is looked
+	 * at once, because `at` only ever moves forward.
+	 */
+	while (at < source.length) {
+		const open = source.indexOf('<', at);
+		if (open === -1) break;
 		// Whatever lay between the previous tag and this one is what the paragraph
 		// prints, when there is a paragraph to print it.
-		if (inParagraph && match.index > at) {
-			body.write(decodeEntities(source.slice(at, match.index)));
-		}
-		at = match.index + whole.length;
+		if (inParagraph && open > at) body.write(decodeEntities(source.slice(at, open)));
 
-		const named = ODF_NAME.exec(whole);
-		// A processing instruction or a doctype: it took its place in the text and
-		// says nothing about the structure.
-		if (named === null) continue;
-
-		const [, closing, namespace, name] = named;
-		const qualified = `${namespace}:${name}`;
-		const tag: Tag = { closing: closing === '/', empty: whole.endsWith('/>'), attributes: whole };
-		if (!tag.closing && !tag.empty && SKIPPED.has(qualified)) {
-			at = jumpPast(source, `</${qualified}>`, at);
-			ODF_TAG.lastIndex = at;
-			inParagraph = false;
-			continue;
-		}
-		if (name === 'p' || name === 'h') inParagraph = !tag.closing && !tag.empty;
-		odfElement(body, name, tag);
+		const found = tagAt(source, open);
+		// A tag that never closes: the file stops here, and so does the reading.
+		if (found === null) break;
+		at = found.next;
+		if (found.whole === '') continue;
+		({ at, inParagraph } = applyTag(body, source, found.whole, at, inParagraph));
 	}
 	body.endParagraph();
 	return body.lines;
+}
+
+/** The tag that starts at `open`, and where the text starts again after it. A
+ *  comment has no name and nothing to apply, so it comes back empty; a tag that
+ *  never closes comes back as nothing at all. */
+function tagAt(source: string, open: number): { whole: string; next: number } | null {
+	if (source.startsWith('<!--', open)) return { whole: '', next: jumpPast(source, '-->', open) };
+	const shut = source.indexOf('>', open);
+	return shut === -1 ? null : { whole: source.slice(open, shut + 1), next: shut + 1 };
+}
+
+/** One tag, applied. It gives back the only two things the walk carries: where
+ *  the text starts again, and whether a paragraph is open. */
+function applyTag(
+	body: Body,
+	source: string,
+	whole: string,
+	at: number,
+	inParagraph: boolean
+): { at: number; inParagraph: boolean } {
+	const named = ODF_NAME.exec(whole);
+	// A processing instruction or a doctype: it took its place in the text and
+	// says nothing about the structure.
+	if (named === null) return { at, inParagraph };
+
+	const [, closing, namespace, name] = named;
+	const qualified = `${namespace}:${name}`;
+	const tag: Tag = { closing: closing === '/', empty: whole.endsWith('/>'), attributes: whole };
+	if (!tag.closing && !tag.empty && SKIPPED.has(qualified)) {
+		return { at: jumpPast(source, `</${qualified}>`, at), inParagraph: false };
+	}
+	odfElement(body, name, tag);
+	const opensParagraph = name === 'p' || name === 'h';
+	return { at, inParagraph: opensParagraph ? !tag.closing && !tag.empty : inParagraph };
 }
 
 /**

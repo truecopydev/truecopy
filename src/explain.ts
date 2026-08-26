@@ -181,9 +181,17 @@ export function explainRows(rows: string[][], options: ExplainOptions = {}): str
  * On a delimited file the numbers themselves say nothing anybody needs: the
  * columns are the fields. So it names what happened instead - and it names the
  * right thing, because two very different documents are measured by index: a
- * CSV, where a delimiter decided, and a Word document, where nothing decided at
- * all and the cells were copied as the file declares them.
+ * CSV, where a delimiter decided, and an office document, where nothing decided
+ * at all and the cells were copied as the file declares them.
+ *
+ * BOTH office formats, and the list is what makes that true. When `.odt` was
+ * added this test still named `docx` alone, so an OpenDocument reading was
+ * described as `cut on the delimiter` - a delimiter it does not have. What a
+ * reader is told about a reading must not depend on which editor wrote the
+ * file, any more than the reading itself does.
  */
+const DECLARES_ITS_CELLS = new Set<Document['origin']>(['docx', 'odt']);
+
 function describeCut(
 	cut: number[],
 	unit: CoordinateUnit = 'points',
@@ -191,7 +199,9 @@ function describeCut(
 ): string {
 	if (cut.length === 0) return 'no boundary';
 	if (unit === 'index') {
-		return origin === 'docx' ? 'cut on the cells the document declares' : 'cut on the delimiter';
+		return DECLARES_ITS_CELLS.has(origin)
+			? 'cut on the cells the document declares'
+			: 'cut on the delimiter';
 	}
 	const at = cut.map((boundary) => Math.round(boundary)).join(', ');
 	return unit === 'characters' ? `cut at characters ${at}` : `cut at ${at}`;

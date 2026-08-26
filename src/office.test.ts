@@ -441,3 +441,29 @@ describe('documentFromOdt, on a content.xml somebody pretty-printed', () => {
 		expect(document.text).toBe('Article 1\nArticle 2');
 	});
 });
+
+describe('documentFromOdt, on a file that stops in the middle', () => {
+	it('stops on a tag that never closes rather than reading it as text', async () => {
+		// Cut mid-tag, with nothing after it at all - not even the closing of the
+		// body. The builder always closes what it opened, so the tail is
+		// overwritten in place, which keeps every offset in the archive valid.
+		const bytes = await odtWithBody('<text:p>Article 1</text:p><text:p');
+		const tail = '</office:text></office:body></office:document-content>';
+		const xml = new TextDecoder('latin1').decode(bytes).replace(tail, ' '.repeat(tail.length));
+		const document = await readOdt(Uint8Array.from(xml, (character) => character.charCodeAt(0)));
+		expect(document.text).toBe('Article 1');
+	});
+
+	it('stops when nothing is left to open', async () => {
+		// The file trails off after its last tag. A fixture cannot be built with
+		// the builder - it always closes what it opened - so the closing tag is
+		// overwritten in place, which keeps every offset in the archive valid.
+		const bytes = await odtWithBody('<text:p>Article 1</text:p>');
+		const closing = '</office:document-content>';
+		const xml = new TextDecoder('latin1')
+			.decode(bytes)
+			.replace(closing, ' '.repeat(closing.length));
+		const document = await readOdt(Uint8Array.from(xml, (character) => character.charCodeAt(0)));
+		expect(document.text).toBe('Article 1');
+	});
+});

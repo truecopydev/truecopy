@@ -4,7 +4,7 @@ import { documentFrom, documentFromText, pageFrom } from './layout.js';
 import type { PositionedItem } from './document.js';
 import type { RoleRule } from './roles.js';
 import type { SignatureOptions } from './signature.js';
-import { docxWithText } from './kit.js';
+import { docxWithText, odtWithText } from './kit.js';
 import { openDocument } from './open.js';
 
 /*
@@ -177,10 +177,14 @@ describe('describeAnomaly', () => {
 });
 
 describe('a document that declares its own cells', () => {
-	it('does not say a delimiter cut it, because none did', async () => {
-		const document = await openDocument(
-			new File([(await docxWithText([['Cadres', '2 100']])) as BlobPart], 'accord.docx')
-		);
+	// Both office formats, and not one of them: when .odt arrived, this test
+	// named docx alone and an OpenDocument reading was described as cut on a
+	// delimiter it does not have.
+	it.each([
+		{ format: 'docx', build: () => docxWithText([['Cadres', '2 100']]), name: 'accord.docx' },
+		{ format: 'odt', build: () => odtWithText([['Cadres', '2 100']]), name: 'accord.odt' }
+	])('does not say a delimiter cut a .$format, because none did', async ({ build, name }) => {
+		const document = await openDocument(new File([(await build()) as BlobPart], name));
 		expect(explainDocument(document)).toContain('cut on the cells the document declares');
 	});
 });
