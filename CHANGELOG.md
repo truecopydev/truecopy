@@ -7,6 +7,25 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Added
+
+- **An OpenDocument text file is read, on the same grid as a Word one.** `openDocument` opens a `.odt`, and `document.origin` says `'odt'`. Until now it was refused as a container - by name and correctly, but refused all the same.
+
+  MEASURED on the French collective agreements the DILA publishes: **4 767 agreements out of 395 581** came back without a citation for no other reason than their document being a `.odt`. Fifty-nine of them, taken from one weekly deposit, now read: fifty-nine out of fifty-nine.
+
+  ```js
+  const document = await openDocument(new File([bytes], 'agreement.odt'));
+  document.origin; // 'odt'
+  ```
+
+  The two formats share one reading model, and that is the part worth stating: paragraphs and rows of cells on a grid, one page, the `index` ruler. What a reader gets does not depend on which editor wrote the file.
+
+  Three things the reader refuses to print, each because printing them would put in a citation something the page does not show: a **tracked deletion**, which ODF keeps in the file; an **annotation**; and the **title or description a drawing carries for a screen reader**. A footnote body is left out for the same family of reasons and is a known limit, written where the code is.
+
+  The trap this cost, and it is the one to know if you write a reader for this format: OpenDocument prints the characters BETWEEN tags, not the contents of a run element. A lexer that matched only the elements it knew copied `<draw:custom-shape svg:x="0.47708in" ...>` into the document as the first line of an agreement. It now matches every tag and prints none of them, and it takes character data only inside a paragraph - so the indentation of a pretty-printed `content.xml` never lands in a row either.
+
 ## [2.0.6] - 2026-08-25
 
 ### Added

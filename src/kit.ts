@@ -283,6 +283,58 @@ export const docxWithText = (
 	return docxWithBody(body, options);
 };
 
+/**
+ * Build a real `.odt`: a real ZIP, a real CRC, a real `content.xml`.
+ *
+ * Same reasoning as `docxWithBody`, and the same reason it is not a string of
+ * XML handed to the parser: what a reader must be able to do is open the file
+ * somebody attached to an email.
+ *
+ * The `mimetype` entry is written first and STORED, which is what the standard
+ * asks for. Nothing here depends on it - the extension is what decides the
+ * format - but a fixture that skipped it would not be the file an editor
+ * writes, and that is the whole point of building a real one.
+ */
+export async function odtWithBody(
+	bodyXml: string,
+	options: { compress?: boolean } = {}
+): Promise<Uint8Array> {
+	const content = `<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"><office:automatic-styles><style:style style:name="P1"/></office:automatic-styles><office:body><office:text>${bodyXml}</office:text></office:body></office:document-content>`;
+	return archiveOf(
+		[
+			{ name: 'mimetype', text: 'application/vnd.oasis.opendocument.text' },
+			{ name: 'content.xml', text: content }
+		],
+		options.compress ?? false
+	);
+}
+
+/**
+ * The same, from what the document says rather than from its markup.
+ *
+ * A string is a paragraph, an array of strings is a table row - the same two
+ * shapes `docxWithText` takes, so a test can be written once against both
+ * formats and prove they read alike.
+ */
+export const odtWithText = (
+	blocks: (string | string[])[],
+	options: { compress?: boolean } = {}
+): Promise<Uint8Array> => {
+	const escape = (text: string): string =>
+		text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	const paragraph = (text: string): string =>
+		`<text:p text:style-name="P1">${escape(text)}</text:p>`;
+	const cellXml = (text: string): string =>
+		`<table:table-cell office:value-type="string">${paragraph(text)}</table:table-cell>`;
+	const rowXml = (cells: string[]): string =>
+		`<table:table table:name="Tableau1"><table:table-row>${cells.map(cellXml).join('')}</table:table-row></table:table>`;
+	const body = blocks
+		.map((block) => (typeof block === 'string' ? paragraph(block) : rowXml(block)))
+		.join('');
+	return odtWithBody(body, options);
+};
+
 /** CRC-32, the one the ZIP format checks its entries with. Table-free: a
  *  fixture builder runs a handful of times, and the table is more code than the
  *  loop it saves. */

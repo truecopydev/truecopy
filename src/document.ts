@@ -107,7 +107,7 @@ export interface TextPage {
  * perfectly good reading - which is exactly what happened the day `docx` was
  * added.
  */
-export const ORIGINS = ['pdf', 'text', 'image', 'docx'] as const;
+export const ORIGINS = ['pdf', 'text', 'image', 'docx', 'odt'] as const;
 
 export type Origin = (typeof ORIGINS)[number];
 
