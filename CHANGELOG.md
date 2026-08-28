@@ -4,7 +4,7 @@ Every change a caller could notice, and why it was made. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); what each number
 means and when one is published is [RELEASING.md](RELEASING.md).
 
-Entries land here under `## [Unreleased]`, with no version and no date. A
+Entries land here under `## [2.0.8] - 2026-08-28`, with no version and no date. A
 release PR is what stamps them.
 
 ## [Unreleased]
