@@ -37,6 +37,37 @@ describe('readNumber', () => {
 		expect(readNumber('1.234')).toBe(1234);
 	});
 
+	it('reads four digits behind a mark as decimals, because thousands come in threes', () => {
+		// Measured on a share buyback filing, where the weighted average daily
+		// price is printed to four, five or six decimals: `24,9000` came back as
+		// two hundred and forty-nine thousand, and `159,9567` as one and a half
+		// million. A thousands group is exactly three digits, so a run of four
+		// behind the mark cannot be one, and neither can five or six. The rule this
+		// file already stated one field over - "used once before anything but three
+		// digits it is the decimal mark itself" - was written the other way round
+		// here.
+		expect(readNumber('24,9000')).toBe(24.9);
+		expect(readNumber('77,482934')).toBe(77.482934);
+		expect(readNumber('159,9567')).toBe(159.9567);
+		expect(readNumber('17.0494')).toBe(17.0494);
+		// Three digits behind stays a group of thousands: only the document can
+		// say otherwise, which is what the `decimal` argument is for.
+		expect(readNumber('27.800')).toBe(27800);
+		expect(readNumber('27,800', ',')).toBe(27.8);
+		// And a token carrying the mark twice is a date or a version, which does not
+		// vote: read as a decimal, 31.12.2025 would come out as 3112.2025, which
+		// looks far more like an amount than the 31122025 it gives. Measured on a
+		// consumer's 404 431 tokens, that guard is what kept 1 154 dates still.
+		expect(readNumber('31.12.2025')).toBe(31122025);
+		expect(readNumber('01.01.2025')).toBe(1012025);
+		// One or two digits behind still read as a decimal whatever the token
+		// carries, which is what a version string has always done here.
+		expect(readNumber('1.4.1')).toBe(14.1);
+		// A mark with nothing behind it is a cell edge, not a decimal point: what
+		// comes before it is the whole number.
+		expect(readNumber('12,')).toBe(12);
+	});
+
 	it('does not read a lone zero in front of a mark as a group of thousands', () => {
 		// Measured on a fidelity premium the document prints as `0,280 euro par
 		// action`. Three digits behind the mark is exactly what a thousands group

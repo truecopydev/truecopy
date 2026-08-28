@@ -123,6 +123,10 @@ function stripSign(text: string): { negative: boolean; body: string } {
 	return { negative, body };
 }
 
+/** A group of thousands is exactly three digits, always. Any other run behind a
+ *  mark makes that mark the decimal one. */
+const THOUSANDS_GROUP = 3;
+
 /**
  * Rewrite the separators into something `parseFloat` reads.
  *
@@ -156,10 +160,44 @@ function normaliseSeparators(text: string): string {
 	const ahead = text.slice(0, last);
 	if (/^0+$/.test(ahead)) return `${ahead}.${text.slice(last + 1)}`;
 
+	/*
+	 * A thousands group is exactly three digits, so only a run of exactly three
+	 * behind the mark can be one. One or two is a decimal, and so is four or
+	 * more: no notation groups thousands by four. This half of the file used to
+	 * say "anything but one or two digits is a thousands mark", which read
+	 * `24,9000` as two hundred and forty-nine thousand - a weighted average price
+	 * printed to four decimals by the form that carries it, and a defect a
+	 * consumer met on a buyback filing.
+	 *
+	 * `decidedBy`, one field over, already stated the rule the right way round:
+	 * "used once before anything but three digits it is the decimal mark itself".
+	 * The two halves now agree.
+	 *
+	 * Three stays a thousands mark: `27.800` is twenty-seven thousand eight
+	 * hundred, and only the document can say otherwise - which is what the
+	 * `decimal` argument is for.
+	 */
+	/*
+	 * Four digits or more behind the mark, and one mark only.
+	 *
+	 * A token carrying the same mark twice is a date or a version - `31.12.2025`,
+	 * `1.0.1` - and `decidedBy` says one field over that neither votes. Read as a
+	 * decimal, that date comes out as `3112.2025`, which looks far more like an
+	 * amount than the `31122025` it used to give, and making a misread PLAUSIBLE
+	 * is the one thing this library exists not to do. Measured on a consumer's
+	 * 404 431 number tokens: with the guard, not one reading moves that was not
+	 * the defect itself.
+	 *
+	 * One or two digits behind keeps reading as a decimal whatever the token
+	 * carries, which is what `1.4.1` -> 14.1 has always done.
+	 */
+	// Split rather than match: there is always a mark here, so a nullable result
+	// would be a branch no input can take.
+	const marks = text.split(/[.,]/).length - 1;
 	const behind = text.length - last - 1;
-	// Not a decimal: the separator is a thousands mark, and what follows it is
-	// part of the number. Keeping only what came before turns 27.800 into 27.
-	if (behind < 1 || behind > 2) return text.replace(/[.,]/g, '');
+	const decimal =
+		(behind >= 1 && behind < THOUSANDS_GROUP) || (behind > THOUSANDS_GROUP && marks === 1);
+	if (!decimal) return text.replace(/[.,]/g, '');
 	return `${text.slice(0, last).replace(/[.,]/g, '')}.${text.slice(last + 1)}`;
 }
 
@@ -205,10 +243,6 @@ export function readNumber(raw: string, decimal?: DecimalMark | null): number | 
 	if (!Number.isFinite(value)) return null;
 	return negative ? -value : value;
 }
-
-/** A group of thousands is exactly three digits, always. Any other run behind a
- *  mark makes that mark the decimal one. */
-const THOUSANDS_GROUP = 3;
 
 /** A run of digits and the marks inside it. Not `numberToken`: that one reads
  *  ONE number and stops at the second comma of `48,275,477.16`, which is exactly
