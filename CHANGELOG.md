@@ -7,6 +7,28 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Fixed
+
+- **A thousands group is exactly three digits, so four decimals are decimals.** `readNumber('24,9000')` returned two hundred and forty-nine thousand. The comma was taken for a thousands separator, which it cannot be: no notation groups thousands by four.
+
+  MEASURED on a share buyback filing, where the weighted average daily price is printed to four, five or six decimals by the form that carries it. `77,482934` came back as seventy-seven million, `159,9567` as one and a half million - silently, on figures that close every arithmetic they enter.
+
+  ```js
+  readNumber('24,9000'); // 24.9, was 249000
+  readNumber('77,482934'); // 77.482934, was 77482934
+  readNumber('27.800'); // 27800, unchanged
+  ```
+
+  **The two halves of `notation.ts` disagreed.** `decidedBy` already stated the rule the right way round - "used once before anything but three digits it is the decimal mark itself" - while `normaliseSeparators` said "anything but one or two digits is a thousands mark". They now agree. Three digits behind still reads as thousands, and only the document can say otherwise, which is what the `decimal` argument is for.
+
+  **One mark, and one only**, and that guard was bought by a measurement rather than by taste. A token carrying the same mark twice is a date or a version, which `decidedBy` already refuses a vote to. Read as decimals, `31.12.2025` comes out as `3112.2025` - which looks far more like an amount than the `31122025` it used to give, and making a misread plausible is the one failure this library exists to prevent. The first version of this fix moved 1 154 dates on one consumer's data; the guard puts them all back, and `1.4.1` still reads 14.1.
+
+  **Readings move, and here is which ones.** Any token whose last separator is followed by four digits or more, when the caller passes no `decimal` mark. Replayed over one consumer's 404 431 number tokens: 565 move, and each one is the defect - `3,81379` was 381 379, `99,9998` was 999 998, `511,4445` was 5 114 445. A caller who passes `decimalMarkOf(document.text)` was never affected: that path already read them right.
+
+  Benches replayed before the merge, as `AGENTS.md` requires for a change to the notation: fidalo, titelia and the corpus green; murparmur measured token by token instead, its working tree being busy; relevedecarriere red on the published 2.0.7 as well, for its file-door test doubling `text()` where the door has read `arrayBuffer()` since 2.0.6.
+
 ## [2.0.7] - 2026-08-26
 
 ### Added
