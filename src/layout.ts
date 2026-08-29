@@ -12,6 +12,10 @@ import type { CoordinateUnit, Document, Place, PositionedItem, Row, TextPage } f
 
 /** Vertical distance under which two items are on the same row. */
 const SAME_ROW_TOLERANCE = 3;
+/** How tall a superscript is, at most, next to the line it belongs to. */
+const SUPERSCRIPT_HEIGHT = 0.85;
+/** How far it rises above that line's baseline, at most, in units of its height. */
+const SUPERSCRIPT_RISE = 0.6;
 /** Horizontal gap, in PDF units, past which two x open two columns. */
 const COLUMN_GAP = 18;
 
@@ -283,13 +287,133 @@ export function columnAt(x: number, boundaries: number[]): number {
  * The "nothing" matters as much as the tab. The two halves of an amount are two
  * items of the same cell, and separating them would turn one number into two.
  */
-function joinRow(items: PositionedItem[], boundaries: number[]): string {
+function joinRow(
+	items: PositionedItem[],
+	boundaries: number[],
+	raised?: ReadonlySet<PositionedItem>
+): string {
 	let text = items[0].text;
 	for (let i = 1; i < items.length; i++) {
-		const sameColumn = columnAt(items[i - 1].x, boundaries) === columnAt(items[i].x, boundaries);
-		text += (sameColumn ? '' : '\t') + items[i].text;
+		const before = items[i - 1];
+		const after = items[i];
+		/*
+		 * A folded superscript is spaced by the GAP, not by the column. It was
+		 * just moved back into this line, and the column rule would answer for a
+		 * boundary the page never printed: "1" and "er" touch, so nothing goes
+		 * between them, and "er" stands a space clear of the word that follows.
+		 * Anywhere else the column rule is untouched.
+		 */
+		if (raised && (raised.has(before) || raised.has(after))) {
+			text += (printedApart(before, after) ? ' ' : '') + after.text;
+			continue;
+		}
+		const sameColumn = columnAt(before.x, boundaries) === columnAt(after.x, boundaries);
+		text += (sameColumn ? '' : '\t') + after.text;
 	}
 	return text.trim();
+}
+
+/** The tallest glyph of a group, or zero when the source carries no geometry. */
+function heightOf(group: PositionedItem[]): number {
+	let tallest = 0;
+	for (const item of group) {
+		const height = item.height ?? 0;
+		if (height > tallest) tallest = height;
+	}
+	return tallest;
+}
+
+/** How far a group reaches, left edge of the first to right edge of the last. */
+function reachOf(group: PositionedItem[]): { from: number; to: number } {
+	let from = Infinity;
+	let to = -Infinity;
+	for (const item of group) {
+		if (item.x < from) from = item.x;
+		if (item.x + item.width > to) to = item.x + item.width;
+	}
+	return { from, to };
+}
+
+/**
+ * Whether a group is a SUPERSCRIPT of the line under it, and not a line at all.
+ *
+ * Three things have to hold at once, and each one alone lets something through:
+ * it is set smaller than the line, it rises by a fraction of that line's own
+ * height, and it sits WITHIN the line's reach. Height alone would swallow a
+ * footnote printed under a table; the rise alone would swallow the next line of
+ * a tightly-led paragraph; the reach alone would swallow a page number.
+ */
+function raisedInto(small: PositionedItem[], host: PositionedItem[]): boolean {
+	// The groups arrive sorted from the top of the page down, so a group always
+	// sits above the one that follows it: the rise needs no guard of its own.
+	const rise = small[0].y - host[0].y;
+	const tall = heightOf(host);
+	if (tall <= 0 || heightOf(small) > tall * SUPERSCRIPT_HEIGHT) return false;
+	if (rise > tall * SUPERSCRIPT_RISE) return false;
+	const raised = reachOf(small);
+	const line = reachOf(host);
+	return raised.from >= line.from && raised.to <= line.to;
+}
+
+/**
+ * A raised ordinal joins its line instead of becoming one.
+ *
+ * WHAT IT REPAIRS. A superscript's baseline is a few points above the line it
+ * belongs to - measured on an AMF filing: "Chiffre d affaires du 1" at y=619.8,
+ * "er" at y=624.8, "semestre 2026" at y=619.8, all with x increasing, so the
+ * engine hands them over in the right order. Five points is more than
+ * SAME_ROW_TOLERANCE, so the "er" became a row of its own; and since rows come
+ * out top to bottom, it was emitted BEFORE the line it belongs to. The reading
+ * said "er Resultat du 1 semestre 2026". Widening the tolerance instead would
+ * weld genuinely neighbouring lines together, which is why the fix is
+ * recognition and not a looser threshold.
+ *
+ * It reads the group ABOVE into the one below, never the reverse: a superscript
+ * rises, and folding downwards would move a line into its own footnote.
+ */
+function folded(grouped: PositionedItem[][]): PositionedItem[][] {
+	const rows: PositionedItem[][] = [];
+	for (const [index, group] of grouped.entries()) {
+		const host = grouped[index + 1];
+		if (host && raisedInto(group, host)) host.push(...group);
+		else rows.push(group);
+	}
+	return rows;
+}
+
+/**
+ * Which items of a finished row are raised above its baseline.
+ *
+ * A superscript reaches a row two ways, and both end in the same place. It
+ * either sat far enough above to become a row of its own - `folded` puts it
+ * back - or it sat within the tolerance and was in the row all along. The
+ * second one is not a row defect at all but a COLUMN one: measured on a
+ * Selectirente filing, "Chiffre d affaires du 1" ends at x=256.3 and the "er"
+ * starts at x=256.5, three points above the baseline, and the cut put a column
+ * boundary between them - the reading said "1 ersemestre". So the mark is taken
+ * on the assembled row, which covers both without asking where it came from.
+ *
+ * The row's baseline is the one its FULL-SIZE glyphs sit on, not the lowest
+ * item: a row whose only small glyph is the superscript would otherwise take
+ * the superscript itself for the baseline and find nothing raised.
+ */
+function raisedWithin(row: PositionedItem[]): Set<PositionedItem> {
+	const marks = new Set<PositionedItem>();
+	const tall = heightOf(row);
+	if (tall <= 0) return marks;
+	// The tallest glyph of the row always clears the bar, so a baseline is always
+	// found: `tall` is its own height, and the bar is a fraction of it.
+	let baseline = Infinity;
+	for (const item of row) {
+		if ((item.height ?? 0) > tall * SUPERSCRIPT_HEIGHT && item.y < baseline) baseline = item.y;
+	}
+	for (const item of row) {
+		const rise = item.y - baseline;
+		if (rise <= 0 || rise > tall * SUPERSCRIPT_RISE) continue;
+		if ((item.height ?? 0) > tall * SUPERSCRIPT_HEIGHT) continue;
+		marks.add(item);
+	}
+	return marks;
 }
 
 /**
@@ -300,7 +424,11 @@ function joinRow(items: PositionedItem[], boundaries: number[]): string {
  * bucket edge, splitting one row of the table in two at the mercy of where it
  * happened to sit on the page.
  */
-export function rowsFrom(items: PositionedItem[], boundaries: number[]): Row[] {
+export function rowsFrom(
+	items: PositionedItem[],
+	boundaries: number[],
+	superscripts = false
+): Row[] {
 	const placed = items
 		.filter((item) => item.text.trim() !== '')
 		.sort((a, b) => b.y - a.y || a.x - b.x);
@@ -312,9 +440,10 @@ export function rowsFrom(items: PositionedItem[], boundaries: number[]): Row[] {
 		else grouped.push([item]);
 	}
 
-	return grouped.map((group) => {
+	return (superscripts ? folded(grouped) : grouped).map((group) => {
 		const ordered = [...group].sort((a, b) => a.x - b.x);
-		return { y: ordered[0].y, items: ordered, text: joinRow(ordered, boundaries) };
+		const marks = superscripts ? raisedWithin(ordered) : undefined;
+		return { y: ordered[0].y, items: ordered, text: joinRow(ordered, boundaries, marks) };
 	});
 }
 
@@ -444,7 +573,8 @@ export function pageFrom(
 	pageNumber: number,
 	width: number,
 	height: number,
-	items: PositionedItem[]
+	items: PositionedItem[],
+	superscripts = false
 ): TextPage {
 	const boundaries = columnBoundaries(items);
 	return {
@@ -452,7 +582,7 @@ export function pageFrom(
 		width,
 		height,
 		items,
-		rows: rowsFrom(items, boundaries),
+		rows: rowsFrom(items, boundaries, superscripts),
 		columnBoundaries: boundaries
 	};
 }

@@ -98,6 +98,22 @@ export const DEFAULT_LIMITS: Limits = {
 
 export interface OpenOptions extends Partial<Limits> {
 	/**
+	 * Read a raised ordinal or footnote marker as part of its line, instead of
+	 * as a line of its own. Off unless asked for.
+	 *
+	 * A superscript's baseline sits a few points above the line it belongs to,
+	 * which is more than the tolerance that groups items into rows: it became a
+	 * row of its own, and rows come out top to bottom, so it was emitted BEFORE
+	 * the words it belongs to - "er Resultat du 1 semestre 2026". On, it joins
+	 * that line and lands where the page prints it.
+	 *
+	 * It moves row text, so it arrives as a knob and not as a new default: a
+	 * reader whose patterns learned the split form keeps it until its own bench
+	 * says otherwise. A source with no glyph geometry - a paste, a CSV, a .docx -
+	 * reports no height and is unaffected.
+	 */
+	superscripts?: boolean;
+	/**
 	 * Where the pdf.js worker lives, when the caller wants one.
 	 *
 	 * The caller supplies it and this library never resolves it, because every
@@ -244,14 +260,28 @@ export function positionedItems(items: unknown[]): PositionedItem[] {
 	const placed: PositionedItem[] = [];
 	for (const raw of items) {
 		if (typeof raw !== 'object' || raw === null || !('str' in raw)) continue;
-		const item = raw as { str: string; transform: number[]; width?: number };
+		const item = raw as {
+			str: string;
+			transform: number[];
+			width?: number;
+			height?: number;
+		};
 		if (item.str.trim() === '') continue;
 		// transform = [a, b, c, d, e, f]; e is x, f is the baseline.
+		/*
+		 * The height only appears when the engine reported one. Writing a zero
+		 * instead would change the SHAPE of every item a caller ever compared,
+		 * and a consumer asserting an exact item goes red for a field it has no
+		 * use for - measured on one when this was added. A paste, a CSV and a
+		 * .docx carry no glyph box and keep exactly the item they had.
+		 */
+		const height = item.height ?? 0;
 		placed.push({
 			text: item.str,
 			x: item.transform[4],
 			y: item.transform[5],
-			width: item.width ?? 0
+			width: item.width ?? 0,
+			...(height > 0 ? { height } : {})
 		});
 	}
 	return placed;
@@ -474,7 +504,9 @@ async function pagesFromPdf(
 			const viewport = page.getViewport({ scale: 1 });
 			const content = await page.getTextContent();
 			const items = positionedItems(content.items);
-			pages.push(pageFrom(pageNumber, viewport.width, viewport.height, items));
+			pages.push(
+				pageFrom(pageNumber, viewport.width, viewport.height, items, options.superscripts ?? false)
+			);
 			page.cleanup();
 		}
 		return documentFrom(pages, 'pdf', name);

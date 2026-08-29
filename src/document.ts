@@ -34,6 +34,15 @@ export interface PositionedItem {
 	/** Baseline, in the same unit (higher is further up the page). */
 	y: number;
 	width: number;
+	/**
+	 * Glyph height, in the same unit. Absent when the source reports none.
+	 *
+	 * It exists to tell a SUPERSCRIPT from a line of its own: a raised ordinal
+	 * or a footnote marker sits a few units above its line and is set smaller,
+	 * and height is the only thing that separates the two. A paste, a CSV and a
+	 * .docx carry no glyph box, so the field is left off and nothing reads it.
+	 */
+	height?: number;
 }
 
 /**

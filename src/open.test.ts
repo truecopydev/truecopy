@@ -378,3 +378,29 @@ describe('openDocument, on what is neither a PDF nor plain text', () => {
 		}
 	);
 });
+
+/*
+ * A consumer that asserts an exact item goes red for a field it has no use for.
+ * The height is written only when the engine measured one, so a source without
+ * glyph geometry hands back exactly the item it handed back before.
+ */
+describe('glyph height', () => {
+	const from = (transform: number[], str: string, width?: number, height?: number) => ({
+		str,
+		transform,
+		width,
+		height
+	});
+
+	it('leaves the field off when the engine reports none', () => {
+		expect(positionedItems([from([1, 0, 0, 1, 5, 9], 'sans', 10)])).toEqual([
+			{ text: 'sans', x: 5, y: 9, width: 10 }
+		]);
+	});
+
+	it('carries the height when the engine measured one', () => {
+		expect(positionedItems([from([1, 0, 0, 1, 5, 9], 'avec', 10, 6.5)])).toEqual([
+			{ text: 'avec', x: 5, y: 9, width: 10, height: 6.5 }
+		]);
+	});
+});
