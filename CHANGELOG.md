@@ -7,6 +7,13 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Added
+
+- **`superscripts` reads a raised ordinal as part of its line, instead of as a line of its own.** A superscript sits a few points above the line it belongs to - more than the tolerance that groups items into rows - so it became a row of its own, and rows come out top to bottom: it was emitted BEFORE the words it belongs to. An AMF filing read `er Resultat du 1 semestre 2026`; with the option it reads `Resultat du 1er semestre 2026`. A second shape is a column defect rather than a row one - the `er` sat inside the tolerance and the cut put a boundary between `1` and it, giving `1 ersemestre` - and the same option covers it, because the mark is taken on the assembled row. Off unless asked for: it moves row text, and a reader whose patterns learned the split form keeps it until its own bench says otherwise. Widening the row tolerance instead would weld genuinely neighbouring lines together, which is why this is recognition and not a looser threshold.
+- **`PositionedItem` carries the glyph `height` when the engine measured one.** It is what separates a superscript from a line of its own. The field is left OFF when no height is reported, so a paste, a CSV, a `.docx` and any caller comparing an exact item are untouched.
+
 ## [2.0.8] - 2026-08-28
 
 ### Fixed

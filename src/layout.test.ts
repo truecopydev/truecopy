@@ -611,3 +611,150 @@ describe('the cut that keeps what comes back', () => {
 		expect(boundariesFromRecurrence(page.rows, 2).length).toBeGreaterThan(0);
 	});
 });
+
+/*
+ * A raised ordinal used to become a row of its own, and rows come out top to
+ * bottom, so it was emitted BEFORE the line it belongs to. Geometry measured on
+ * an AMF filing: the line sits at y=619.8 with 16pt glyphs, the "er" at y=624.8
+ * with 10.6pt ones, x increasing throughout.
+ */
+describe('superscripts', () => {
+	const glyph = (
+		text: string,
+		x: number,
+		y: number,
+		height: number,
+		width = text.length * 8
+	): PositionedItem => ({ text, x, y, width, height });
+
+	const ordinal = () => [
+		glyph('Chiffre d’affaires du 1', 64.7, 619.8, 16),
+		glyph('er', 208.4, 624.8, 10.6, 8),
+		glyph('semestre 2026', 221, 619.8, 16)
+	];
+
+	it('reads a raised ordinal as its own row when not asked otherwise', () => {
+		const rows = rowsFrom(ordinal(), []);
+		expect(rows).toHaveLength(2);
+		expect(rows[0].text).toBe('er');
+	});
+
+	it('folds the ordinal into the line it belongs to', () => {
+		const rows = rowsFrom(ordinal(), [], true);
+		expect(rows).toHaveLength(1);
+		expect(rows[0].text).toBe('Chiffre d’affaires du 1er semestre 2026');
+	});
+
+	it('leaves a source without glyph geometry alone', () => {
+		const flat = [item('Resultats du 1', 10, 100), item('er', 80, 103), item('semestre', 95, 100)];
+		expect(rowsFrom(flat, [], true)).toHaveLength(rowsFrom(flat, [], false).length);
+	});
+
+	/* Height alone would swallow a footnote printed under the table. */
+	it('does not fold a small line that sits outside its neighbour reach', () => {
+		const rows = rowsFrom(
+			[glyph('Total du tableau', 64, 619.8, 16), glyph('(1) note de bas', 400, 624.8, 8)],
+			[],
+			true
+		);
+		expect(rows).toHaveLength(2);
+	});
+
+	/* The rise alone would swallow the next line of a tightly-led paragraph. */
+	it('does not fold a full-size line that merely sits close above', () => {
+		const rows = rowsFrom(
+			[glyph('Premiere ligne', 64, 624.8, 16), glyph('Seconde ligne', 64, 619.8, 16)],
+			[],
+			true
+		);
+		expect(rows).toHaveLength(2);
+	});
+
+	it('never folds downwards, so a line is not moved into its own footnote', () => {
+		const rows = rowsFrom([glyph('La ligne', 64, 624.8, 16), glyph('e', 70, 619.8, 8)], [], true);
+		expect(rows).toHaveLength(2);
+	});
+
+	/*
+	 * The second shape, and it is a COLUMN defect rather than a row one: the "er"
+	 * sits three points up, inside SAME_ROW_TOLERANCE, so it was in the row all
+	 * along - and the cut put a boundary between "1" and it. Geometry measured on
+	 * a Selectirente filing: the line ends at x=256.3 and the "er" starts at 256.5.
+	 */
+	it('spaces a superscript already in the row by the printed gap', () => {
+		const items = [
+			glyph('Chiffre d’affaires du 1', 159, 103.6, 10, 97.3),
+			glyph('er', 256.5, 106.6, 6.5, 5.8),
+			glyph('semestre 2026, le 13 juillet 2026', 265.9, 103.6, 10, 286.2)
+		];
+		const cut = columnBoundaries(items);
+		expect(rowsFrom(items, cut).map((row) => row.text)).toEqual([
+			'Chiffre d’affaires du 1	ersemestre 2026, le 13 juillet 2026'
+		]);
+		expect(rowsFrom(items, cut, true).map((row) => row.text)).toEqual([
+			'Chiffre d’affaires du 1er semestre 2026, le 13 juillet 2026'
+		]);
+	});
+
+	/* Too high to belong to the line: a header sitting above a small caption. */
+	it('does not fold a small group that rises clear of the line', () => {
+		const rows = rowsFrom(
+			[glyph('note', 70, 640, 8), glyph('La ligne entiere', 64, 619.8, 16)],
+			[],
+			true
+		);
+		expect(rows).toHaveLength(2);
+	});
+
+	/* Within one row, a full-size item a hair above the baseline is not raised. */
+	it('marks only the small glyphs of a row, not the merely uneven ones', () => {
+		const items = [
+			glyph('Montant', 40, 100, 10),
+			glyph('exercice', 120, 102, 10),
+			glyph('2', 200, 102.5, 6.5, 4)
+		];
+		const cut = columnBoundaries(items);
+		const [ligne] = rowsFrom(items, cut, true);
+		expect(ligne.text).toContain('Montant');
+		expect(ligne.text).toContain('exercice');
+	});
+
+	/*
+	 * A page can hand over geometry for some glyphs and not others - an engine
+	 * reports no box for a substituted font. The row still has a baseline, and
+	 * what carries no height is simply never taken for a superscript.
+	 */
+	it('reads a row whose geometry is only partly there', () => {
+		const items = [
+			glyph('Ligne', 40, 100, 10),
+			item('sans', 90, 102, 5),
+			glyph('fin', 120, 100, 10)
+		];
+		const cut = columnBoundaries(items);
+		const [ligne] = rowsFrom(items, cut, true);
+		expect(ligne.text).toContain('Ligne');
+		expect(ligne.text).toContain('fin');
+	});
+
+	/* And the same mixture on the folding path, where the reach is measured. */
+	it('folds against a line whose glyphs report different widths', () => {
+		const rows = rowsFrom(
+			[
+				glyph('er', 100, 624.8, 6.5, 6),
+				glyph('Le total du 1', 64, 619.8, 16, 200),
+				glyph('.', 90, 619.8, 16, 2)
+			],
+			[],
+			true
+		);
+		expect(rows).toHaveLength(1);
+	});
+
+	it('carries the option from the page down to its rows', () => {
+		const page = pageFrom(1, 595, 842, ordinal(), true);
+		expect(page.rows).toHaveLength(1);
+		expect(documentFrom([page], 'pdf', 'depot.pdf').text).toBe(
+			'Chiffre d’affaires du 1er semestre 2026'
+		);
+	});
+});
