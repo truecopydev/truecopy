@@ -7,7 +7,7 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
-## [Unreleased]
+## [2.0.9] - 2026-08-29
 
 ### Added
 

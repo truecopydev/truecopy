@@ -1,6 +1,6 @@
 {
 	"name": "truecopy",
-	"version": "2.0.8",
+	"version": "2.0.9",
 	"type": "module",
 	"description": "Extract tables from a PDF, a Word document, a paste or a CSV in TypeScript, and know when the extraction cannot be trusted. Learns each document's own shape, so a new issuer needs no new configuration.",
 	"keywords": [
