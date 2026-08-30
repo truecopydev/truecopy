@@ -215,6 +215,25 @@ describe('readDate', () => {
 		expect(readDate('25/01/24', FRENCH)?.getFullYear()).toBe(2024);
 	});
 
+	it('reads a delimited year the text layer broke across a space', () => {
+		// Same run the named-month path already repairs: a page prints
+		// `12/05/2026` and the text layer hands over `12/05/202 6`. Read as
+		// `{2,4}` it yielded the year 202 - a confident date off by eighteen
+		// centuries, on the shape every statement and invoice goes through.
+		expect(readDate('12/05/202 6', FRENCH)?.getFullYear()).toBe(2026);
+		expect(readDate('12/05/2 0 2 6', FRENCH)?.getFullYear()).toBe(2026);
+	});
+
+	it('refuses three contiguous digits, which are no year anyone writes', () => {
+		expect(readDate('12/05/202', FRENCH)).toBeNull();
+		expect(readDate('12-05-202', FRENCH)).toBeNull();
+		expect(readDate('1/2/999 VIREMENT', FRENCH)).toBeNull();
+		// And a run gathered across a space is held to the same plausible band
+		// the named-month path uses: `12/05/1 234,56` is a day, a month and an
+		// amount, and 1234 is a calendar year that no statement row means.
+		expect(readDate('12/05/1 234,56', FRENCH)).toBeNull();
+	});
+
 	it('refuses a day that rolls over into the next month', () => {
 		// A 31st in a 30-day month is a misread, and JavaScript would happily
 		// return the 1st of the month after.
@@ -284,6 +303,27 @@ describe('readLeadingDate', () => {
 		expect(readLeadingDate('25 janv. 3 100,00', FRENCH)).toBeNull();
 		// A contiguous year followed by an amount still reads, exactly as before.
 		expect(readLeadingDate('25 janv. 2026 300,00', FRENCH)?.date.getFullYear()).toBe(2026);
+	});
+
+	it('keeps an amount out of a delimited two-digit year', () => {
+		// The guard on the repair. The four-digit branch, tried first, gathers
+		// `26 1 2` across the amount of `25/01/26 1 234,56`; the plausible band
+		// then rejects that run and a date always read comes back null. The
+		// two-digit branch goes first and closes on a non-digit, so it cannot.
+		const found = readLeadingDate('25/01/26 1 234,56', FRENCH);
+		expect(found?.date.getFullYear()).toBe(2026);
+		expect(found?.length).toBe(8);
+		expect(readLeadingDate('12/05/26 4 190', FRENCH)?.date.getFullYear()).toBe(2026);
+	});
+
+	it('takes the whole broken year, so the wording it hands back is clean', () => {
+		// The length matters as much as the date: cut at 9 and the caller keeps
+		// ` 6` at the head of the wording of the row.
+		const found = readLeadingDate('12/05/202 6 GROCERIES', FRENCH);
+		expect(found?.date.getFullYear()).toBe(2026);
+		expect(found?.length).toBe(11);
+		expect(readLeadingDate('12/05/202 GROCERIES', FRENCH)).toBeNull();
+		expect(readLeadingDate('12/05/1 234,56 GROCERIES', FRENCH)).toBeNull();
 	});
 
 	it('reads a month written out, accents and full stop included', () => {

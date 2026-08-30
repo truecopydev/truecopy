@@ -417,14 +417,40 @@ export const accentFree = (text: string): string =>
 const dayMonth = (first: number, second: number, notation: Notation): [number, number] =>
 	notation.dateOrder === 'MDY' ? [second, first] : [first, second];
 
-const DELIMITED = /(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/;
+/**
+ * The year of a delimited date: two digits, or four - contiguous, or split by
+ * the space a broken text layer leaves behind.
+ *
+ * `{2,4}` accepted THREE contiguous digits, and nobody writes a year that way.
+ * What produces them is the run this file already describes one field over: a
+ * text layer breaks a glyph run apart, so a page printing `12/05/2026` arrives
+ * as `12/05/202 6` and the old pattern read the year 202 - a confident date off
+ * by eighteen centuries, and a length that left ` 6` at the head of the wording
+ * the caller keeps. The named-month path was taught to read across that space
+ * and to hold what it gathers to a plausible band; the delimited path, which
+ * every statement and every invoice goes through, was not.
+ *
+ * THE TWO-DIGIT BRANCH COMES FIRST AND CLOSES ON A NON-DIGIT. Let the four-digit
+ * branch try first and `25/01/26 1 234,56` gathers `26 1 2` across the amount:
+ * `yearOf` rejects that run and a date that has always been read comes back
+ * null. The ordering is the safety of this alternation, not a matter of style.
+ *
+ * The blanks are the ones that may sit INSIDE a number, so the tab is not among
+ * them - it delimits columns, and welding a year to the next column is the
+ * defect `GROUPS_THOUSANDS` exists to refuse.
+ */
+const DELIMITED_YEAR = `(\\d{2}(?!\\d)|\\d(?:[${GROUPS_THOUSANDS}]?\\d){3})`;
+
+const DELIMITED = new RegExp(`(\\d{1,2})[/\\-.](\\d{1,2})[/\\-.]${DELIMITED_YEAR}`);
 
 /** A delimited date anywhere in the text, read in the notation's order. */
 export function readDate(text: string, notation: Notation): Date | null {
 	const match = DELIMITED.exec(text);
 	if (!match) return null;
 	const [day, month] = dayMonth(Number(match[1]), Number(match[2]), notation);
-	return makeDate(Number(match[3]), month - 1, day);
+	const year = yearOf(match[3]);
+	if (year === null) return null;
+	return makeDate(year, month - 1, day);
 }
 
 export interface LeadingDate {
@@ -435,7 +461,7 @@ export interface LeadingDate {
 }
 
 const ISO = /^(\d{4})-(\d{2})-(\d{2})/;
-const LEADING_DELIMITED = /^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})/;
+const LEADING_DELIMITED = new RegExp(`^(\\d{1,2})[/\\-.](\\d{1,2})[/\\-.]${DELIMITED_YEAR}`);
 const LEADING_DAY_MONTH = /^(\d{1,2})[/\-.](\d{1,2})(?!\d)/;
 /**
  * `\p{L}` and not a range of Latin letters: a month name is a word, in
@@ -476,7 +502,7 @@ const LEADING_NAMED = new RegExp(
  * reading that was right can start coming back different.
  */
 const yearOf = (written: string): number | null => {
-	if (/^\d{4}$/.test(written)) return Number(written);
+	if (/^\d{2}$|^\d{4}$/.test(written)) return Number(written);
 	const year = Number(written.replace(/\D/g, ''));
 	return year >= 1900 && year <= 2099 ? year : null;
 };
@@ -499,7 +525,9 @@ function fromDelimited(text: string, notation: Notation): LeadingDate | null {
 	const match = LEADING_DELIMITED.exec(text);
 	if (!match) return null;
 	const [day, month] = dayMonth(Number(match[1]), Number(match[2]), notation);
-	return dateOfLength(makeDate(Number(match[3]), month - 1, day), match[0].length);
+	const year = yearOf(match[3]);
+	if (year === null) return null;
+	return dateOfLength(makeDate(year, month - 1, day), match[0].length);
 }
 
 function fromDayMonth(text: string, notation: Notation, year: number): LeadingDate | null {
