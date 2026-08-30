@@ -7,6 +7,25 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Fixed
+
+- **A delimited date reads its year across the space a broken text layer leaves, and refuses three contiguous digits.** `readDate` and `readLeadingDate` matched the year as `\d{2,4}`, so a page printing `12/05/2026` whose text layer hands over `12/05/202 6` was read as the year **202** - a confident date off by eighteen centuries, on the date shape every statement and every invoice goes through. The named-month path was taught this run and its plausible band in 2.0.9; the delimited path was not, and a guard that lives in one of two twins is the sign the danger is real rather than that the other is safe.
+
+  A CALLER COULD HAVE RELIED ON THE OLD READING, and this changes it by name: `readDate('12/05/202')` returned the year 202 and now returns `null`. Three contiguous digits are no year anyone writes; refusing them is what lets the four-digit branch read across a space without also inventing dates out of truncated runs.
+
+  The `length` moves with it. `12/05/202 6 GROCERIES` used to report 9, leaving ` 6` at the head of the wording the caller keeps; it now reports 11.
+
+  ```js
+  readDate('12/05/202 6', french); // 2026-05-12, was the year 202
+  readDate('12/05/202', french); // null, was the year 202
+  readDate('25/01/26 1 234,56', french); // 2026-01-25, unchanged
+  readDate('12/05/1 234,56', french); // null: 1234 is not a year a row means
+  ```
+
+  A run gathered across a space is held to the same 1900-2099 band the named-month path uses, and contiguous digits are not - that asymmetry is what keeps `25/01/26 1 234,56` reading as 2026 instead of gathering `26 1 2` across the amount.
+
 ## [2.0.9] - 2026-08-29
 
 ### Added
