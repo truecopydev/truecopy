@@ -11,6 +11,21 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **A figure between brackets that never close is read, and read positive.** `readNumber` returned `null` for `(185,74`, so `findNumbers` dropped the figure and `carriesNumber` answered false about a number the page prints. The token deliberately takes an opening bracket, because `(123,45)` is how accounting writes a negative; when the closing one falls outside the token, the bracket stays in the body and reaches `parseFloat` as `(185.74`, which is NaN.
+
+  The shape this hits is the standard French way of printing a per-share value beside its total, and it is not rare: **24 values across 14 quarterly reports** in one consumer's corpus, all of the form below. The total was found, the per-share value was not, and the consumer recorded the difference as _the document does not carry this figure_ - a silent absence in the place where an absence is a claim.
+
+  A bracket that never closes opened a phrase; the accounting form closes tight around its digits and never around a unit, so what sits between the digits and the closing bracket is prose, and prose carries no sign.
+
+  ```js
+  readNumber('(185,74'); // 185.74, was null
+  findNumbers('1 516 388 206 € (185,74 €/part)'); // both figures, was only the total
+  carriesNumber('… € (185,74 €/part)', '185,74', ','); // true, was false
+
+  readNumber('(123,45)'); // -123.45, unchanged
+  readNumber('(    123,45)'); // -123.45, unchanged
+  ```
+
 - **A delimited date reads its year across the space a broken text layer leaves, and refuses three contiguous digits.** `readDate` and `readLeadingDate` matched the year as `\d{2,4}`, so a page printing `12/05/2026` whose text layer hands over `12/05/202 6` was read as the year **202** - a confident date off by eighteen centuries, on the date shape every statement and every invoice goes through. The named-month path was taught this run and its plausible band in 2.0.9; the delimited path was not, and a guard that lives in one of two twins is the sign the danger is real rather than that the other is safe.
 
   A CALLER COULD HAVE RELIED ON THE OLD READING, and this changes it by name: `readDate('12/05/202')` returned the year 202 and now returns `null`. Three contiguous digits are no year anyone writes; refusing them is what lets the four-digit branch read across a space without also inventing dates out of truncated runs.

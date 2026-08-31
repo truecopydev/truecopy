@@ -101,15 +101,39 @@ export function numberToken(decimals?: number): RegExp {
 	);
 }
 
-/** Peel the sign off a token. Parentheses, a trailing minus and a leading minus
- *  each mark it negative; a leading plus is dropped. All three forms appear on
- *  real documents, and two of them are easy to read as no sign at all. */
+/**
+ * Peel the sign off a token.
+ *
+ * Parentheses, a trailing minus and a leading minus each mark it negative; a
+ * leading plus is dropped. All three forms appear on real documents, and two of
+ * them are easy to read as no sign at all.
+ *
+ * A PARENTHESIS THAT NEVER CLOSES IS PUNCTUATION, NOT A SIGN, and that is the
+ * whole of the second branch. `numberToken` takes an opening parenthesis into
+ * the token so the accounting negative survives; when the closing one is not in
+ * the token, the parenthesis opened a phrase rather than wrapping a figure:
+ *
+ *     1 516 388 206 € (185,74 €/part)      token: `(185,74`
+ *
+ * Left in the body it reached `parseFloat`, which reads `(185.74` as NaN, so
+ * `readNumber` returned null and `findNumbers` dropped the figure entirely. A
+ * consumer then read that as *the document does not carry this number* -
+ * measured on 24 values across 14 quarterly reports, all of them the standard
+ * French way of printing a per-share value beside its total.
+ *
+ * It is dropped rather than refused because the accounting form this library
+ * reads closes tight around its digits - `(123,45)`, `(    123,45)`, tested
+ * below - and never around a unit. What sits between the digits and the closing
+ * parenthesis is prose, and prose does not carry a sign.
+ */
 function stripSign(text: string): { negative: boolean; body: string } {
 	let body = text;
 	let negative = false;
 	if (/^\(.*\)$/.test(body)) {
 		negative = true;
 		body = body.slice(1, -1);
+	} else if (body.startsWith('(')) {
+		body = body.slice(1);
 	}
 	if (body.endsWith('-')) {
 		negative = true;

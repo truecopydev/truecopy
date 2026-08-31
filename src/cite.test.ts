@@ -125,6 +125,22 @@ describe('carriesNumber', () => {
 		expect(carriesNumber('solde (123,45) au 31/12', '(123,45)', ',')).toBe(true);
 	});
 
+	/*
+	 * THE CHECK THAT SENT A CONSUMER LOOKING FOR A FIGURE THE PAGE PRINTS.
+	 *
+	 * A per-share value beside its total, between brackets with its unit - the
+	 * standard French layout. The bracket used to poison the reading, so this
+	 * answered false and the consumer recorded *the document does not carry
+	 * this*. Measured on 24 values across 14 quarterly reports.
+	 */
+	it('finds a figure that a phrase between brackets carries', () => {
+		const ligne = 'VALEUR DE RECONSTITUTION 1 516 388 206 € (185,74 €/part)';
+		expect(carriesNumber(ligne, '185,74', ',')).toBe(true);
+		expect(carriesNumber(ligne, '1 516 388 206', ',')).toBe(true);
+		// And the figure it does NOT carry stays refused.
+		expect(carriesNumber(ligne, '185,75', ',')).toBe(false);
+	});
+
 	it('refuses a value that is not a figure at all', () => {
 		expect(carriesNumber('142 939', 'CCV', ',')).toBe(false);
 	});

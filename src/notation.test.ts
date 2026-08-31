@@ -100,6 +100,18 @@ describe('readNumber', () => {
 		expect(readNumber('+12,00')).toBe(12);
 	});
 
+	/*
+	 * A PARENTHESIS THAT NEVER CLOSES OPENED A PHRASE, and the figure inside it
+	 * is positive. `numberToken` takes the opening bracket so the accounting
+	 * negative survives; left in the body when nothing closes it, it reached
+	 * `parseFloat` as `(185.74`, which is NaN - so the number vanished, and a
+	 * consumer read that as the document not carrying it at all.
+	 */
+	it('reads a figure whose bracket never closes, and keeps it positive', () => {
+		expect(readNumber('(185,74')).toBe(185.74);
+		expect(readNumber('(1 030,30')).toBe(1030.3);
+	});
+
 	it('reads through what a typesetter puts inside a number', () => {
 		expect(readNumber('1 234,56')).toBe(1234.56);
 		expect(readNumber('1 234,56')).toBe(1234.56);
@@ -138,6 +150,19 @@ describe('findNumbers', () => {
 		// drops the bracket, which flips the sign in silence.
 		expect(readNumber('(    123,45)')).toBe(-123.45);
 		expect(findNumbers('(  123,45)', 2)[0].value).toBe(-123.45);
+	});
+
+	/*
+	 * THE FORM A FRENCH FINANCIAL DOCUMENT USES FOR A PER-SHARE VALUE.
+	 *
+	 * The total, then the same figure per share between brackets with its unit.
+	 * The token stops before the closing bracket, so the figure used to read as
+	 * NaN and disappear from the line - the total was found, the per-share value
+	 * was not. Measured on 24 values across 14 quarterly reports.
+	 */
+	it('finds a figure that a phrase between brackets carries', () => {
+		const found = findNumbers('1 516 388 206 € (185,74 €/part)');
+		expect(found.map((one) => one.value)).toEqual([1516388206, 185.74]);
 	});
 
 	it('reads every figure on a line, in order, with where it sits', () => {
