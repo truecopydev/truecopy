@@ -118,7 +118,7 @@ export interface TextPage {
  */
 export const ORIGINS = ['pdf', 'text', 'image', 'docx', 'odt'] as const;
 
-export type Origin = (typeof ORIGINS)[number];
+type Origin = (typeof ORIGINS)[number];
 
 export interface Document {
 	pages: TextPage[];
