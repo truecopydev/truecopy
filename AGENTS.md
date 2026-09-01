@@ -45,6 +45,30 @@ Two of those checks are unusual and are load-bearing:
 - `api` and `skill` regenerate the published surface. A drift there means the
   documentation and the packaged agent skill no longer describe the code.
 
+## Before opening a pull request
+
+```sh
+npm run verifier
+```
+
+= `gate` + `audit` + `secrets` + `paquet`. **`gate` is what a commit costs;
+`verifier` is what CI costs**, and until 2026-09-01 the difference was three
+checks that lived only inside `gate.yml` - so nobody could run them, and a red
+one was discovered after the push.
+
+- `audit` = `npm audit --omit=dev --audit-level=high`. Only what a consumer
+  installs: an advisory on a linter cannot reach anybody who installed the
+  package, and a gate that reddens for something nobody can be hurt by gets
+  ignored, then removed.
+- `secrets` = `gitleaks` over the whole history. The binary is installed
+  outside npm, which is why `knip.json` lists it under `ignoreBinaries`.
+- `paquet` packs the tarball, installs it into a throwaway project and imports
+  it as a stranger would. A green suite proves the SOURCE works; only this
+  proves the PACKAGE does.
+
+The two security checks come first, before `paquet`: put behind a check that
+is red for another reason, they are never reached at all.
+
 ## Changing a reading
 
 The cut, the notation, the records and the table are shared by several

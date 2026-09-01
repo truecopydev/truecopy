@@ -137,6 +137,10 @@
 		"test": "vitest run",
 		"test:coverage": "vitest run --coverage",
 		"gate": "npm run format:check && npm run dashes && npm run lint && npm run check && npm run build && npm run api && npm run skill && npm run knip && npm run dup && npm run test:coverage",
+		"audit": "npm audit --omit=dev --audit-level=high",
+		"secrets": "gitleaks detect --source . --redact --no-banner",
+		"paquet": "node scripts/paquet-publie.mjs",
+		"verifier": "npm run gate && npm run audit && npm run secrets && npm run paquet",
 		"prepublishOnly": "npm run gate"
 	},
 	"peerDependencies": {
