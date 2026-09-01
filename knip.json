@@ -1,5 +1,6 @@
 {
 	"$schema": "https://unpkg.com/knip@5/schema.json",
 	"entry": ["src/index.ts", "src/mcp.ts"],
-	"project": ["src/**/*.ts"]
+	"project": ["src/**/*.ts"],
+	"ignoreBinaries": ["gitleaks"]
 }
