@@ -7,6 +7,21 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Fixed
+
+- **`truecopy/anchor` no longer reads the bullet of a list as a minus sign.** `missingFigures` and `proofSpan` reported the 1 of `- 1 place minimum par logement` as MISSING: `findNumbers` takes the dash and the space that follow it for a sign and hands back minus one, which is not the figure the value announces. An absence is a claim in this module, so a false one is worse than no check at all.
+
+  MEASURED on the corpus the module was written for, and it is not an edge: 55 planning codes, 10 191 served values, **199 of them came back unproved that the sentence beside them prints in full**. A bulleted list is not one document family's layout - a regulation, an agreement and a contract all write one.
+
+  ```js
+  missingFigures('- 1 place minimum par logement', '1 place'); // [], was ['1']
+  proofSpan('- 1 place minimum', '1 place'); // points at the 1, was null
+  ```
+
+  The number reader is right for the documents it was written on and is untouched: `-1 234,56` and `1 234,56-` are how a statement prints a negative, and both still read negative. What no statement does is separate a minus from its digits by a space while a list does it on every item, so the rule is narrow: **inside this module only**, a dash that no digit precedes and that whitespace follows is not a sign. `notation`, `cite` and every other entry point read exactly as before.
+
 ## [2.0.11] - 2026-09-08
 
 ### Added

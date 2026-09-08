@@ -215,6 +215,24 @@ describe('missingFigures', () => {
 		expect(missingFigures('chacune des faces', 'une place', { spelled: SPELLED })).toEqual(['1']);
 	});
 
+	it('does not read the bullet of a list as a minus sign', () => {
+		// Measured on 55 planning codes: `- 1 place minimum par logement` reported
+		// its 1 as missing, because the number reader takes the bullet and its
+		// space for a sign and hands back minus one. 199 values came back unproved
+		// that the sentence beside them prints in full.
+		expect(missingFigures('- 1 place minimum par logement', '1 place')).toEqual([]);
+		expect(missingFigures('- 0,5 place par logement', '0,5 place', { decimal: ',' })).toEqual([]);
+	});
+
+	it('still reads the two forms a document writes a negative in', () => {
+		// The sign is attached, or it trails. Neither is what a list does.
+		expect(missingFigures('solde -1 234,56 EUR', '-1 234,56', { decimal: ',' })).toEqual([]);
+		expect(missingFigures('solde 1 234,56- EUR', '1 234,56-', { decimal: ',' })).toEqual([]);
+		expect(missingFigures('solde -1 234,56 EUR', '1 234,56', { decimal: ',' })).toEqual([
+			'1 234,56'
+		]);
+	});
+
 	it('proves a repeated figure once', () => {
 		expect(missingFigures('recul de 5 metres', 'de 5 m a 5 m')).toEqual([]);
 	});
@@ -241,6 +259,14 @@ describe('proofSpan', () => {
 		expect(proofSpan(source, 'une place', { spelled: SPELLED })).toEqual({
 			start: source.indexOf('une'),
 			end: source.indexOf('une') + 3
+		});
+	});
+
+	it('points at the figure of a bulleted line, not past its bullet', () => {
+		const source = '- 1 place minimum par logement';
+		expect(proofSpan(source, '1 place')).toEqual({
+			start: source.indexOf('1'),
+			end: source.indexOf('1') + 1
 		});
 	});
 
