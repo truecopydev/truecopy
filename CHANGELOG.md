@@ -7,6 +7,31 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Fixed
+
+- **`truecopy/anchor` reads a figure that a full stop, a comma or a slash glues to a word.** `findNumbers('alignement de la R.D.13')` returns NOTHING AT ALL, and so do `UBb,15%` and `(L=H/2)`: the reader never opens a match after one of those marks, so `missingFigures` reported figures the sentence prints in full as absent.
+
+  That guard earns its keep on a figures column - it is what stops a reading from starting inside `1 234,56` or `12/05/2026` and coming back with 56 or with 5. In prose the same mark does something else: it ends an abbreviation, separates a clause, writes a ratio.
+
+  The rule follows the difference exactly, and only inside this module: the mark steps aside when a **non-digit precedes it**, because inside a number the character before the mark is always a digit.
+
+  ```js
+  missingFigures("a l'alignement de la R.D.13", '6 m de la RD 13'); // ['6'], was ['6', '13']
+  missingFigures("le secteur UBb,15% de l'unite", '15 %'); // [], was ['15']
+  missingFigures('(L=H/2) de la construction', 'H/2 au minimum'); // [], was ['2']
+
+  missingFigures('7.3 Dispositions en zone 1AUD', '3 m minimum'); // ['3'], unchanged
+  missingFigures('un solde de 1 234,56 EUR', '56', ','); // ['56'], unchanged
+  ```
+
+  **`7.3` still reads as one number, and that is the point.** A regulation numbers its paragraphs, a quoted sentence opens on that number, and a check that read a digit run rather than a number took the `3` of `7.3` for the three metres a rule announces - measured on the same corpus, 115 served values whose proof was the paragraph number.
+
+  Measured over 55 planning codes and 10 191 served values, against the same check written locally: the two readings disagreed on 18 values before this and on 5 after, and none of the 5 is this library - two are the caller's own masking, two are a formula the compiled value reformats, and in one the library is right and the local check is wrong.
+
+  `notation`, `cite` and every other entry point read exactly as before.
+
 ## [2.0.12] - 2026-09-08
 
 ### Fixed
