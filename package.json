@@ -101,6 +101,10 @@
 			"types": "./dist/cite.d.ts",
 			"import": "./dist/cite.js"
 		},
+		"./anchor": {
+			"types": "./dist/anchor.d.ts",
+			"import": "./dist/anchor.js"
+		},
 		"./pattern": {
 			"types": "./dist/pattern.d.ts",
 			"import": "./dist/pattern.js"

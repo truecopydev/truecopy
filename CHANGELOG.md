@@ -7,6 +7,31 @@ means and when one is published is [RELEASING.md](RELEASING.md).
 Entries land here under `## [Unreleased]`, with no version and no date. A
 release PR is what stamps them.
 
+## [Unreleased]
+
+### Added
+
+- **`truecopy/anchor`: the passage a stored value came from, found again in the document.** A document read ONCE, offline, into values a site then serves for months cannot re-run its extraction per reader, so what proves such a value is not the extraction. It is the sentence, stored nowhere, found again at display time from a short anchor kept beside the value: nothing recopies the text, so the value cannot drift from it, and a revised document announces itself by the anchor no longer falling.
+
+  Two applications wrote this separately before it was here, on document families with nothing in common - a planning code printed as a PDF, a collective agreement published as marked-up text - and the second lost a lesson the first had already paid for. That is what says it belongs here.
+
+  ```js
+  const passage = anchoredPassage(article, 'hauteur maximale de 9', { depth: 'outline' });
+  // { heading: ['1.1- Dans une bande de 15 metres :'], line: '- zone UA : 9 metres.', opened: [] }
+
+  const quoted = [...passage.heading, passage.line, ...passage.opened].join(' ');
+  missingFigures(quoted, '35 m', { decimal: ',' }); // ['35'] - the anchor fell, the value did not
+  proofSpan(quoted, '9 m'); // { start, end }: how far a reader travels to the proof
+  ```
+
+  **`Passage` has three parts rather than one string**, and each is a defect already paid for. A paragraph quoted WITHOUT its ancestors is exact and says nothing: `-- de moins de 2 ans : 1 mois` has lost `- pour les ETAM`, which is half the rule, and reads as everyone's notice period. A heading quoted without the list it opens costs as much: `l'employeur complete :` followed by two items says that something is topped up and never what. Which of the three a narrow screen sheds is a display decision, so the join stays the caller's.
+
+  **`missingFigures` is the check an anchor cannot make.** An anchor that still falls proves the paragraph exists, never what it SAYS: measured on one planning code, a rule displayed as `35 m de l'axe` sat beside a sentence about the same road reading `un recul minimum de 10 metres`, with every mechanical check green. `proofSpan` is the second half, and it exists because a citation is bounded twice and the two bounds do not talk: of 610 values whose citation did carry the announced figure, 331 put it past the cut of a phone screen, and the gate called all 331 correct.
+
+  `units` and `depth` are separate and neither is guessed, because both mistakes are silent: reading depth off a source that does not mark it returns a passage with no ancestors, which is the exact failure the module exists to prevent, and returns it looking like a success. What stays the caller's is the join, the crop, and any masking a domain needs before its figures can be counted - a planning code writes `50 m2`, which announces fifty and not two. Mask without changing length and the extents stay indices into your own string.
+
+- **`Extent`, and it is not `Span`.** `labels` already exports a `Span` that carries the text it found; this one carries only two indices, because what sits between them is a stretch of the caller's own string.
+
 ## [2.0.10] - 2026-08-31
 
 ### Fixed

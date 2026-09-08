@@ -9,11 +9,12 @@ everything it re-exports counts as used and a name nobody imports stays green
 forever. Here, adding one is a line in a diff.
 
 ```text
-18 entry points, 73 values, 65 types
+19 entry points, 77 values, 69 types
 a name reachable through its own entry point and through the barrel is listed twice
 
 truecopy
   value  accentFree
+  value  anchoredPassage
   value  assignRoles
   value  boundariesFromAnchors
   value  boundariesFromRecurrence
@@ -58,13 +59,16 @@ truecopy
   type   ExplainOptions
   value  explainReading
   value  explainRows
+  type   Extent
   type   Extraction
   value  failures
   type   Field
   type   FieldFormat
+  type   FigureOptions
   type   Finding
   value  findNumbers
   value  findRowAnomalies
+  value  foldAnchor
   type   FoundNumber
   value  gapFor
   value  isOnlyNumber
@@ -77,6 +81,7 @@ truecopy
   type   LeadingDate
   type   Limits
   type   Look
+  value  missingFigures
   value  NEVER_MATCHES
   type   Notation
   value  numberedRows
@@ -84,6 +89,8 @@ truecopy
   value  openDocument
   type   OpenOptions
   value  pageFrom
+  type   Passage
+  type   PassageOptions
   type   PatternSet
   type   PdfEngine
   value  pdfWithPages
@@ -96,6 +103,7 @@ truecopy
   value  positionedItems
   value  profileColumns
   type   ProfileOptions
+  value  proofSpan
   type   RawPattern
   value  readDate
   value  readDocument
@@ -258,6 +266,16 @@ truecopy/cite
   value  carriesText
   value  citedText
   value  numberedRows
+
+truecopy/anchor
+  value  anchoredPassage
+  type   Extent
+  type   FigureOptions
+  value  foldAnchor
+  value  missingFigures
+  type   Passage
+  type   PassageOptions
+  value  proofSpan
 
 truecopy/pattern
   type   CompileOptions
