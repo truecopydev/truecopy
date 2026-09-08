@@ -292,7 +292,7 @@ export function anchoredPassage(
 	let ceiling = line.level;
 	for (let i = at - 1; i >= 0 && ceiling > 0; i -= 1) {
 		const above = parts[i];
-		if (above === undefined || above.level < 0) break;
+		if (above.level < 0) break;
 		if (above.level >= ceiling) continue;
 		heading.unshift(above.text);
 		ceiling = above.level;
@@ -302,7 +302,7 @@ export function anchoredPassage(
 	if (Number.isFinite(line.below)) {
 		for (let i = at + 1; i < parts.length; i += 1) {
 			const child = parts[i];
-			if (child === undefined || child.level < line.below) break;
+			if (child.level < line.below) break;
 			opened.push(child.text);
 		}
 	}
