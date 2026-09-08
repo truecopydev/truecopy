@@ -363,11 +363,13 @@ export interface FigureOptions {
  *    behind it are a figure the page prints in full.
  *
  *    The rule follows the difference exactly: the mark only steps aside when a
- *    NON-DIGIT precedes it, because inside a number the character before the
- *    mark is always a digit. `1 234,56`, `2.5`, `7.3` and `12/05/2026` read
- *    exactly as before - which matters, because reading `7.3` as one number is
- *    what keeps a paragraph's own number from being taken for the figure a rule
- *    announces.
+ *    character that is NEITHER A DIGIT NOR A BLANK precedes it, because that is
+ *    what GLUED means. Inside a number the character before the mark is always
+ *    a digit, so `1 234,56`, `2.5`, `7.3` and `12/05/2026` read exactly as
+ *    before - which matters, because reading `7.3` as one number is what keeps
+ *    a paragraph's own number from being taken for the figure a rule announces.
+ *    And a mark a blank precedes is not glued to anything, so `Art. 5` needs no
+ *    mask and gets none.
  *
  * BOTH LIVE HERE RATHER THAN IN `notation`: they are properties of prose, which
  * is this module's subject, and every other consumer's reader learned its
