@@ -329,29 +329,54 @@ export interface FigureOptions {
 }
 
 /*
- * A DASH THAT OPENS A LINE IS A BULLET, AND THE NUMBER READER TAKES IT FOR A
- * MINUS SIGN.
+ * PROSE PUNCTUATES DIFFERENTLY FROM A COLUMN OF FIGURES, AND THE NUMBER READER
+ * LEARNED THE COLUMN.
  *
- * MEASURED, on the corpus this module was written for: 55 planning codes,
- * 10 191 served values, and `- 1 place minimum par logement` reported its 1 as
- * MISSING - `findNumbers` reads the bullet and the space as a sign and hands
- * back minus one, which is not the figure the value announces. 199 values came
- * back unproved that the sentence beside them prints in full. An absence is a
- * claim here, so a false one is worse than no check.
+ * Two marks, measured on the same corpus and each costing figures the sentence
+ * plainly prints. Both masks keep the LENGTH, because the extents this module
+ * returns are indices into the string it was handed.
  *
- * The reader is right for the documents it was written on: `-1 234,56` and
- * `1 234,56-` are how a statement prints a negative, and both stay read that
- * way. What no statement does is separate a minus from its digits by a space
- * while a list does it on every item, so the rule is narrow: a dash that no
- * digit precedes and that whitespace follows is not a sign. The mask keeps the
- * LENGTH, because the extents this module returns are indices into the string
- * it was handed.
+ * 1. A DASH THAT OPENS A LINE IS A BULLET, AND THE READER TAKES IT FOR A MINUS
+ *    SIGN.
  *
- * It lives here rather than in `notation`: a bullet is a property of prose,
- * which is this module's subject, and the readers of every other consumer
- * learned their columns on the reading `notation` already has.
+ *    Measured on 55 planning codes and 10 191 served values: `- 1 place minimum
+ *    par logement` reported its 1 as MISSING, because the reader takes the
+ *    bullet and its space for a sign and hands back minus one. 199 values came
+ *    back unproved that the sentence beside them prints in full. An absence is
+ *    a claim here, so a false one is worse than no check.
+ *
+ *    The reader is right for the documents it was written on: `-1 234,56` and
+ *    `1 234,56-` are how a statement prints a negative, and both stay read that
+ *    way. What no statement does is separate a minus from its digits by a space
+ *    while a list does it on every item, so the rule is narrow: a dash that no
+ *    digit precedes and that whitespace follows is not a sign.
+ *
+ * 2. A FULL STOP, A COMMA OR A SLASH THAT GLUES A WORD TO A FIGURE HIDES THE
+ *    FIGURE ENTIRELY.
+ *
+ *    `findNumbers('alignement de la R.D.13')` returns NOTHING AT ALL, and so do
+ *    `UBb,15%` and `(L=H/2)`. The reader never opens a match after one of those
+ *    marks, and that guard earns its keep on a figures column: it is what stops
+ *    a reading from starting inside `1 234,56` or `12/05/2026` and coming back
+ *    with 56 or with 5. In prose the same mark does something else - it ends an
+ *    abbreviation, it separates a clause, it writes a ratio - and the digits
+ *    behind it are a figure the page prints in full.
+ *
+ *    The rule follows the difference exactly: the mark only steps aside when a
+ *    character that is NEITHER A DIGIT NOR A BLANK precedes it, because that is
+ *    what GLUED means. Inside a number the character before the mark is always
+ *    a digit, so `1 234,56`, `2.5`, `7.3` and `12/05/2026` read exactly as
+ *    before - which matters, because reading `7.3` as one number is what keeps
+ *    a paragraph's own number from being taken for the figure a rule announces.
+ *    And a mark a blank precedes is not glued to anything, so `Art. 5` needs no
+ *    mask and gets none.
+ *
+ * BOTH LIVE HERE RATHER THAN IN `notation`: they are properties of prose, which
+ * is this module's subject, and every other consumer's reader learned its
+ * columns on the reading `notation` already has.
  */
-const bulletsAside = (text: string): string => text.replace(/(?<![\d.,])-(?=\s)/g, ' ');
+const forProse = (text: string): string =>
+	text.replace(/(?<![\d.,])-(?=\s)/g, ' ').replace(/(?<=[^\d\s])[.,/](?=\d)/g, ' ');
 
 /**
  * Every figure a value announces, kept AS THE VALUE WRITES IT.
@@ -370,7 +395,7 @@ function announced(value: string, options: FigureOptions): string[] {
 		   refusal should be the figure, not the gutter it was found in. */
 		if (read !== null && !figures.has(read)) figures.set(read, raw.trim());
 	};
-	for (const found of findNumbers(bulletsAside(value))) keep(found.raw);
+	for (const found of findNumbers(forProse(value))) keep(found.raw);
 	for (const [word, figure] of options.spelled ?? []) {
 		if (wordAt(value, word) >= 0) keep(figure);
 	}
@@ -404,7 +429,7 @@ function firstReading(source: string, figure: string, options: FigureOptions): E
 		if (best === null || span.end < best.end) best = span;
 	};
 	const sought = readNumber(figure, options.decimal);
-	for (const found of findNumbers(bulletsAside(source))) {
+	for (const found of findNumbers(forProse(source))) {
 		if (readNumber(found.raw, options.decimal) === sought) {
 			/*
 			 * THE TOKEN IS WIDER THAN THE FIGURE, DELIBERATELY, and a span must not
@@ -446,7 +471,7 @@ export function missingFigures(
 	value: string,
 	options: FigureOptions = {}
 ): readonly string[] {
-	const read = bulletsAside(source);
+	const read = forProse(source);
 	return announced(value, options).filter(
 		(figure) =>
 			!carriesNumber(read, figure, options.decimal) &&

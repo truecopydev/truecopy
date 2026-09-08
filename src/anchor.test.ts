@@ -224,6 +224,26 @@ describe('missingFigures', () => {
 		expect(missingFigures('- 0,5 place par logement', '0,5 place', { decimal: ',' })).toEqual([]);
 	});
 
+	it('reads a figure a full stop, a comma or a slash glues to a word', () => {
+		// `findNumbers` returns NOTHING AT ALL on these three, because it never
+		// opens a match after one of those marks. On a figures column that guard
+		// is what stops a reading from starting inside `1 234,56`; in prose the
+		// mark ends an abbreviation or separates a clause, and the digits behind
+		// it are a figure the page prints in full.
+		expect(missingFigures("a l'alignement de la R.D.13", '6 m de la RD 13')).toEqual(['6']);
+		expect(missingFigures("dans le secteur UBb,15% de l'unite", '15 %')).toEqual([]);
+		expect(missingFigures('(L=H/2) de la construction', 'H/2 au minimum')).toEqual([]);
+	});
+
+	it('leaves a mark that sits inside a number exactly where it was', () => {
+		// The character before the mark is a digit there, and that is the whole
+		// difference. Reading `7.3` as one number is what keeps a paragraph's own
+		// number from being taken for the figure a rule announces.
+		expect(missingFigures('7.3 Dispositions en zone 1AUD', '3 m minimum')).toEqual(['3']);
+		expect(missingFigures('un solde de 1 234,56 EUR', '1 234,56', { decimal: ',' })).toEqual([]);
+		expect(missingFigures('un solde de 1 234,56 EUR', '56', { decimal: ',' })).toEqual(['56']);
+	});
+
 	it('still reads the two forms a document writes a negative in', () => {
 		// The sign is attached, or it trails. Neither is what a list does.
 		expect(missingFigures('solde -1 234,56 EUR', '-1 234,56', { decimal: ',' })).toEqual([]);
