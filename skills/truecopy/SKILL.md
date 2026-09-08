@@ -256,6 +256,47 @@ wrong rather than odd. Two errors that cancel out still pass.
 Reach for `readDocument` above instead when the reading is yours to write and
 has to be repeated: it takes the three methods and drives them.
 
+## A value served long after its reading: keep an anchor, not the sentence
+
+When a document is read ONCE, offline, into values a site serves for months,
+the extraction cannot be re-run per reader. Store a short **anchor** beside the
+value and find the sentence again at display time: nothing recopies the text,
+so the value cannot drift from it, and a revised document announces itself by
+the anchor no longer falling.
+
+```ts
+import { anchoredPassage, missingFigures, proofSpan } from 'truecopy/anchor';
+
+// units: 'lines' trusts the breaks the source printed, 'prose' cuts a run-on
+// blob on its numbering and its sentence ends.
+// depth: 'dashes' counts the hyphens a marked-up source puts in front of a
+// line, 'outline' infers depth from bullets, numbering and a trailing colon.
+const passage = anchoredPassage(article, rule.anchor, { units: 'lines', depth: 'outline' });
+// A null passage is the alarm: the document was revised since it was read.
+if (passage === null) return null; // NEVER a value without its sentence
+
+const quoted = [...passage.heading, passage.line, ...passage.opened].join(' ');
+missingFigures(quoted, rule.value, { decimal: mark }); // [] or the figures it lacks
+proofSpan(quoted, rule.value, { decimal: mark }); // { start, end } of the proof, or null
+```
+
+Two mistakes cost the same, and both are why `Passage` has three parts rather
+than one string: a paragraph quoted WITHOUT its ancestors is exact and says
+nothing (`- under two years: one month` has lost who it applies to), and a
+heading quoted without the list it opens says that something is topped up and
+never what. Join them yourself; shed ancestors from the OUTSIDE IN when a
+screen is too narrow, never the line itself.
+
+And an anchor that falls proves the paragraph exists, not what it says.
+`missingFigures` is the check for that: measured on one planning code, a value
+displayed as `35 m from the axis` sat beside a sentence reading `a minimum
+setback of 10 metres`, anchor green.
+
+Three things stay yours: how the passage is joined, how much of it a surface
+crops, and any masking a domain needs before figures can be counted (a planning
+code writes `50 m2`, which announces fifty and not two). Mask WITHOUT changing
+length and the spans stay indices into your own string.
+
 ## Traps that cost an afternoon
 
 - Column boundaries come from the spread of x over the WHOLE page

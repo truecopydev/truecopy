@@ -283,6 +283,41 @@ Both lookups were measured against their naive forms on a real corpus before the
 
 What stays yours is policy, not mechanics: which fields are figures, which single field anchors a record, and the rule that a failed side field is dropped and counted rather than fatal. `checkExtraction` (`truecopy/contract`) is the arithmetic half - the sum of what came back, against the totals the document declares about itself.
 
+## When the value outlives its reading
+
+A document read once, offline, into values a site then serves for months cannot
+re-run its extraction per reader. What proves such a value is not the
+extraction: it is the SENTENCE, stored nowhere, found again in the document at
+display time from a short **anchor** kept beside the value. Nothing recopies the
+text, so a value cannot drift from it; and the day the document is revised, the
+anchor stops falling and the absence is the alarm.
+
+```ts
+import { anchoredPassage, missingFigures, proofSpan } from 'truecopy/anchor';
+
+// stored once: { value: '9 m', anchor: 'hauteur maximale de 9' }
+const passage = anchoredPassage(article, rule.anchor, { units: 'lines', depth: 'outline' });
+// A null passage is the alarm: the document was revised since it was read.
+if (passage === null) return null; // never a value without its sentence
+
+const quoted = [...passage.heading, passage.line, ...passage.opened].join(' ');
+missingFigures(quoted, rule.value, { decimal: mark }); // [] or the figures it does not carry
+proofSpan(quoted, rule.value, { decimal: mark }); // how far a reader travels to the proof
+```
+
+**A paragraph quoted alone is exact and says nothing.** `- under two years of
+service: one month` has lost `- for technicians`, which is half the rule, and
+the sentence above it, which is the other half: quoted alone it reads as
+everyone's notice period. So a passage is the paragraph, its ancestors, AND the
+list it opens, and the three arrive apart because which of them a narrow screen
+sheds is a display decision.
+
+And an anchor that still falls proves the paragraph exists, never what it SAYS.
+Measured on one planning code: a rule displayed as `35 m from the axis` sat
+beside a sentence about the same road reading `a minimum setback of 10 metres`.
+`missingFigures` is what sees that; `proofSpan` is what says whether the reader
+reaches the figure before the screen cuts the citation off.
+
 ## The kit that makes it compulsory
 
 An interface is dodged with a `return null`; an assertion is not. Drop the kit into your gate with a corpus of your own:
@@ -350,6 +385,7 @@ Each one is also its own entry point, so a project that wants one pays for one.
 | [`signature.ts`](src/signature.ts) | `signature`  | which rows break the table's own type signature                                       |
 | [`schema.ts`](src/schema.ts)       | `schema`     | the fields, formats and count a reading must satisfy                                  |
 | [`cite.ts`](src/cite.ts)           | `cite`       | the rows a model cited, and whether they really carry each value                      |
+| [`anchor.ts`](src/anchor.ts)       | `anchor`     | the passage a stored value came from, found again in the document                     |
 | [`explain.ts`](src/explain.ts)     | `explain`    | what all of the above decided, in words                                               |
 | [`pattern.ts`](src/pattern.ts)     | `pattern`    | domain knowledge as **data**, compiled behind a ReDoS guard                           |
 | [`contract.ts`](src/contract.ts)   | `contract`   | what an honest reading looks like                                                     |
