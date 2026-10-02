@@ -490,9 +490,69 @@ function joinCell(items: readonly PositionedItem[], measured: boolean): string {
 		.join('');
 }
 
+/** A closing parenthesis printed on its own, as an accounts table draws it. */
+const CLOSING_ONLY = /^\)+$/;
+
+/** How many parentheses a run of text leaves open. */
+function leftOpen(text: string): number {
+	let open = 0;
+	for (const character of text) {
+		if (character === '(') open++;
+		else if (character === ')' && open > 0) open--;
+	}
+	return open;
+}
+
+/**
+ * The column of every item of a row, by its left edge.
+ *
+ * WITH `pairedParentheses`, ONE EXCEPTION: a closing parenthesis printed as an
+ * item of its own goes back to the cell it closes. An accounts table sets its
+ * figures flush right and hangs the `)` of a negative past that edge, so the
+ * `)` starts after the column ends - often closer to the next column than to
+ * its own. Read by its left edge alone it changes cell: `( 1,234` and
+ * `) ( 5,678 )`, a negative that lost its bracket beside a cell that gained
+ * one, and no check sees it, because every digit is still there.
+ *
+ * Three conditions, all read on the page and none on the document: the item is
+ * only closing parentheses; it touches the item before it, with no printed
+ * space between them; and the cell that item belongs to has a parenthesis
+ * still open. A `)` a space clear of the figure, or one closing nothing, stays
+ * where its left edge puts it.
+ */
+function columnsOf(
+	items: readonly PositionedItem[],
+	boundaries: number[],
+	paired: boolean
+): number[] {
+	const columns = items.map((item) => columnAt(item.x, boundaries));
+	if (!paired) return columns;
+	const byX = items.map((_, at) => at).sort((a, b) => items[a].x - items[b].x);
+	for (let k = 1; k < byX.length; k++) {
+		const at = byX[k];
+		const before = byX[k - 1];
+		if (!CLOSING_ONLY.test(items[at].text.trim())) continue;
+		if (columns[before] >= columns[at]) continue;
+		if (printedApart(items[before], items[at])) continue;
+		const cell = byX
+			.slice(0, k)
+			.filter((index) => columns[index] === columns[before])
+			.map((index) => items[index].text)
+			.join('');
+		if (leftOpen(cell) > 0) columns[at] = columns[before];
+	}
+	return columns;
+}
+
 /** Cut a row against boundaries: the page's, or the ones a reader built from a
- *  header row of its own. */
-export function rowToCells(row: Row, boundaries: number[], measuredSpaces = false): string[] {
+ *  header row of its own. `pairedParentheses` keeps a hanging `)` with the
+ *  figure it closes (see `columnsOf`); off, every item goes by its left edge. */
+export function rowToCells(
+	row: Row,
+	boundaries: number[],
+	measuredSpaces = false,
+	pairedParentheses = false
+): string[] {
 	const columns = Array.from({ length: boundaries.length + 1 }, (_, at) => at);
 	/*
 	 * A row with no geometry still has its text. Rows built from plain text - a
@@ -501,10 +561,11 @@ export function rowToCells(row: Row, boundaries: number[], measuredSpaces = fals
 	 * nothing. Uncut is an answer, and the reading says so; empty is a lie.
 	 */
 	if (row.items.length === 0) return columns.map((at) => (at === 0 ? tidy(row.text) : ''));
+	const itemColumns = columnsOf(row.items, boundaries, pairedParentheses);
 	return columns.map((at) =>
 		tidy(
 			joinCell(
-				row.items.filter((item) => columnAt(item.x, boundaries) === at),
+				row.items.filter((_, index) => itemColumns[index] === at),
 				measuredSpaces
 			)
 		)
@@ -525,9 +586,12 @@ const tidy = (text: string): string => text.replace(/\s+/g, ' ').trim();
 export const cellsOf = (
 	page: TextPage,
 	boundaries?: number[],
-	measuredSpaces = false
+	measuredSpaces = false,
+	pairedParentheses = false
 ): string[][] =>
-	page.rows.map((row) => rowToCells(row, boundaries ?? page.columnBoundaries, measuredSpaces));
+	page.rows.map((row) =>
+		rowToCells(row, boundaries ?? page.columnBoundaries, measuredSpaces, pairedParentheses)
+	);
 
 /**
  * Where a group of items sits, or `null` when the group is empty.

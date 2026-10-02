@@ -174,6 +174,67 @@ describe('rows', () => {
 		expect(rowToCells(page.rows[0], [], true)).toEqual(['deux mots']);
 	});
 
+	/*
+	 * An accounts table hangs the ")" of a negative past the flush-right edge of
+	 * its figures, so the ")" starts after its column ends and the cut hands it
+	 * to the next one. The geometry is the shape a browser prints: "(" and ")"
+	 * are items of their own, touching the figure.
+	 */
+	const negatives = () =>
+		pageFrom(1, 595, 842, [
+			item('Operating costs', 40, 700, 70),
+			item('(', 300, 700, 4),
+			item('1,234', 304, 700, 30),
+			item(')', 334, 700, 4),
+			item('(', 350, 700, 4),
+			item('5,678', 354, 700, 30),
+			item(')', 384, 700, 4)
+		]).rows[0];
+
+	it('keeps a hanging closing parenthesis with the figure it closes, when asked', () => {
+		expect(rowToCells(negatives(), [150, 320], false, true)).toEqual([
+			'Operating costs',
+			'( 1,234 )',
+			'( 5,678 )'
+		]);
+		// Off, the reading does not move: a consumer adopts the knob when its
+		// own bench is green.
+		expect(rowToCells(negatives(), [150, 320])).toEqual([
+			'Operating costs',
+			'( 1,234',
+			') ( 5,678 )'
+		]);
+	});
+
+	it('leaves a parenthesis that closes nothing, or is printed apart, where it falls', () => {
+		// The cell on the left has no parenthesis open - a stray ")" opening it
+		// does not count as one: the hanging ")" is not its own.
+		const closesNothing = pageFrom(1, 595, 842, [
+			item(')', 296, 700, 4),
+			item('1,234', 304, 700, 30),
+			item(')', 334, 700, 4)
+		]).rows[0];
+		expect(rowToCells(closesNothing, [320], false, true)).toEqual([') 1,234', ')']);
+		// A parenthesis the cell already closed is not left open either.
+		const closed = pageFrom(1, 595, 842, [item('(1,234)', 300, 700, 34), item(')', 334, 700, 4)])
+			.rows[0];
+		expect(rowToCells(closed, [320], false, true)).toEqual(['(1,234)', ')']);
+		// A space clear of the figure: the page printed it apart.
+		const apart = pageFrom(1, 595, 842, [
+			item('(', 300, 700, 4),
+			item('1,234', 304, 700, 30),
+			item(')', 340, 700, 4)
+		]).rows[0];
+		expect(rowToCells(apart, [320], false, true)).toEqual(['( 1,234', ')']);
+		// More than a bracket: a note mark is text, not a hanging bracket.
+		const note = pageFrom(1, 595, 842, [
+			item('(', 300, 700, 4),
+			item('1,234', 304, 700, 30),
+			item(') a', 334, 700, 12)
+		]).rows[0];
+		expect(rowToCells(note, [320], false, true)).toEqual(['( 1,234', ') a']);
+	});
+
 	it('cuts a row against boundaries it is given', () => {
 		const page = pageFrom(1, 595, 842, [item('2019', 50, 700), item('4', 400, 700)]);
 		expect(rowToCells(page.rows[0], [200])).toEqual(['2019', '4']);

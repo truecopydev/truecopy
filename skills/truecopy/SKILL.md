@@ -79,6 +79,12 @@ Three fields decide how you write the rest, and each has a wrong first instinct:
   relied on those cells arriving whole. `readTable(file, { rightEdges: false })`
   is the cut exactly as it was before right edges were read. It is a
   compatibility pin, not a tuning knob: never hunt documents with it.
+- **`pairedParentheses: true`, on accounts tables.** A negative printed `(1,234)`
+  hangs its `)` past the flush-right edge of the column, and the cut hands it to
+  the next cell: `( 1,234` beside `) ( 5,678 )`, every digit present and no
+  finding raised. `readTable(file, { pairedParentheses: true })` puts such a `)`
+  back when it touches the figure and closes a parenthesis that cell opened.
+  Off by default; turn it on once your own readings are checked with it.
 
 ## When a row is not a record
 
