@@ -322,6 +322,22 @@ export interface TableOptions extends OpenOptions {
 	 * having no gaps to measure, and `document.text` is not touched at all.
 	 */
 	measuredSpaces?: boolean;
+	/**
+	 * Keep a hanging closing parenthesis in the cell of the figure it closes.
+	 * Off unless asked for.
+	 *
+	 * An accounts table sets its figures flush right and hangs the `)` of a
+	 * negative past that edge. Cut by left edges, that `)` lands in the next
+	 * column: `( 1,234` beside `) ( 5,678 )`, a negative that lost its
+	 * bracket next to a cell that gained one, with every digit still there for
+	 * the checks to approve. On, a `)` printed on its own goes back to the cell
+	 * it closes when it touches the item before it and that cell has a
+	 * parenthesis open; anything else stays where its left edge puts it.
+	 *
+	 * It moves cell text, so it arrives as a knob and not as a new default. The
+	 * column boundaries are not touched, only which cell such a `)` joins.
+	 */
+	pairedParentheses?: boolean;
 }
 
 /**
@@ -356,7 +372,12 @@ export async function readTable(file: File, options: TableOptions = {}): Promise
 			gapFor(page.unit),
 			options.rightEdges ?? true
 		);
-		const cells = cellsOf(page, cut, options.measuredSpaces ?? false);
+		const cells = cellsOf(
+			page,
+			cut,
+			options.measuredSpaces ?? false,
+			options.pairedParentheses ?? false
+		);
 		boundaries.push(cut);
 		pages.push(cells);
 		findings.push(...complainAbout(page, cells, cut, mark));
