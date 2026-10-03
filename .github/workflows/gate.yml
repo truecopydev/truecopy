@@ -48,6 +48,13 @@ jobs:
       # macOS-only and optional.
       - run: npm ci --ignore-scripts
 
+      # pdfjs-dist 6.3 asks for Node 22.13 and fails every PDF on Node 20, where
+      # truecopy turns it into a `not-opened` refusal. The lockfile carries the
+      # current engine, which the job below tests; this job tests the promise
+      # `engines` makes, so it reads with the newest pdf.js Node 20 can run.
+      - name: the pdf engine Node 20 can run
+        run: npm run pdf-engine:node20
+
       # format, lint, typecheck, build, knip, jscpd, tests, coverage ratchet.
       - run: npm run gate
 
@@ -69,6 +76,31 @@ jobs:
       # before pushing. `npm run verifier` replays this whole job.
       - name: the published package imports
         run: npm run paquet
+
+  # Its own job because it genuinely differs: the gate above reads with the
+  # pdf.js Node 20 can run, and a consumer on a current Node installs the one
+  # the lockfile carries. The suite and its ratchet: the rest of the gate does
+  # not depend on the engine.
+  current-engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+
+      # The bin and example tests import `dist/`, which the gate builds first.
+      - run: npm run build
+
+      - name: the suite and its coverage on the current pdf engine
+        run: npm run test:coverage
 
   # Its own job, and the comment at the top of this file says why that has to be
   # earned: this one genuinely differs. It needs the whole history rather than

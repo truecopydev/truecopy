@@ -29,3 +29,11 @@ updates:
         update-types: [minor, patch]
     commit-message:
       prefix: chore
+    # Vitest 5 runs on Node 22.12 and later only, and the gate runs on Node 20
+    # because `engines` promises it. The two move together, in the major that
+    # drops Node 20, and not before.
+    ignore:
+      - dependency-name: 'vitest'
+        update-types: [version-update:semver-major]
+      - dependency-name: '@vitest/*'
+        update-types: [version-update:semver-major]

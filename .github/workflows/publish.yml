@@ -74,6 +74,11 @@ jobs:
 
       - run: npm ci --ignore-scripts
 
+      # `prepublishOnly` replays the gate here, on Node 20: same engine as the
+      # gate job, for the reason gate.yml gives.
+      - name: the pdf engine Node 20 can run
+        run: npm run pdf-engine:node20
+
       # The one mistake this cannot recover from. A version is never
       # unpublished, so a tag dispatched by hand that does not match the version
       # in the tree burns a number - either the wrong code goes out under the
