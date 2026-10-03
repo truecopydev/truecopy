@@ -53,7 +53,7 @@ jobs:
       # current engine, which the job below tests; this job tests the promise
       # `engines` makes, so it reads with the newest pdf.js Node 20 can run.
       - name: the pdf engine Node 20 can run
-        run: npm install --no-save --ignore-scripts pdfjs-dist@~6.2.108
+        run: npm run pdf-engine:node20
 
       # format, lint, typecheck, build, knip, jscpd, tests, coverage ratchet.
       - run: npm run gate
@@ -79,8 +79,8 @@ jobs:
 
   # Its own job because it genuinely differs: the gate above reads with the
   # pdf.js Node 20 can run, and a consumer on a current Node installs the one
-  # the lockfile carries. Only the suite: the rest of the gate does not depend
-  # on the engine.
+  # the lockfile carries. The suite and its ratchet: the rest of the gate does
+  # not depend on the engine.
   current-engine:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -96,8 +96,8 @@ jobs:
 
       - run: npm ci --ignore-scripts
 
-      - name: the suite on the current pdf engine
-        run: npm test
+      - name: the suite and its coverage on the current pdf engine
+        run: npm run test:coverage
 
   # Its own job, and the comment at the top of this file says why that has to be
   # earned: this one genuinely differs. It needs the whole history rather than
