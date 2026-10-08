@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.14] - 2026-10-08
+
 ### Added
 
 - **`readTable(file, { pairedParentheses: true })` keeps a hanging closing parenthesis in the cell of the figure it closes.** An accounts table sets its figures flush right and hangs the `)` of a negative past that edge, so the `)` starts after its column ends and the cut, which reads left edges, hands it to the next column: `( 1,234` beside `) ( 5,678 )`. A negative loses its bracket, its neighbour gains one, and no check sees it, because every digit is still there in the right order - the reading is wrong and nothing in `findings` says so.
