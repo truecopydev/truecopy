@@ -28,7 +28,7 @@
  * it. This module says CARRIED or NOT, per value; the policy is yours.
  */
 
-import { findNumbers, readNumber, type DecimalMark } from './notation.js';
+import { findNumbers, readNumber, type Brackets, type DecimalMark } from './notation.js';
 
 /**
  * The rows as a model should receive them: one line per row, its number first,
@@ -82,6 +82,15 @@ export function citedText(
 const folded = (text: string): string =>
 	text.toLowerCase().replace(/[‘’ʼ]/g, "'").replace(/\s+/g, ' ').trim();
 
+/** A word without the brackets that open or close it. */
+const withoutBrackets = (word: string): string => {
+	let start = 0;
+	let end = word.length;
+	while (word[start] === '(') start += 1;
+	while (end > start && word[end - 1] === ')') end -= 1;
+	return word.slice(start, end);
+};
+
 /**
  * The words of a text, in order, cut on whitespace AND on hyphens.
  *
@@ -89,12 +98,14 @@ const folded = (text: string): string =>
  * hyphen and throws its tail past the figure columns - the two halves of one
  * town arrive a whole row of figures apart. Cutting both the document and the
  * sought value the same way keeps the comparison symmetric, and a name printed
- * in one piece walks the same path with no special case.
+ * in one piece walks the same path with no special case. Brackets come off a
+ * word only when the caller declares them punctuation.
  */
-const wordsOf = (text: string): string[] =>
+const wordsOf = (text: string, brackets: Brackets): string[] =>
 	folded(text)
 		.split(' ')
 		.flatMap((word) => word.split('-'))
+		.map((word) => (brackets === 'punctuation' ? withoutBrackets(word) : word))
 		.filter((word) => word !== '');
 
 /**
@@ -110,11 +121,17 @@ const wordsOf = (text: string): string[] =>
  * invented value has none of its words there. What it can no longer catch is a
  * RECOMBINATION of words all present and in order - a real but narrow risk,
  * the cited rows covering one record.
+ *
+ * `brackets` is the same declaration `carriesNumber` takes. Left out, a word
+ * keeps its brackets and `(75016)` is one word, carried only as `(75016)`.
+ * With `'punctuation'`, the brackets that open or close a word are dropped on
+ * both sides, so `rue Bellini (75016) Paris` carries the postal code `75016`
+ * copied exactly as the address prints it.
  */
-export function carriesText(source: string, value: string): boolean {
-	const sought = wordsOf(value);
+export function carriesText(source: string, value: string, brackets: Brackets = 'sign'): boolean {
+	const sought = wordsOf(value, brackets);
 	if (sought.length === 0) return false;
-	const words = wordsOf(source);
+	const words = wordsOf(source, brackets);
 	let from = 0;
 	for (const word of sought) {
 		const at = words.indexOf(word, from);
@@ -140,13 +157,22 @@ export function carriesText(source: string, value: string): boolean {
  * rounding this exists to catch - and is not. Pass the mark from
  * `decimalMarkOf(document.text)`; left out, each figure is read on its own,
  * which is a guess and inherits a guess's failures.
+ *
+ * `brackets` is what brackets around a figure mean on this document, read
+ * the same way on both sides. Left out, they carry a sign: `(75016)` is
+ * carried as `(75016)` and never as `75016`, which is right on a statement
+ * and refuses a postal code copied exactly from an address. Pass
+ * `'punctuation'` for a document that prints asides in brackets; a sign
+ * dropped from a real accounting negative is then no longer caught, which is
+ * why it is never the default.
  */
 export function carriesNumber(
 	source: string,
 	value: string,
-	decimal?: DecimalMark | null
+	decimal?: DecimalMark | null,
+	brackets?: Brackets
 ): boolean {
-	const sought = readNumber(value, decimal);
+	const sought = readNumber(value, decimal, brackets);
 	if (sought === null) return false;
-	return findNumbers(source).some((found) => readNumber(found.raw, decimal) === sought);
+	return findNumbers(source).some((found) => readNumber(found.raw, decimal, brackets) === sought);
 }
