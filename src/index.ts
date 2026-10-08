@@ -54,7 +54,7 @@ export {
 export type { Doubt, Finding, Table, TableOptions } from './table.js';
 export { readTable } from './table.js';
 
-export type { DecimalMark, Notation, FoundNumber, LeadingDate } from './notation.js';
+export type { Brackets, DecimalMark, Notation, FoundNumber, LeadingDate } from './notation.js';
 export {
 	accentFree,
 	decimalMarkOf,

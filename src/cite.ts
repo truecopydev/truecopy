@@ -28,7 +28,7 @@
  * it. This module says CARRIED or NOT, per value; the policy is yours.
  */
 
-import { findNumbers, readNumber, type DecimalMark } from './notation.js';
+import { findNumbers, readNumber, type Brackets, type DecimalMark } from './notation.js';
 
 /**
  * The rows as a model should receive them: one line per row, its number first,
@@ -90,11 +90,27 @@ const folded = (text: string): string =>
  * town arrive a whole row of figures apart. Cutting both the document and the
  * sought value the same way keeps the comparison symmetric, and a name printed
  * in one piece walks the same path with no special case.
+ *
+ * Without the brackets that open or close a word, for the same symmetry. A page
+ * prints `rue Bellini (75016) Paris`, and the postal code is `75016`: kept, the
+ * brackets made `(75016)` one word that no exact copy of the code could match,
+ * so a citation was refused for quoting the value without its punctuation. A
+ * text carries no sign, so nothing is lost by dropping them; a figure whose
+ * brackets do carry one is `carriesNumber`'s business, not this.
  */
+const withoutBrackets = (word: string): string => {
+	let start = 0;
+	let end = word.length;
+	while (word[start] === '(') start += 1;
+	while (end > start && word[end - 1] === ')') end -= 1;
+	return word.slice(start, end);
+};
+
 const wordsOf = (text: string): string[] =>
 	folded(text)
 		.split(' ')
 		.flatMap((word) => word.split('-'))
+		.map(withoutBrackets)
 		.filter((word) => word !== '');
 
 /**
@@ -140,13 +156,22 @@ export function carriesText(source: string, value: string): boolean {
  * rounding this exists to catch - and is not. Pass the mark from
  * `decimalMarkOf(document.text)`; left out, each figure is read on its own,
  * which is a guess and inherits a guess's failures.
+ *
+ * `brackets` is what brackets around a figure mean on this document, read
+ * the same way on both sides. Left out, they carry a sign: `(75016)` is
+ * carried as `(75016)` and never as `75016`, which is right on a statement
+ * and refuses a postal code copied exactly from an address. Pass
+ * `'punctuation'` for a document that prints asides in brackets; a sign
+ * dropped from a real accounting negative is then no longer caught, which is
+ * why it is never the default.
  */
 export function carriesNumber(
 	source: string,
 	value: string,
-	decimal?: DecimalMark | null
+	decimal?: DecimalMark | null,
+	brackets?: Brackets
 ): boolean {
-	const sought = readNumber(value, decimal);
+	const sought = readNumber(value, decimal, brackets);
 	if (sought === null) return false;
-	return findNumbers(source).some((found) => readNumber(found.raw, decimal) === sought);
+	return findNumbers(source).some((found) => readNumber(found.raw, decimal, brackets) === sought);
 }

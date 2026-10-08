@@ -9,7 +9,7 @@ everything it re-exports counts as used and a name nobody imports stays green
 forever. Here, adding one is a line in a diff.
 
 ```text
-19 entry points, 77 values, 69 types
+19 entry points, 77 values, 70 types
 a name reachable through its own entry point and through the barrel is listed twice
 
 truecopy
@@ -18,6 +18,7 @@ truecopy
   value  assignRoles
   value  boundariesFromAnchors
   value  boundariesFromRecurrence
+  type   Brackets
   type   Candidate
   value  carriesNumber
   value  carriesText
@@ -187,6 +188,7 @@ truecopy/table
 
 truecopy/notation
   value  accentFree
+  type   Brackets
   type   DecimalMark
   value  decimalMarkOf
   value  findNumbers

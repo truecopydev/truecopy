@@ -19,6 +19,21 @@ release PR is what stamps them.
 
   It moves cell text, so it arrives as a knob and not as a new default: a reader adopts it when its own bench is green. `rowToCells` and `cellsOf` take the same flag.
 
+- **`readNumber` and `carriesNumber` take a `brackets` argument, so a page that prints asides in brackets is no longer read as a page of negatives.** `readNumber('(75016)')` is -75016, and so is a footnote marker `(1)`: the accounting convention, applied to an address. A caller that cited the postal code exactly as `8 rue Bellini (75016) Paris` prints it was told the page does not carry it, because `+75016` met the `-75016` the reader returned ([#70](https://github.com/truecopydev/truecopy/issues/70)).
+
+  ```js
+  readNumber('(75016)'); // -75016, unchanged
+  readNumber('(75016)', null, 'punctuation'); // 75016
+  carriesNumber('8 rue Bellini (75016) Paris', '75016', ','); // false, unchanged
+  carriesNumber('8 rue Bellini (75016) Paris', '75016', ',', 'punctuation'); // true
+  ```
+
+  Nothing in a token tells the two conventions apart: on 270 quarterly reports, 4 176 figures closed in brackets, 2 637 of them at the head of a cell, which is exactly where an accounting negative sits too. So the caller says which page it holds, the way `decimalMarkOf` lets it say which mark is decimal, and the default stays `'sign'`: no reading moves under an existing consumer. A minus is a minus under both, so `(-12,00)` still reads -12. The new `Brackets` type is exported beside `DecimalMark`.
+
+### Fixed
+
+- **`carriesText` finds a word printed between brackets.** `(75016)` was one word, so neither `75016` nor `Bellini 75016 Paris` was carried by `8 rue Bellini (75016) Paris`. Brackets that open or close a word are now dropped on both sides before the comparison, the same symmetry as the hyphens; a text carries no sign, so nothing a figure needs is lost ([#70](https://github.com/truecopydev/truecopy/issues/70)).
+
 ## [2.0.13] - 2026-09-08
 
 ### Fixed

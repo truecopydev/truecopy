@@ -277,6 +277,7 @@ const source = citedText(page, record.rows); // what it claims to have read
 
 carriesText(source, record.town); // all its words, in order - never a substring
 carriesNumber(source, record.surface, mark); // the page's numbers - never a digit soup
+carriesNumber(source, record.postcode, mark, 'punctuation'); // brackets as asides, not as a sign
 ```
 
 Both lookups were measured against their naive forms on a real corpus before they were written this way. A contiguous substring refused 104 of one document's 111 records, because layouts throw the tail of a name past the figure columns - the words are all there, in order, never in one piece. And flattening the source into one run of digits found a surface **three times** in a row that carries no such figure: a guard that looked strong exactly where it protected nothing.

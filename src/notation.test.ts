@@ -112,6 +112,24 @@ describe('readNumber', () => {
 		expect(readNumber('(1 030,30')).toBe(1030.3);
 	});
 
+	/*
+	 * BRACKETS ARE A SIGN ONLY ON A PAGE THAT USES THEM AS ONE. An address
+	 * prints `(75016)` and a footnote `(1)`; read as accounting, both came out
+	 * negative. The caller says which page it holds, and the default stays the
+	 * accounting one so that no reading moves under an existing consumer.
+	 */
+	it('reads brackets as punctuation when the caller says the page uses them that way', () => {
+		expect(readNumber('(75016)')).toBe(-75016);
+		expect(readNumber('(75016)', null, 'sign')).toBe(-75016);
+		expect(readNumber('(75016)', null, 'punctuation')).toBe(75016);
+		expect(readNumber('(1)', undefined, 'punctuation')).toBe(1);
+		expect(readNumber('(1 234,56)', ',', 'punctuation')).toBe(1234.56);
+		// A minus is still a minus: only the brackets stop carrying a sign.
+		expect(readNumber('(-12,00)', ',', 'punctuation')).toBe(-12);
+		expect(readNumber('(12,00)-', ',', 'punctuation')).toBe(-12);
+		expect(readNumber('(185,74', ',', 'punctuation')).toBe(185.74);
+	});
+
 	it('reads through what a typesetter puts inside a number', () => {
 		expect(readNumber('1 234,56')).toBe(1234.56);
 		expect(readNumber('1 234,56')).toBe(1234.56);
