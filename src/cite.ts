@@ -82,16 +82,6 @@ export function citedText(
 const folded = (text: string): string =>
 	text.toLowerCase().replace(/[‘’ʼ]/g, "'").replace(/\s+/g, ' ').trim();
 
-/**
- * The words of a text, in order, cut on whitespace AND on hyphens.
- *
- * On hyphens from both sides, because a layout breaks a hyphenated name at the
- * hyphen and throws its tail past the figure columns - the two halves of one
- * town arrive a whole row of figures apart. Cutting both the document and the
- * sought value the same way keeps the comparison symmetric, and a name printed
- * in one piece walks the same path with no special case.
- *
- */
 /** A word without the brackets that open or close it. */
 const withoutBrackets = (word: string): string => {
 	let start = 0;
@@ -101,6 +91,16 @@ const withoutBrackets = (word: string): string => {
 	return word.slice(start, end);
 };
 
+/**
+ * The words of a text, in order, cut on whitespace AND on hyphens.
+ *
+ * On hyphens from both sides, because a layout breaks a hyphenated name at the
+ * hyphen and throws its tail past the figure columns - the two halves of one
+ * town arrive a whole row of figures apart. Cutting both the document and the
+ * sought value the same way keeps the comparison symmetric, and a name printed
+ * in one piece walks the same path with no special case. Brackets come off a
+ * word only when the caller declares them punctuation.
+ */
 const wordsOf = (text: string, brackets: Brackets): string[] =>
 	folded(text)
 		.split(' ')
