@@ -91,13 +91,8 @@ const folded = (text: string): string =>
  * sought value the same way keeps the comparison symmetric, and a name printed
  * in one piece walks the same path with no special case.
  *
- * Without the brackets that open or close a word, for the same symmetry. A page
- * prints `rue Bellini (75016) Paris`, and the postal code is `75016`: kept, the
- * brackets made `(75016)` one word that no exact copy of the code could match,
- * so a citation was refused for quoting the value without its punctuation. A
- * text carries no sign, so nothing is lost by dropping them; a figure whose
- * brackets do carry one is `carriesNumber`'s business, not this.
  */
+/** A word without the brackets that open or close it. */
 const withoutBrackets = (word: string): string => {
 	let start = 0;
 	let end = word.length;
@@ -106,11 +101,11 @@ const withoutBrackets = (word: string): string => {
 	return word.slice(start, end);
 };
 
-const wordsOf = (text: string): string[] =>
+const wordsOf = (text: string, brackets: Brackets): string[] =>
 	folded(text)
 		.split(' ')
 		.flatMap((word) => word.split('-'))
-		.map(withoutBrackets)
+		.map((word) => (brackets === 'punctuation' ? withoutBrackets(word) : word))
 		.filter((word) => word !== '');
 
 /**
@@ -126,11 +121,17 @@ const wordsOf = (text: string): string[] =>
  * invented value has none of its words there. What it can no longer catch is a
  * RECOMBINATION of words all present and in order - a real but narrow risk,
  * the cited rows covering one record.
+ *
+ * `brackets` is the same declaration `carriesNumber` takes. Left out, a word
+ * keeps its brackets and `(75016)` is one word, carried only as `(75016)`.
+ * With `'punctuation'`, the brackets that open or close a word are dropped on
+ * both sides, so `rue Bellini (75016) Paris` carries the postal code `75016`
+ * copied exactly as the address prints it.
  */
-export function carriesText(source: string, value: string): boolean {
-	const sought = wordsOf(value);
+export function carriesText(source: string, value: string, brackets: Brackets = 'sign'): boolean {
+	const sought = wordsOf(value, brackets);
 	if (sought.length === 0) return false;
-	const words = wordsOf(source);
+	const words = wordsOf(source, brackets);
 	let from = 0;
 	for (const word of sought) {
 		const at = words.indexOf(word, from);

@@ -30,9 +30,7 @@ release PR is what stamps them.
 
   Nothing in a token tells the two conventions apart: on 270 quarterly reports, 4 176 figures closed in brackets, 2 637 of them at the head of a cell, which is exactly where an accounting negative sits too. So the caller says which page it holds, the way `decimalMarkOf` lets it say which mark is decimal, and the default stays `'sign'`: no reading moves under an existing consumer. A minus is a minus under both, so `(-12,00)` still reads -12. The new `Brackets` type is exported beside `DecimalMark`.
 
-### Fixed
-
-- **`carriesText` finds a word printed between brackets.** `(75016)` was one word, so neither `75016` nor `Bellini 75016 Paris` was carried by `8 rue Bellini (75016) Paris`. Brackets that open or close a word are now dropped on both sides before the comparison, the same symmetry as the hyphens; a text carries no sign, so nothing a figure needs is lost ([#70](https://github.com/truecopydev/truecopy/issues/70)).
+  `carriesText` takes the same argument: `(75016)` is one word by default, and with `'punctuation'` the brackets that open or close a word are dropped on both sides, so `8 rue Bellini (75016) Paris` carries `75016` and `Bellini 75016 Paris`.
 
 ## [2.0.13] - 2026-09-08
 

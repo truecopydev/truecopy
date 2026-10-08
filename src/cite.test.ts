@@ -84,15 +84,17 @@ describe('carriesText', () => {
 		expect(carriesText('ÉPINAY 93800', 'Épinay')).toBe(true);
 	});
 
-	it('reads a word without the brackets around it, on both sides', () => {
+	it('reads a word without the brackets around it, when told they are punctuation', () => {
 		// The postal code is 75016; the brackets are the address's punctuation.
 		const ligne = '8 rue Bellini (75016) Paris';
-		expect(carriesText(ligne, '75016')).toBe(true);
+		expect(carriesText(ligne, '75016')).toBe(false);
 		expect(carriesText(ligne, '(75016)')).toBe(true);
-		expect(carriesText(ligne, 'Bellini 75016 Paris')).toBe(true);
-		expect(carriesText('Lille (voir note 3)', 'voir note')).toBe(true);
-		expect(carriesText(ligne, '75017')).toBe(false);
-		expect(carriesText('EVRY 91000', '()')).toBe(false);
+		expect(carriesText(ligne, '75016', 'punctuation')).toBe(true);
+		expect(carriesText(ligne, '(75016)', 'punctuation')).toBe(true);
+		expect(carriesText(ligne, 'Bellini 75016 Paris', 'punctuation')).toBe(true);
+		expect(carriesText('Lille (voir note 3)', 'voir note', 'punctuation')).toBe(true);
+		expect(carriesText(ligne, '75017', 'punctuation')).toBe(false);
+		expect(carriesText('EVRY 91000', '()', 'punctuation')).toBe(false);
 	});
 
 	it('refuses an empty value: nothing is not carried', () => {
@@ -166,7 +168,6 @@ describe('carriesNumber', () => {
 		expect(carriesNumber(ligne, '75017', ',', 'punctuation')).toBe(false);
 		// And the accounting page keeps refusing a sign that was dropped.
 		expect(carriesNumber('solde (123,45) au 31/12', '123,45', ',')).toBe(false);
-		expect(carriesNumber('solde (123,45) au 31/12', '123,45', ',', 'sign')).toBe(false);
 	});
 
 	it('refuses a value that is not a figure at all', () => {
