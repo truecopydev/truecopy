@@ -9,6 +9,17 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`openDocument` names the file it read: `document.digest` is the SHA-256 of the exact bytes it was given, in lowercase hex.** A reading, an anchor or a citation kept for years has to say which file it was made on, and a file name says nothing once the issuer replaces the document under the same name. With the digest, the reading points at one set of bytes, and an archive that keeps the file under that digest can hand back the very document the reading was made on.
+
+  ```js
+  const document = await openDocument(file);
+  document.digest; // 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' for a file holding "abc"
+  ```
+
+  Web Crypto computes it, in the browser as in Node, with no new dependency. Same bytes, same digest, whatever the file is called. No reading moves: rows, cells and findings are untouched. A document built from a string (`documentFromText`) has no file and carries none.
+
 ## [2.0.14] - 2026-10-08
 
 ### Added

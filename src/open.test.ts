@@ -43,6 +43,18 @@ describe('openDocument', () => {
 		expect(document.pages[0].rows.map((row) => row.text)).toEqual(['a', 'b']);
 	});
 
+	it('names the bytes it read with their SHA-256, the same bytes the same digest', async () => {
+		const csv = await openDocument(new File(['abc'], 'abc.csv', { type: 'text/csv' }));
+		// The published SHA-256 test vector for "abc".
+		expect(csv.digest).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+		const pdf = pdfWithText([{ word: 'Year', x: 50, y: 750 }]);
+		const first = await openDocument(new File([pdf], 'a.pdf', { type: 'application/pdf' }));
+		const again = await openDocument(new File([pdf], 'renamed.pdf', { type: 'application/pdf' }));
+		expect(first.digest).toMatch(/^[0-9a-f]{64}$/);
+		expect(again.digest).toBe(first.digest);
+		expect(first.pages[0].rows.map((row) => row.text)).toEqual(['Year']);
+	});
+
 	it('extracts a real PDF, from the bytes to the rows', async () => {
 		const pdf = pdfWithText([
 			{ word: 'Year', x: 50, y: 750 },

@@ -376,7 +376,7 @@ async function openOffice(bytes: Uint8Array, file: File, limits: Limits): Promis
 	}
 }
 
-/** Open a dropped file. The only path. */
+/** Open a dropped file. The only path. The document carries the digest of the bytes it was read from. */
 export async function openDocument(file: File, options: OpenOptions = {}): Promise<Document> {
 	const limits = { ...DEFAULT_LIMITS, ...options };
 	if (file.size === 0) throw new UnreadableDocument('empty', 'This file is empty.');
@@ -384,10 +384,27 @@ export async function openDocument(file: File, options: OpenOptions = {}): Promi
 		const megabytes = Math.round(limits.maximumBytes / 1048576);
 		throw new UnreadableDocument('too-big', `This file is over ${megabytes} MB.`);
 	}
+	const data = await file.arrayBuffer();
+	// Before the engine sees the bytes: pdf.js may transfer the buffer to its worker and leave it empty.
+	const digest = await sha256Hex(data);
+	return { ...(await openBytes(data, file, limits, options)), digest };
+}
 
+/** Lowercase hex SHA-256, through Web Crypto: the same in a browser and in Node, with no dependency. */
+async function sha256Hex(data: ArrayBuffer): Promise<string> {
+	const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+	return Array.from(hash, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function openBytes(
+	data: ArrayBuffer,
+	file: File,
+	limits: Limits,
+	options: OpenOptions
+): Promise<Document> {
 	const looksLikePdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
 	if (!looksLikePdf) {
-		const bytes = new Uint8Array(await file.arrayBuffer());
+		const bytes = new Uint8Array(data);
 		if (looksLikeArchive(bytes)) return openOffice(bytes, file, limits);
 		const encoding = encodingOf(bytes);
 		if (encoding === null) {
@@ -401,7 +418,7 @@ export async function openDocument(file: File, options: OpenOptions = {}): Promi
 
 	try {
 		const document = await withDeadline(
-			pagesFromPdf(await file.arrayBuffer(), file.name, limits, options),
+			pagesFromPdf(data, file.name, limits, options),
 			limits.deadlineMilliseconds
 		);
 		if (document.text.trim() === '') {
