@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.15] - 2026-10-14
+
 ### Added
 
 - **`openDocument` names the file it read: `document.digest` is the SHA-256 of the exact bytes it was given, in lowercase hex.** A reading, an anchor or a citation kept for years has to say which file it was made on, and a file name says nothing once the issuer replaces the document under the same name. With the digest, the reading points at one set of bytes, and an archive that keeps the file under that digest can hand back the very document the reading was made on.
