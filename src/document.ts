@@ -127,4 +127,13 @@ export interface Document {
 	text: string;
 	origin: Origin;
 	name: string;
+	/**
+	 * The SHA-256 of the exact bytes `openDocument` was given, in lowercase hex.
+	 *
+	 * It names the document a reading was made on, so a reading, an anchor or a
+	 * citation can be matched to the file it came from, and an archive that
+	 * keeps that file under the same digest can hand it back years later.
+	 * Absent when the document was built from a string rather than a file.
+	 */
+	digest?: string;
 }

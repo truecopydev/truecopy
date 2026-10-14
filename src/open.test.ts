@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
 	DEFAULT_LIMITS,
@@ -41,6 +42,22 @@ describe('openDocument', () => {
 		// One page: a paste was never paginated. Two rows, and they keep their text.
 		expect(document.pages).toHaveLength(1);
 		expect(document.pages[0].rows.map((row) => row.text)).toEqual(['a', 'b']);
+	});
+
+	it('names the bytes it read with their SHA-256', async () => {
+		const csv = await openDocument(new File(['abc'], 'abc.csv', { type: 'text/csv' }));
+		// The published SHA-256 test vector for "abc".
+		expect(csv.digest).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
+	});
+
+	it('hashes a PDF before the engine can take its buffer, the same bytes the same digest', async () => {
+		const pdf = pdfWithText([{ word: 'Year', x: 50, y: 750 }]);
+		const expected = createHash('sha256').update(pdf).digest('hex');
+		const first = await openDocument(new File([pdf], 'a.pdf', { type: 'application/pdf' }));
+		const again = await openDocument(new File([pdf], 'renamed.pdf', { type: 'application/pdf' }));
+		// A digest taken after pdf.js transferred the buffer would be the hash of zero bytes.
+		expect(first.digest).toBe(expected);
+		expect(again.digest).toBe(expected);
 	});
 
 	it('extracts a real PDF, from the bytes to the rows', async () => {
