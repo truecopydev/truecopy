@@ -194,6 +194,7 @@ describe('read_table', () => {
 			firstRowNumber: number;
 			totalRows: number;
 			more: boolean;
+			pagesUnread: number;
 			pages: { number: number; boundaries: number[] }[];
 			findings: unknown[];
 		};
@@ -203,6 +204,7 @@ describe('read_table', () => {
 		expect(data.firstRowNumber).toBe(1);
 		expect(data.totalRows).toBe(3);
 		expect(data.more).toBe(false);
+		expect(data.pagesUnread).toBe(0);
 		expect(data.pages[0].number).toBe(1);
 		expect(Array.isArray(data.findings)).toBe(true);
 		expect(result.isError).toBeUndefined();
@@ -249,6 +251,9 @@ describe('read_table', () => {
 		const file = new File([two], 'two.pdf', { type: 'application/pdf' });
 		const result = await call('read_table', { path: '/x.pdf', maximumPages: 1 }, serving(file));
 		expect((result.structuredContent as { pages: unknown[] }).pages).toHaveLength(1);
+		// The rows end with page one, the document does not: `more` speaks of rows only.
+		expect((result.structuredContent as { pagesUnread: number }).pagesUnread).toBe(1);
+		expect(result.content[0].text).toContain('1 more page(s) left unread past maximumPages');
 	});
 
 	it('refuses a call with no path, in the result so the model can retry', async () => {

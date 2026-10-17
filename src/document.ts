@@ -136,4 +136,12 @@ export interface Document {
 	 * Absent when the document was built from a string rather than a file.
 	 */
 	digest?: string;
+	/**
+	 * The pages `maximumPages` left unopened, counted among those `keepPage`
+	 * wanted. Absent when the whole document was read.
+	 *
+	 * A reading cut at the bound otherwise looks exactly like a document that
+	 * ends there, and a consumer takes a partial extraction for a complete one.
+	 */
+	pagesUnread?: number;
 }

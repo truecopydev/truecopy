@@ -25,7 +25,12 @@ type Unarchivable =
 	/** The entry inflates to more than the caller allowed. A small archive can
 	 *  carry a very large member, and a reader that trusts the declared size
 	 *  hands a browser tab a gigabyte it never agreed to. */
-	| 'entry-too-big';
+	| 'entry-too-big'
+	/** The entry does not inflate to what the directory declared: its CRC-32 or
+	 *  its size disagrees. A damaged byte inside a stored entry is still valid
+	 *  XML, and a digit changed there reads as a figure the document never
+	 *  printed. */
+	| 'entry-corrupt';
 
 export class UnreadableArchive extends Error {
 	readonly reason: Unarchivable;
@@ -55,6 +60,7 @@ const MAXIMUM_COMMENT = 0xffff;
 interface Entry {
 	name: string;
 	method: number;
+	crc: number;
 	compressedSize: number;
 	uncompressedSize: number;
 	localHeaderOffset: number;
@@ -105,6 +111,7 @@ function entriesOf(bytes: Uint8Array, view: DataView): Entry[] {
 		entries.push({
 			name: names.decode(bytes.subarray(at + 46, at + 46 + nameLength)),
 			method: view.getUint16(at + 10, true),
+			crc: view.getUint32(at + 16, true),
 			compressedSize: view.getUint32(at + 20, true),
 			uncompressedSize: view.getUint32(at + 24, true),
 			localHeaderOffset: view.getUint32(at + 42, true)
@@ -162,6 +169,28 @@ async function inflate(data: Uint8Array, maximumBytes: number): Promise<Uint8Arr
 	return joined;
 }
 
+/** CRC-32 as the ZIP format computes it, one table built on first use. */
+let crcTable: Uint32Array | undefined;
+
+export function crc32(bytes: Uint8Array): number {
+	crcTable ??= Uint32Array.from({ length: 256 }, (_, index) => {
+		let crc = index;
+		for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+		return crc >>> 0;
+	});
+	let crc = 0xffffffff;
+	for (const byte of bytes) crc = crcTable[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+	return (crc ^ 0xffffffff) >>> 0;
+}
+
+/** The content, once it agrees with what the directory declared about it. */
+function checked(content: Uint8Array, entry: Entry): Uint8Array {
+	if (content.byteLength !== entry.uncompressedSize || crc32(content) !== entry.crc) {
+		throw new UnreadableArchive('entry-corrupt', 'This archive is damaged.');
+	}
+	return content;
+}
+
 /**
  * One named entry of a ZIP, decompressed, or a refusal that names the reason.
  *
@@ -187,7 +216,7 @@ export async function fileFromArchive(
 		if (data.byteLength > maximumBytes) {
 			throw new UnreadableArchive('entry-too-big', 'This archive holds more than expected.');
 		}
-		return data;
+		return checked(data, entry);
 	}
 	if (entry.method !== DEFLATED) {
 		throw new UnreadableArchive(
@@ -195,7 +224,7 @@ export async function fileFromArchive(
 			'This archive is compressed in a way this reader does not know.'
 		);
 	}
-	return inflate(data, maximumBytes);
+	return checked(await inflate(data, maximumBytes), entry);
 }
 
 /** Whether these bytes open like a ZIP. Two bytes, and it is what tells a

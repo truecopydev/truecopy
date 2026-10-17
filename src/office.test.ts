@@ -1,6 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { docxWithBody, docxWithText, odtWithBody, odtWithText } from './kit.js';
 import { documentFromDocx, documentFromOdt, OPENDOCUMENT_BODY, WORD_BODY } from './office.js';
+import { crc32 } from './zip.js';
+
+/**
+ * A stored archive with its text edited in place, every offset kept, and the
+ * CRC of each stored entry stamped again: the reader checks it, and a fixture
+ * that left the old one would test the checksum rather than the reader.
+ */
+function editedInPlace(bytes: Uint8Array, edit: (xml: string) => string): Uint8Array {
+	const xml = edit(new TextDecoder('latin1').decode(bytes));
+	const copy = Uint8Array.from(xml, (character) => character.charCodeAt(0));
+	const view = new DataView(copy.buffer);
+	for (let at = 0; at + 46 <= copy.byteLength; at++) {
+		if (view.getUint32(at, true) !== 0x02014b50 || view.getUint16(at + 10, true) !== 0) continue;
+		const local = view.getUint32(at + 42, true);
+		const from = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
+		const crc = crc32(copy.subarray(from, from + view.getUint32(at + 20, true)));
+		view.setUint32(at + 16, crc, true);
+		view.setUint32(local + 14, crc, true);
+	}
+	return copy;
+}
 
 const read = (bytes: Uint8Array, name = 'accord.docx') => documentFromDocx(bytes, name, 5_000_000);
 
@@ -167,9 +188,10 @@ describe('documentFromDocx', () => {
 		// closes what it opened - so the stored part is overwritten in place, which
 		// keeps every offset in the archive valid.
 		const bytes = await docxWithBody(`<w:p><w:r><w:t>${'A'.repeat(23)}`);
-		const xml = new TextDecoder('latin1').decode(bytes);
-		const cut = xml.replace('</w:body></w:document>', ' '.repeat(22));
-		const document = await read(Uint8Array.from(cut, (character) => character.charCodeAt(0)));
+		const cut = editedInPlace(bytes, (xml) =>
+			xml.replace('</w:body></w:document>', ' '.repeat(22))
+		);
+		const document = await read(cut);
 		expect(document.text.trim()).toBe('A'.repeat(23));
 	});
 
@@ -253,6 +275,31 @@ describe('documentFromOdt', () => {
 			[0, 'Total'],
 			[2, '1 800']
 		]);
+	});
+
+	it('refuses a span wider than any sheet rather than allocating it', async () => {
+		// Thirty bytes of markup asking for a billion columns: the grid is built
+		// from that number, so believing it would take the memory of the tab.
+		const wide = (reader: Promise<unknown>) =>
+			expect(reader).rejects.toMatchObject({
+				reason: 'entry-too-big'
+			});
+		await wide(
+			readOdt(
+				await odtWithBody(
+					'<table:table><table:table-row>' +
+						'<table:table-cell table:number-columns-spanned="999999999"><text:p>Total</text:p></table:table-cell>' +
+						'</table:table-row></table:table>'
+				)
+			)
+		);
+		await wide(
+			read(
+				await docxWithBody(
+					'<w:tbl><w:tr><w:tc><w:tcPr><w:gridSpan w:val="999999999"/></w:tcPr><w:p><w:r><w:t>A</w:t></w:r></w:p></w:tc></w:tr></w:tbl>'
+				)
+			)
+		);
 	});
 
 	it('writes a repeated empty cell once per column it stands for', async () => {
@@ -424,8 +471,8 @@ describe('documentFromOdt, when the body is not where it should be', () => {
 		// to returning an empty document for a file that plainly has one.
 		const bytes = await odtWithText(['Article 1']);
 		// Renamed in place, so every offset in the archive stays valid.
-		const xml = new TextDecoder('latin1').decode(bytes).replace('<office:body>', '<office:x0dy>');
-		const document = await readOdt(Uint8Array.from(xml, (character) => character.charCodeAt(0)));
+		const renamed = editedInPlace(bytes, (xml) => xml.replace('<office:body>', '<office:x0dy>'));
+		const document = await readOdt(renamed);
 		expect(document.text).toBe('Article 1');
 	});
 });
@@ -449,8 +496,8 @@ describe('documentFromOdt, on a file that stops in the middle', () => {
 		// overwritten in place, which keeps every offset in the archive valid.
 		const bytes = await odtWithBody('<text:p>Article 1</text:p><text:p');
 		const tail = '</office:text></office:body></office:document-content>';
-		const xml = new TextDecoder('latin1').decode(bytes).replace(tail, ' '.repeat(tail.length));
-		const document = await readOdt(Uint8Array.from(xml, (character) => character.charCodeAt(0)));
+		const cut = editedInPlace(bytes, (xml) => xml.replace(tail, ' '.repeat(tail.length)));
+		const document = await readOdt(cut);
 		expect(document.text).toBe('Article 1');
 	});
 
@@ -460,10 +507,8 @@ describe('documentFromOdt, on a file that stops in the middle', () => {
 		// overwritten in place, which keeps every offset in the archive valid.
 		const bytes = await odtWithBody('<text:p>Article 1</text:p>');
 		const closing = '</office:document-content>';
-		const xml = new TextDecoder('latin1')
-			.decode(bytes)
-			.replace(closing, ' '.repeat(closing.length));
-		const document = await readOdt(Uint8Array.from(xml, (character) => character.charCodeAt(0)));
+		const cut = editedInPlace(bytes, (xml) => xml.replace(closing, ' '.repeat(closing.length)));
+		const document = await readOdt(cut);
 		expect(document.text).toBe('Article 1');
 	});
 });

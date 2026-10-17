@@ -164,6 +164,7 @@ export const TOOLS = [
 				firstRowNumber: { type: 'integer' },
 				totalRows: { type: 'integer' },
 				more: { type: 'boolean' },
+				pagesUnread: { type: 'integer', minimum: 0 },
 				pages: {
 					type: 'array',
 					items: {
@@ -184,6 +185,7 @@ export const TOOLS = [
 				'firstRowNumber',
 				'totalRows',
 				'more',
+				'pagesUnread',
 				'pages',
 				'findings'
 			]
@@ -355,6 +357,7 @@ async function runReadTable(
 			firstRowNumber: cut.from,
 			totalRows: cut.total,
 			more: cut.more,
+			pagesUnread: table.document.pagesUnread ?? 0,
 			pages: table.document.pages.map((page, index) => ({
 				number: page.pageNumber,
 				boundaries: table.boundaries[index]
