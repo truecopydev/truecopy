@@ -46,6 +46,19 @@ export function numberedRows(rows: readonly (readonly string[])[], first = 0): s
 }
 
 /**
+ * How the cells of the cited rows are put together.
+ *
+ * `'joined'`, the default, puts a space between two cells, so a value the cut
+ * split across two of them is still found. It is also how two cells `12` and
+ * `345` become `12 345`, a thousands group that carries `12345`, a figure
+ * neither cell printed. `'apart'` keeps a ` | ` between cells and between rows:
+ * no number and no word is read across a cell, and a figure the cut split in
+ * two is no longer carried. A choice and not a new default, because it moves
+ * what a check accepts on documents whose cut splits numbers.
+ */
+export type CellJoin = 'joined' | 'apart';
+
+/**
  * The text of the rows a record cited, joined once.
  *
  * This is the ONLY source a value may be verified against. A number cited out
@@ -57,13 +70,15 @@ export function numberedRows(rows: readonly (readonly string[])[], first = 0): s
 export function citedText(
 	rows: readonly (readonly string[])[],
 	cited: readonly number[],
-	first = 0
+	first = 0,
+	cells: CellJoin = 'joined'
 ): string {
+	const glue = cells === 'apart' ? ' | ' : ' ';
 	return cited
 		.map((number) => rows[number - first])
 		.filter((row): row is readonly string[] => row !== undefined)
-		.map((row) => row.join(' '))
-		.join(' ');
+		.map((row) => row.join(glue))
+		.join(glue);
 }
 
 /**

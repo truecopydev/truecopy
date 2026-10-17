@@ -114,7 +114,7 @@ export type {
 } from './schema.js';
 export { conforms, schemaOf, validate, validateWith } from './schema.js';
 
-export { carriesNumber, carriesText, citedText, numberedRows } from './cite.js';
+export { carriesNumber, carriesText, citedText, numberedRows, type CellJoin } from './cite.js';
 
 export type { FigureOptions, Passage, PassageOptions, Extent } from './anchor.js';
 export { anchoredPassage, foldAnchor, missingFigures, proofSpan } from './anchor.js';
