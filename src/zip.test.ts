@@ -120,6 +120,25 @@ describe('fileFromArchive', () => {
 		});
 		expect(await reasonOf(compressed, BODY, 10)).toBe('entry-too-big');
 	});
+
+	it('refuses a stored entry whose bytes no longer match their CRC', async () => {
+		// One digit changed inside a stored part is still well formed XML: only
+		// the checksum tells that the figure is not the one the file was written with.
+		const damaged = (await archive()).slice();
+		const at = new TextDecoder('latin1').decode(damaged).indexOf('Article 1') + 8;
+		damaged[at] = '7'.charCodeAt(0);
+		expect(await reasonOf(damaged)).toBe('entry-corrupt');
+	});
+
+	it('refuses an entry whose declared CRC or size disagrees with its content', async () => {
+		expect(await reasonOf(withField(await archive(), CENTRAL, 16, 12345, 32))).toBe(
+			'entry-corrupt'
+		);
+		const compressed = await docxWithBody('<w:p><w:r><w:t>Article 1</w:t></w:r></w:p>', {
+			compress: true
+		});
+		expect(await reasonOf(withField(compressed, CENTRAL, 24, 3, 32))).toBe('entry-corrupt');
+	});
 });
 
 describe('looksLikeArchive', () => {

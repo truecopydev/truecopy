@@ -20,7 +20,7 @@
 
 import type { Document, PositionedItem, Row, TextPage } from './document.js';
 import { columnBoundaries, documentFrom, gapFor } from './layout.js';
-import { fileFromArchive } from './zip.js';
+import { fileFromArchive, UnreadableArchive } from './zip.js';
 
 /** Where the format puts the body of a Word document. Fixed by the standard, so
  *  there is nothing to search for and nothing to guess when it is absent. */
@@ -182,10 +182,18 @@ class Body {
 	}
 }
 
+/** The widest grid a spreadsheet application lets a sheet have. A span is the
+ *  file's word and drives an allocation, so a few bytes saying a cell covers a
+ *  billion columns would otherwise take the memory of the tab. */
+const MAXIMUM_COLUMNS = 16_384;
+
 /** A row of cells laid back onto its grid: one field per column, and a column
  *  the document left empty stays an empty field rather than closing the gap. */
 function fieldsOf(cells: Cell[]): string[] {
 	const width = cells.reduce((total, cell) => Math.max(total, cell.column + cell.span), 0);
+	if (width > MAXIMUM_COLUMNS) {
+		throw new UnreadableArchive('entry-too-big', 'This table is wider than any document prints.');
+	}
 	const fields: string[] = Array.from({ length: width }, () => '');
 	for (const cell of cells) fields[cell.column] = cell.text.replace(/\s+/g, ' ').trim();
 	return fields;

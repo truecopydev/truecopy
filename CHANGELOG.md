@@ -9,6 +9,16 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An archive entry that does not match its CRC-32 or its declared size is refused (`entry-corrupt`).** A damaged byte inside a stored `.docx` or `.odt` part is still well formed XML, so a changed digit read as a figure the document never printed. `openDocument` now refuses such a file as `not-opened`. A file an editor wrote is untouched: no reading moves.
+- **A PDF read stopped by the deadline now stops the engine too.** `withDeadline` only abandoned the wait: the loading task kept running, and a caller that retried piled engines up. The loading task is destroyed on expiry, and no further page is opened. `withDeadline` takes an optional `onExpire` callback for a caller bounding its own work the same way.
+- **A table wider than any spreadsheet (16 384 columns) is refused as `too-big`** rather than allocated. A span in an `.odt` or a `.docx` is the file's word and sized the grid directly, so a few bytes could take the memory of a tab.
+
+### Added
+
+- **`document.pagesUnread` counts the pages `maximumPages` left unopened**, among those `keepPage` wanted, and is absent when the whole PDF was read. A reading cut at the bound looked exactly like a document ending there. `explainDocument` (and so the command and `read_table`) says the reading is partial, and `read_table` returns `pagesUnread` beside `more`, which speaks of rows only. No reading moves: pages, rows and cells are untouched.
+
 ## [2.0.15] - 2026-10-14
 
 ### Added

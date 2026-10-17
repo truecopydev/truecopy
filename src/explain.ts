@@ -234,6 +234,11 @@ export function explainDocument(document: Document, options: ExplainOptions = {}
 	return [
 		`truecopy - ${document.name}`,
 		`${document.origin}, ${document.pages.length} page(s), ${rows} row(s)`,
+		...(document.pagesUnread === undefined
+			? []
+			: [
+					`${document.pagesUnread} more page(s) left unread past maximumPages: this reading is partial.`
+				]),
 		...pages.flatMap((page) => pageLines(page, options, document.origin))
 	].join('\n');
 }
