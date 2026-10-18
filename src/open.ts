@@ -241,8 +241,21 @@ export async function withDeadline<T>(
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const tooLong = new Promise<never>((_, reject) => {
 		timer = setTimeout(() => {
-			onExpire?.();
-			reject(new UnreadableDocument('too-slow', 'This document does not finish opening.'));
+			// A cancel that throws must not take the refusal with it: the caller
+			// would wait for ever, and under Node the throw would end the process.
+			let failure: unknown;
+			try {
+				onExpire?.();
+			} catch (error) {
+				failure = error;
+			}
+			reject(
+				new UnreadableDocument(
+					'too-slow',
+					'This document does not finish opening.',
+					failure === undefined ? undefined : { cause: failure }
+				)
+			);
 		}, milliseconds);
 	});
 	try {
@@ -479,6 +492,13 @@ async function loadDefaultEngine(): Promise<PdfEngine> {
 	}
 }
 
+/** How many page numbers a PDF read walks before it lets a timer run. */
+const YIELD_EVERY_PAGES = 4096;
+
+function nextTurn(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 /** What the deadline needs to stop a PDF read rather than walk away from it. */
 interface PdfRun {
 	expired: boolean;
@@ -505,6 +525,10 @@ async function pagesFromPdf(
 	 * OpenOptions, where that trade is weighed.
 	 */
 	const pdfjs = options.pdfjs ?? (await loadDefaultEngine());
+	// The engine may arrive after the deadline: a task created now would have
+	// nobody left to destroy it, and every retry would add one.
+	if (run.expired)
+		throw new UnreadableDocument('too-slow', 'This document does not finish opening.');
 
 	/*
 	 * The worker exists only in a browser, and only when the caller resolved its
@@ -534,32 +558,63 @@ async function pagesFromPdf(
 	const stop = stopperOf(task);
 	run.stop = stop;
 	try {
-		const pdf = await task.promise;
-		const pages: TextPage[] = [];
-		const wanted = options.keepPage ?? (() => true);
-		// The cap counts the pages OPENED, so it bounds the work whichever pages
-		// are asked for. Skipping is what costs nothing: a page that is never
-		// opened is never laid out, and that is the whole saving.
-		let pagesUnread = 0;
-		for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-			if (run.expired) break;
-			if (!wanted(pageNumber)) continue;
-			if (pages.length >= limits.maximumPages) {
-				pagesUnread += 1;
-				continue;
-			}
-			const page = await pdf.getPage(pageNumber);
-			const viewport = page.getViewport({ scale: 1 });
-			const content = await page.getTextContent();
-			const items = positionedItems(content.items);
-			pages.push(
-				pageFrom(pageNumber, viewport.width, viewport.height, items, options.superscripts ?? false)
-			);
-			page.cleanup();
-		}
+		const { pages, pagesUnread } = await readPages(await task.promise, limits, options, run);
 		const document = documentFrom(pages, 'pdf', name);
 		return pagesUnread === 0 ? document : { ...document, pagesUnread };
 	} finally {
 		await stop();
 	}
+}
+
+/**
+ * Open the pages a read wants, up to the cap, and count those the cap left.
+ * The cap counts the pages OPENED, so it bounds the work whichever pages are
+ * asked for. Skipping is what costs nothing: a page that is never opened is
+ * never laid out, and that is the whole saving.
+ */
+async function readPages(
+	pdf: PdfFile,
+	limits: Limits,
+	options: OpenOptions,
+	run: PdfRun
+): Promise<{ pages: TextPage[]; pagesUnread: number }> {
+	const pages: TextPage[] = [];
+	const wanted = options.keepPage ?? (() => true);
+	let pagesUnread = 0;
+	for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+		// A page count is whatever the file declares, so a skipping loop can
+		// run long without awaiting anything: let the deadline in now and then.
+		if (pageNumber % YIELD_EVERY_PAGES === 0) await nextTurn();
+		if (run.expired) break;
+		const full = pages.length >= limits.maximumPages;
+		if (full && options.keepPage === undefined) {
+			return { pages, pagesUnread: pdf.numPages - pageNumber + 1 };
+		}
+		if (!wanted(pageNumber)) continue;
+		if (full) {
+			pagesUnread += 1;
+			continue;
+		}
+		pages.push(await textPageOf(pdf, pageNumber, options.superscripts ?? false));
+	}
+	return { pages, pagesUnread };
+}
+
+async function textPageOf(
+	pdf: PdfFile,
+	pageNumber: number,
+	superscripts: boolean
+): Promise<TextPage> {
+	const page = await pdf.getPage(pageNumber);
+	const viewport = page.getViewport({ scale: 1 });
+	const content = await page.getTextContent();
+	const text = pageFrom(
+		pageNumber,
+		viewport.width,
+		viewport.height,
+		positionedItems(content.items),
+		superscripts
+	);
+	page.cleanup();
+	return text;
 }

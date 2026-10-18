@@ -17,6 +17,16 @@ describe('withDeadline', () => {
 		await expect(withDeadline(Promise.resolve('read'), 50)).resolves.toBe('read');
 	});
 
+	it('still refuses when the cancel it was given throws', async () => {
+		// A throw inside the timer would escape the promise: the caller would wait
+		// for ever, and under Node the process would end.
+		const broken = new Error('cannot cancel');
+		const refused = withDeadline(new Promise<string>(() => {}), 5, () => {
+			throw broken;
+		});
+		await expect(refused).rejects.toMatchObject({ reason: 'too-slow', cause: broken });
+	});
+
 	it('gives up on a read that never returns', async () => {
 		// Without this bound the screen stays on "reading the file..." with no
 		// button, no message and no way out.
@@ -304,6 +314,42 @@ describe('the reason a document was refused', () => {
 		expect(opened).toBe(after);
 		expect(opened).toBeLessThan(50);
 		expect(destroyed).toBe(1);
+	});
+
+	it('counts the pages left past the cap without walking them', async () => {
+		// The page count is what the file declares. Walking a billion page
+		// numbers past a cap of one would block the thread, deadline included.
+		const declared = 1_000_000_000;
+		const huge = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: declared,
+					getPage: async () => ({
+						getViewport: () => ({ width: 600, height: 800 }),
+						getTextContent: async () => ({
+							items: [{ str: 'a', transform: [1, 0, 0, 1, 10, 700], width: 5 }]
+						}),
+						cleanup: () => undefined
+					})
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'huge.pdf', {
+			type: 'application/pdf'
+		});
+		const document = await openDocument(file, { pdfjs: huge, maximumPages: 1 });
+		expect(document.pagesUnread).toBe(declared - 1);
+
+		// A caller choosing pages still has its choice asked page by page, so
+		// the walk lets the deadline in rather than hold the thread.
+		const refused = await refusal(file, {
+			pdfjs: huge,
+			maximumPages: 1,
+			keepPage: () => false,
+			deadlineMilliseconds: 20
+		});
+		expect(refused.reason).toBe('too-slow');
 	});
 
 	it('names a read that ran out of time', async () => {
