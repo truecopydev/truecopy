@@ -316,6 +316,69 @@ describe('the reason a document was refused', () => {
 		expect(destroyed).toBe(1);
 	});
 
+	it('asks nothing more of a page that arrives after the deadline', async () => {
+		// An engine whose destroy() leaves the page in flight to resolve anyway.
+		let laidOut = 0;
+		let cleaned = 0;
+		const late = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: async () => {
+						await new Promise((resolve) => setTimeout(resolve, 20));
+						return {
+							getViewport: () => ({ width: 600, height: 800 }),
+							getTextContent: async () => {
+								laidOut += 1;
+								return { items: [] };
+							},
+							cleanup: () => {
+								cleaned += 1;
+							}
+						};
+					}
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'late-page.pdf', {
+			type: 'application/pdf'
+		});
+		expect((await refusal(file, { pdfjs: late, deadlineMilliseconds: 5 })).reason).toBe('too-slow');
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		expect(laidOut).toBe(0);
+		expect(cleaned).toBe(1);
+	});
+
+	it('refuses a page whose text arrives after the deadline', async () => {
+		let viewed = 0;
+		const late = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: async () => ({
+						getViewport: () => {
+							viewed += 1;
+							return { width: 600, height: 800 };
+						},
+						getTextContent: async () => {
+							await new Promise((resolve) => setTimeout(resolve, 20));
+							return { items: [] };
+						},
+						cleanup: () => undefined
+					})
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'late-text.pdf', {
+			type: 'application/pdf'
+		});
+		expect((await refusal(file, { pdfjs: late, deadlineMilliseconds: 5 })).reason).toBe('too-slow');
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		expect(viewed).toBe(1);
+	});
+
 	it('counts the pages left past the cap without walking them', async () => {
 		// The page count is what the file declares. Walking a billion page
 		// numbers past a cap of one would block the thread, deadline included.

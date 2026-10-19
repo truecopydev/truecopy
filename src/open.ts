@@ -595,19 +595,29 @@ async function readPages(
 			pagesUnread += 1;
 			continue;
 		}
-		pages.push(await textPageOf(pdf, pageNumber, options.superscripts ?? false));
+		pages.push(await textPageOf(pdf, pageNumber, options.superscripts ?? false, run));
 	}
 	return { pages, pagesUnread };
+}
+
+function abandoned(page: PdfPage): never {
+	page.cleanup();
+	throw new UnreadableDocument('too-slow', 'This document does not finish opening.');
 }
 
 async function textPageOf(
 	pdf: PdfFile,
 	pageNumber: number,
-	superscripts: boolean
+	superscripts: boolean,
+	run: PdfRun
 ): Promise<TextPage> {
+	// An engine whose cancel does not reject what is in flight still answers
+	// after the refusal: each answer is checked before more work is asked of it.
 	const page = await pdf.getPage(pageNumber);
+	if (run.expired) return abandoned(page);
 	const viewport = page.getViewport({ scale: 1 });
 	const content = await page.getTextContent();
+	if (run.expired) return abandoned(page);
 	const text = pageFrom(
 		pageNumber,
 		viewport.width,
