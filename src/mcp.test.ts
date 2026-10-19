@@ -404,6 +404,50 @@ describe('check_citations', () => {
 	});
 });
 
+describe('a reading named by its digest', () => {
+	/** The same path, answering a different file from the second call on. */
+	function replacedAfterFirstOpen(first: string, then: string): McpCapabilities {
+		let opened = 0;
+		return serving(async () => pasted('s.txt', opened++ === 0 ? first : then));
+	}
+
+	it('names the bytes it read, on both tools', async () => {
+		const capabilities = serving(pasted('s.txt', STATEMENT));
+		const read = await call('read_table', { path: 's.txt' }, capabilities);
+		const digest = (read.structuredContent as { digest: string }).digest;
+		expect(digest).toMatch(/^[0-9a-f]{64}$/);
+		const check = await call(
+			'check_citations',
+			{ path: 's.txt', digest, records: [{ rows: [1], values: { amount: 12.4 } }] },
+			capabilities
+		);
+		expect(check.isError).toBeUndefined();
+		expect(check.structuredContent).toMatchObject({ digest, carried: 1 });
+	});
+
+	it('refuses a second page of a file replaced since the first', async () => {
+		const capabilities = replacedAfterFirstOpen(STATEMENT, STATEMENT.replace('12,40', '99,99'));
+		const first = await call('read_table', { path: 's.txt', limit: 1 }, capabilities);
+		const digest = (first.structuredContent as { digest: string }).digest;
+		const next = await call('read_table', { path: 's.txt', from: 2, digest }, capabilities);
+		expect(next.isError).toBe(true);
+		expect(next.content[0].text).toContain('has changed since the reading');
+	});
+
+	it('refuses to check citations against rows the file no longer has', async () => {
+		const capabilities = replacedAfterFirstOpen(STATEMENT, STATEMENT.replace('12,40', '99,99'));
+		const first = await call('read_table', { path: 's.txt' }, capabilities);
+		const digest = (first.structuredContent as { digest: string }).digest;
+		const check = await call(
+			'check_citations',
+			{ path: 's.txt', digest, records: [{ rows: [1], values: { amount: 99.99 } }] },
+			capabilities
+		);
+		expect(check.isError).toBe(true);
+		expect(check.structuredContent).toBeUndefined();
+	});
+});
+
 describe('the schema the server advertises', () => {
 	it('offers every origin a reading can carry, and no other', () => {
 		// Declared twice - the type and the schema - and the day `docx` was added

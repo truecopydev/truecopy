@@ -18,6 +18,7 @@ release PR is what stamps them.
 ### Added
 
 - **`document.pagesUnread` counts the pages `maximumPages` left unopened**, among those `keepPage` wanted, and is absent when the whole PDF was read. A reading cut at the bound looked exactly like a document ending there. `explainDocument` (and so the command and `read_table`) says the reading is partial, and `read_table` returns `pagesUnread` beside `more`, which speaks of rows only. No reading moves: pages, rows and cells are untouched.
+- **`read_table` and `check_citations` return the `digest` of the bytes they read, and take it back.** Each call opens the path again, so a second page or a check could land on a file replaced in between, with row numbers that belonged to the first. Given a `digest`, either tool refuses a file that no longer has it. Optional: a caller that sends none is answered as before. No reading moves.
 
 ## [2.0.15] - 2026-10-14
 

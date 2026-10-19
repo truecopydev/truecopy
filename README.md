@@ -457,7 +457,7 @@ An agent holding a terminal already has the command above, and one that can impo
 Two tools, and the second is the one that is hard to get anywhere else:
 
 - **`read_table`** turns a PDF, a CSV, a TSV or a saved paste into rows: the cut, how often each column is filled, the rows numbered, and what the reading **could not vouch for**. Bounded at 200 rows a call, and what it left is counted rather than dropped.
-- **`check_citations`** takes the records a model claims to have read, each citing the rows it came from, and says which values the cited rows do not print. A JSON number is checked as a figure with the document's own decimal mark, a JSON string as its words in order. It answers "was this read or invented", never "is this complete", and it says so.
+- **`check_citations`** takes the records a model claims to have read, each citing the rows it came from, and says which values the cited rows do not print. A JSON number is checked as a figure with the document's own decimal mark, a JSON string as its words in order. It answers "was this read or invented", never "is this complete", and it says so. Both return the `digest` of the bytes read; passed back, it makes a later call refuse a file changed in between.
 
 **Nothing is uploaded, because there is nowhere to upload it to.** The server runs where the file already is, makes no network call, and opens no file it was not handed. A statement, a payslip and a career record are the worst documents there are to send anywhere, and a server has nothing to compute on them that this does not compute in place. Set `TRUECOPY_MCP_ROOT` and it opens nothing outside that directory, symbolic links resolved before the check.
 

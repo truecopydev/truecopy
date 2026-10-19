@@ -104,6 +104,13 @@ const PAGES_FIELD = {
 		'How many pages to open. Defaults to 40, which bounds a runaway read rather than describing your document: raise it for an annual report.'
 } as const;
 
+const DIGEST_FIELD = {
+	type: 'string',
+	pattern: '^[0-9a-f]{64}$',
+	description:
+		'The digest read_table returned for this file. When given, the call is refused if the file has changed since: its rows would no longer be the ones numbered.'
+} as const;
+
 const FINDING_SCHEMA = {
 	type: 'object',
 	properties: {
@@ -150,7 +157,8 @@ export const TOOLS = [
 					maximum: MAXIMUM_ROWS,
 					description: `Rows to return, at most ${MAXIMUM_ROWS}. Defaults to ${DEFAULT_ROWS}. What is left is counted and named, never silently dropped.`
 				},
-				maximumPages: PAGES_FIELD
+				maximumPages: PAGES_FIELD,
+				digest: DIGEST_FIELD
 			},
 			required: ['path'],
 			additionalProperties: false
@@ -159,6 +167,7 @@ export const TOOLS = [
 			type: 'object',
 			properties: {
 				file: { type: 'string' },
+				digest: { type: 'string' },
 				origin: { type: 'string', enum: [...ORIGINS] },
 				rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
 				firstRowNumber: { type: 'integer' },
@@ -201,7 +210,7 @@ export const TOOLS = [
 		name: 'check_citations',
 		title: 'Check values against the rows they were read from',
 		description:
-			'Verify that every value really appears in the rows it cites. A model turning cells into records fails one visible way, it misses a record, and one invisible way: it returns a plausible value the document never printed - a town deduced from a postcode, a rounded figure, a recomposed date - which reads exactly like a successful extraction. Each value is looked up in the cited rows and NOWHERE else, so nothing can be produced, only pointed at. A JSON number is checked as a figure, a JSON string as its words in order. Cite the row numbers read_table returned, for the same file and the same maximumPages: a different page bound is a different reading, and its rows are numbered differently.',
+			'Verify that every value really appears in the rows it cites. A model turning cells into records fails one visible way, it misses a record, and one invisible way: it returns a plausible value the document never printed - a town deduced from a postcode, a rounded figure, a recomposed date - which reads exactly like a successful extraction. Each value is looked up in the cited rows and NOWHERE else, so nothing can be produced, only pointed at. A JSON number is checked as a figure, a JSON string as its words in order. Cite the row numbers read_table returned, for the same file and the same maximumPages: a different page bound is a different reading, and its rows are numbered differently. Pass back the digest read_table returned, and a file changed since is refused rather than checked against rows it no longer has.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -229,7 +238,8 @@ export const TOOLS = [
 						additionalProperties: false
 					}
 				},
-				maximumPages: PAGES_FIELD
+				maximumPages: PAGES_FIELD,
+				digest: DIGEST_FIELD
 			},
 			required: ['path', 'records'],
 			additionalProperties: false
@@ -238,6 +248,7 @@ export const TOOLS = [
 			type: 'object',
 			properties: {
 				file: { type: 'string' },
+				digest: { type: 'string' },
 				checked: { type: 'integer' },
 				carried: { type: 'integer' },
 				records: {
@@ -302,6 +313,21 @@ async function reading(
 }
 
 /**
+ * The refusal owed to a call made against an earlier version of the file, or
+ * null. Every call opens the path again, so a second page or a check could
+ * otherwise land on a file replaced in between, with row numbers that belong
+ * to the first one. A caller that sends no digest has asked for no such check.
+ */
+function changedSince(args: Record<string, unknown>, table: Table): Outcome | null {
+	const expected = stringAt(args, 'digest');
+	if (expected === null || expected === table.document.digest) return null;
+	return {
+		text: `${table.document.name} has changed since the reading of digest ${expected}: its rows are no longer the ones numbered. Call read_table again.`,
+		failed: true
+	};
+}
+
+/**
  * The rows a call returns, and what it leaves behind.
  *
  * Bounded because a document has no bound and a context window does; ANNOUNCED
@@ -339,6 +365,8 @@ async function runReadTable(
 	if (path === null) return { text: 'read_table needs a path to a file.', failed: true };
 
 	const table = await reading(args, capabilities, path);
+	const changed = changedSince(args, table);
+	if (changed !== null) return changed;
 	const cut = windowOf(table, args);
 	/*
 	 * The listing explain would print is suppressed here and printed below
@@ -352,6 +380,7 @@ async function runReadTable(
 		text: [report, rowBlock(cut), describeDoubts(table.warnings)].join('\n\n'),
 		data: {
 			file: table.document.name,
+			digest: table.document.digest,
 			origin: table.document.origin,
 			rows: cut.rows,
 			firstRowNumber: cut.from,
@@ -465,6 +494,8 @@ async function runCheckCitations(
 	}
 
 	const table = await reading(args, capabilities, path);
+	const changed = changedSince(args, table);
+	if (changed !== null) return changed;
 	const mark = decimalMarkOf(table.document.text);
 	const checked = claims.map((claim, index) => checkOne(claim, index, table.rows, mark));
 
@@ -480,6 +511,7 @@ async function runCheckCitations(
 		text: citationText(table.document.name, total, missing),
 		data: {
 			file: table.document.name,
+			digest: table.document.digest,
 			checked: total,
 			carried: total - missing.length,
 			records: checked
