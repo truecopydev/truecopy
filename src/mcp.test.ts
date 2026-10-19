@@ -104,12 +104,17 @@ describe('the protocol', () => {
 		});
 	});
 
-	it('lists both tools, with how long the list may be held', async () => {
+	it('lists the four tools, with how long the list may be held', async () => {
 		const result = (await ask('tools/list'))?.result as {
 			tools: { name: string }[];
 			ttlMs: number;
 		};
-		expect(result.tools.map((tool) => tool.name)).toEqual(['read_table', 'check_citations']);
+		expect(result.tools.map((tool) => tool.name)).toEqual([
+			'read_table',
+			'find_amounts',
+			'find_dates',
+			'check_citations'
+		]);
 		expect(result.ttlMs).toBeGreaterThan(0);
 	});
 
@@ -154,8 +159,10 @@ describe('every tool description', () => {
 	it('says what the tool does not prove, and not only what it does', () => {
 		// The description is the prompt a host puts in front of a model. One that
 		// says "reads tables" and stops has taught the opposite of this library.
-		const [read, check] = TOOLS;
+		const [read, amounts, dates, check] = TOOLS;
 		expect(read.description).toContain('NOT a promise that the reading is right');
+		expect(amounts.description).toContain('reliable only means nothing looked wrong');
+		expect(dates.description).toContain('STATED, never guessed');
 		expect(check.description).toContain('NOWHERE else');
 	});
 
@@ -284,8 +291,10 @@ describe('read_table', () => {
 			throw new Error('ENOENT: no such file');
 		});
 		const result = await call('read_table', { path: '/nowhere.pdf' }, missing);
-		expect(result.content[0].text).toBe('could not read that file: ENOENT: no such file');
-		expect(result.structuredContent).toBeUndefined();
+		expect(result.content[0].text).toBe(
+			'verdict: unreadable - could not read that file: ENOENT: no such file'
+		);
+		expect(result.structuredContent).toEqual({ verdict: 'unreadable' });
 	});
 
 	it('reports a rejection that is not an Error rather than crashing on it', async () => {
@@ -293,7 +302,7 @@ describe('read_table', () => {
 			throw 'denied';
 		});
 		expect((await call('read_table', { path: '/x' }, odd)).content[0].text).toBe(
-			'could not read that file: denied'
+			'verdict: unreadable - could not read that file: denied'
 		);
 	});
 });
@@ -407,5 +416,167 @@ describe('the schema the server advertises', () => {
 		const read = TOOLS.find((tool) => tool.name === 'read_table');
 		const origin = read?.outputSchema.properties.origin;
 		expect(origin).toEqual({ type: 'string', enum: [...ORIGINS] });
+	});
+});
+
+describe('the verdict', () => {
+	it('opens a clean reading on reliable, and says what reliable is not', async () => {
+		const result = await call(
+			'read_table',
+			{ path: 'statement.txt' },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.verdict).toBe('reliable');
+		expect(result.content[0].text).toContain('verdict: reliable');
+		expect(result.content[0].text).toContain('not the same as "this reading is right"');
+	});
+
+	it('is doubtful as soon as one thing looked wrong', async () => {
+		const result = await call(
+			'read_table',
+			{ path: 'prose.txt' },
+			serving(pasted('prose.txt', 'one line of prose\nand another one'))
+		);
+		expect(result.structuredContent?.verdict).toBe('doubtful');
+		expect(result.content[0].text).toContain('verdict: doubtful');
+	});
+
+	it('is unreadable when the file did not open, with the reason', async () => {
+		const result = await call(
+			'find_amounts',
+			{ path: 'broken.pdf' },
+			serving(new File(['this is not a PDF at all'], 'broken.pdf', { type: 'application/pdf' }))
+		);
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toMatch(/^verdict: unreadable - /);
+		expect(result.structuredContent?.verdict).toBe('unreadable');
+	});
+
+	it('travels with every tool that reads', async () => {
+		const serve = serving(pasted('statement.txt', STATEMENT));
+		for (const name of ['read_table', 'find_amounts', 'find_dates']) {
+			const result = await call(name, { path: 'statement.txt' }, serve);
+			expect(result.structuredContent?.verdict).toBe('reliable');
+		}
+	});
+});
+
+describe('find_amounts', () => {
+	it('finds the sums of money, where the page printed them', async () => {
+		const result = await call(
+			'find_amounts',
+			{ path: 'statement.txt' },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.amounts).toEqual([
+			{ row: 1, column: 3, written: '12,40', value: 12.4 },
+			{ row: 2, column: 3, written: '750,00', value: 750 },
+			{ row: 3, column: 3, written: '68,00', value: 68 }
+		]);
+		expect(result.structuredContent?.decimals).toBe(2);
+		expect(result.content[0].text).toContain('row 2, column 3: 750,00 -> 750');
+		expect(result.content[0].text).toContain('What it means');
+	});
+
+	it('takes every number when asked for no decimals at all', async () => {
+		const result = await call(
+			'find_amounts',
+			{ path: 'statement.txt', decimals: 0 },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		const amounts = result.structuredContent?.amounts as { row: number; written: string }[];
+		expect(amounts.length).toBeGreaterThan(3);
+		expect(amounts.some((found) => found.written === '750,00')).toBe(true);
+		expect(result.structuredContent?.decimals).toBe(0);
+	});
+
+	it('finds nothing when the page writes its figures with other decimals', async () => {
+		const result = await call(
+			'find_amounts',
+			{ path: 'statement.txt', decimals: 1 },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.amounts).toEqual([]);
+		expect(result.structuredContent?.decimals).toBe(1);
+		expect(result.content[0].text).toContain('0 figure(s) written with 1 decimal(s)');
+	});
+
+	it('falls back to two decimals when the number of decimals is not one', async () => {
+		// A host that validates against the schema never sends this; one that
+		// does not is exactly the one whose mistakes have to be answered.
+		const result = await call(
+			'find_amounts',
+			{ path: 'statement.txt', decimals: 1.5 },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.decimals).toBe(2);
+	});
+
+	it('names the rows it did not look in', async () => {
+		const result = await call(
+			'find_amounts',
+			{ path: 'statement.txt', limit: 2 },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.more).toBe(true);
+		expect(result.content[0].text).toContain(
+			'1 more row(s) not looked in. Call find_amounts again with from: 3'
+		);
+	});
+
+	it('needs a path', async () => {
+		const result = await call('find_amounts', {}, serving(pasted('x.txt', 'a')));
+		expect(result.isError).toBe(true);
+	});
+});
+
+describe('find_dates', () => {
+	it('finds the dates in the order given, where the page printed them', async () => {
+		const result = await call(
+			'find_dates',
+			{ path: 'statement.txt' },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.dates).toEqual([
+			{ row: 1, column: 1, written: '02/05/2026', date: '2026-05-02' },
+			{ row: 2, column: 1, written: '03/05/2026', date: '2026-05-03' },
+			{ row: 3, column: 1, written: '05/05/2026', date: '2026-05-05' }
+		]);
+		expect(result.content[0].text).toContain('read as DMY');
+	});
+
+	it('reads the same digits the other way round when told to', async () => {
+		const result = await call(
+			'find_dates',
+			{ path: 'statement.txt', dateOrder: 'MDY' },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		const dates = result.structuredContent?.dates as { date: string }[];
+		expect(dates[0].date).toBe('2026-02-05');
+	});
+
+	it('dates a row that prints no year only when the year is given', async () => {
+		const serve = serving(pasted('short.txt', '02/05;CARTE AMAZON;12,40'));
+		const without = await call('find_dates', { path: 'short.txt' }, serve);
+		expect(without.structuredContent?.dates).toEqual([]);
+		const withYear = await call('find_dates', { path: 'short.txt', year: 2026 }, serve);
+		expect(withYear.structuredContent?.dates).toEqual([
+			{ row: 1, column: 1, written: '02/05', date: '2026-05-02' }
+		]);
+	});
+
+	it('says when the window starts past the last row', async () => {
+		const result = await call(
+			'find_dates',
+			{ path: 'statement.txt', from: 9 },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.dates).toEqual([]);
+		expect(result.content[0].text).toContain('no row at 9: this reading has 3 row(s)');
+	});
+
+	it('needs a path', async () => {
+		const result = await call('find_dates', {}, serving(pasted('x.txt', 'a')));
+		expect(result.isError).toBe(true);
 	});
 });

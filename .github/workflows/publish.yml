@@ -122,3 +122,14 @@ jobs:
           # publishes, a few times a month.
           NPM_CONFIG_LOGLEVEL: verbose
         run: npm publish --provenance --access public
+
+  # The MCP registry entry, once npm serves the version. Same tag, same
+  # repository claim; `mcp-registry.yml` says why it is called and not triggered.
+  registry:
+    needs: publish
+    uses: ./.github/workflows/mcp-registry.yml
+    with:
+      tag: ${{ inputs.tag }}
+    permissions:
+      contents: read
+      id-token: write
