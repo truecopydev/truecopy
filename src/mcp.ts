@@ -412,6 +412,7 @@ export const TOOLS = [
 			type: 'object',
 			properties: {
 				file: { type: 'string' },
+				verdict: VERDICT_FIELD,
 				checked: { type: 'integer' },
 				carried: { type: 'integer' },
 				records: {
@@ -434,7 +435,7 @@ export const TOOLS = [
 					}
 				}
 			},
-			required: ['file', 'checked', 'carried', 'records']
+			required: ['file', 'verdict', 'checked', 'carried', 'records']
 		},
 		annotations: READ_ONLY
 	}
@@ -458,6 +459,38 @@ function stringAt(args: Record<string, unknown>, name: string): string | null {
 function integerAt(args: Record<string, unknown>, name: string): number | null {
 	const value = args[name];
 	return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
+}
+
+/**
+ * A whole number within the bounds its schema states: the default when absent,
+ * null when what came is neither. Null is ANSWERED, never rounded or dropped:
+ * `decimals: 2.5` read as 2, or a year out of range read as no year, returns
+ * plausible figures under a `reliable` verdict, which is the one failure this
+ * server exists to prevent.
+ */
+function boundedAt(
+	args: Record<string, unknown>,
+	name: string,
+	fallback: number | undefined,
+	lowest: number,
+	highest: number
+): number | undefined | null {
+	const value = args[name] ?? fallback;
+	if (value === undefined) return undefined;
+	return typeof value === 'number' && Number.isInteger(value) && value >= lowest && value <= highest
+		? value
+		: null;
+}
+
+/** The order of day and month, stated or defaulted, and never read off a typo. */
+function dateOrderAt(args: Record<string, unknown>): 'DMY' | 'MDY' | null {
+	const value = args.dateOrder ?? 'DMY';
+	return value === 'DMY' || value === 'MDY' ? value : null;
+}
+
+/** An argument the schema does not admit is refused by name, so the caller fixes the call. */
+function badArgument(tool: string, name: string, expected: string): Outcome {
+	return { text: `${tool}: ${name} must be ${expected}.`, failed: true };
 }
 
 /** The reading, once, for whichever tool asked. */
@@ -595,13 +628,6 @@ function foundData(table: Table, cut: ReturnType<typeof windowOf>, own: object) 
 	};
 }
 
-/** The decimals asked for, 0 standing for "every number". */
-function decimalsAt(args: Record<string, unknown>): number | undefined {
-	const value = args.decimals;
-	if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return 2;
-	return value === 0 ? undefined : value;
-}
-
 async function runFindAmounts(
 	args: Record<string, unknown>,
 	capabilities: McpCapabilities
@@ -609,20 +635,22 @@ async function runFindAmounts(
 	const path = stringAt(args, 'path');
 	if (path === null) return { text: 'find_amounts needs a path to a file.', failed: true };
 
-	const decimals = decimalsAt(args);
+	const decimals = boundedAt(args, 'decimals', 2, 0, 6);
+	if (decimals === null) {
+		return badArgument('find_amounts', 'decimals', 'a whole number from 0 to 6');
+	}
 	const table = await reading(args, capabilities, path);
 	const cut = windowOf(table, args);
 	const amounts: (Placed & { value: number })[] = placedCells(cut).flatMap(
 		({ cell, row, column }) =>
-			findNumbers(cell, decimals).map((found) => ({
+			findNumbers(cell, decimals === 0 ? undefined : decimals).map((found) => ({
 				row,
 				column,
 				written: found.raw.trim(),
 				value: found.value
 			}))
 	);
-	const which =
-		decimals === undefined ? 'number(s)' : `figure(s) written with ${decimals} decimal(s)`;
+	const which = decimals === 0 ? 'number(s)' : `figure(s) written with ${decimals} decimal(s)`;
 	return {
 		text: foundText(
 			table,
@@ -633,7 +661,7 @@ async function runFindAmounts(
 			),
 			'a figure is where the page printed it, with the row to cite in check_citations. What it means - a debit, a balance, a reference - is not read here.'
 		),
-		data: foundData(table, cut, { decimals: decimals ?? 0, amounts })
+		data: foundData(table, cut, { decimals, amounts })
 	};
 }
 
@@ -650,8 +678,12 @@ async function runFindDates(
 	const path = stringAt(args, 'path');
 	if (path === null) return { text: 'find_dates needs a path to a file.', failed: true };
 
-	const dateOrder = args.dateOrder === 'MDY' ? 'MDY' : 'DMY';
-	const year = integerAt(args, 'year') ?? undefined;
+	const dateOrder = dateOrderAt(args);
+	if (dateOrder === null) {
+		return badArgument('find_dates', 'dateOrder', 'DMY or MDY: the order is stated, never guessed');
+	}
+	const year = boundedAt(args, 'year', undefined, 1900, 2200);
+	if (year === null) return badArgument('find_dates', 'year', 'a whole year from 1900 to 2200');
 	const table = await reading(args, capabilities, path);
 	const cut = windowOf(table, args);
 	const dates: (Placed & { date: string })[] = placedCells(cut).flatMap(({ cell, row, column }) => {
@@ -731,8 +763,8 @@ function checkOne(claim: Claim, index: number, rows: string[][], mark: DecimalMa
  * a reader who takes "all carried" for "the reading is complete" has been told
  * the opposite of what was measured.
  */
-function citationText(file: string, checked: number, missing: string[]): string {
-	const head = `truecopy - ${file}\n${checked} value(s) checked against the rows they cite.`;
+function citationText(table: Table, checked: number, missing: string[]): string {
+	const head = `truecopy - ${table.document.name}\n${verdictLine(table)}\n\n${checked} value(s) checked against the rows they cite.`;
 	if (missing.length === 0) {
 		return [
 			head,
@@ -783,9 +815,10 @@ async function runCheckCitations(
 	);
 
 	return {
-		text: citationText(table.document.name, total, missing),
+		text: citationText(table, total, missing),
 		data: {
 			file: table.document.name,
+			verdict: verdictOf(table.findings),
 			checked: total,
 			carried: total - missing.length,
 			records: checked

@@ -458,6 +458,9 @@ describe('the verdict', () => {
 			const result = await call(name, { path: 'statement.txt' }, serve);
 			expect(result.structuredContent?.verdict).toBe('reliable');
 		}
+		const checked = await call('check_citations', { path: 'statement.txt', records: [] }, serve);
+		expect(checked.structuredContent?.verdict).toBe('reliable');
+		expect(checked.content[0].text.split('\n')[1]).toMatch(/^verdict: reliable - /);
 	});
 });
 
@@ -501,15 +504,18 @@ describe('find_amounts', () => {
 		expect(result.content[0].text).toContain('0 figure(s) written with 1 decimal(s)');
 	});
 
-	it('falls back to two decimals when the number of decimals is not one', async () => {
+	it('refuses a number of decimals the schema does not admit, by name', async () => {
 		// A host that validates against the schema never sends this; one that
-		// does not is exactly the one whose mistakes have to be answered.
-		const result = await call(
-			'find_amounts',
-			{ path: 'statement.txt', decimals: 1.5 },
-			serving(pasted('statement.txt', STATEMENT))
-		);
-		expect(result.structuredContent?.decimals).toBe(2);
+		// does not is exactly the one whose mistakes have to be answered - and
+		// answered, not rounded: 1.5 read as 2 is a guess under a reliable verdict.
+		const serve = serving(pasted('statement.txt', STATEMENT));
+		for (const decimals of [1.5, -1, 7, '2']) {
+			const result = await call('find_amounts', { path: 'statement.txt', decimals }, serve);
+			expect(result.isError).toBe(true);
+			expect(result.content[0].text).toBe(
+				'find_amounts: decimals must be a whole number from 0 to 6.'
+			);
+		}
 	});
 
 	it('names the rows it did not look in', async () => {
@@ -578,5 +584,27 @@ describe('find_dates', () => {
 	it('needs a path', async () => {
 		const result = await call('find_dates', {}, serving(pasted('x.txt', 'a')));
 		expect(result.isError).toBe(true);
+	});
+
+	it('refuses an order of day and month it does not know rather than guessing one', async () => {
+		const serve = serving(pasted('statement.txt', STATEMENT));
+		for (const dateOrder of ['mdy', 'YMD', 3]) {
+			const result = await call('find_dates', { path: 'statement.txt', dateOrder }, serve);
+			expect(result.isError).toBe(true);
+			expect(result.content[0].text).toBe(
+				'find_dates: dateOrder must be DMY or MDY: the order is stated, never guessed.'
+			);
+		}
+	});
+
+	it('refuses a year outside the schema rather than dropping it', async () => {
+		const serve = serving(pasted('short.txt', '02/05;CARTE AMAZON;12,40'));
+		for (const year of [1850, 2026.5, '2026']) {
+			const result = await call('find_dates', { path: 'short.txt', year }, serve);
+			expect(result.isError).toBe(true);
+			expect(result.content[0].text).toBe(
+				'find_dates: year must be a whole year from 1900 to 2200.'
+			);
+		}
 	});
 });
