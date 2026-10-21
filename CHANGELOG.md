@@ -11,7 +11,7 @@ release PR is what stamps them.
 
 ### Fixed
 
-- **The MCP registry entry of 2.0.16 was refused: its description ran over the registry's 100 characters, and nothing before the tag had checked it.** `npm run skill` now checks the length with the versions, and `mcp-registry.yml` takes a `ref` to replay an entry from a commit that fixed it, the tag staying where it points.
+- **The MCP registry entry of 2.0.16 was refused: its description ran over the registry's 100 characters, and nothing before the tag had checked it.** `npm run skill` now checks the length with the versions, and `mcp-registry.yml` takes a `ref` to replay an entry from a commit that fixed it, the tag staying where it points. The listing check that follows a publish reads the entry by exact name and version, with a few retries: the search index lagged the publish and reported a published entry as missing.
 
 ## [2.0.16] - 2026-10-21
 
