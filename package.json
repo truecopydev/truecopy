@@ -17,11 +17,17 @@
 		"schema",
 		"validation",
 		"typescript",
-		"browser"
+		"browser",
+		"mcp",
+		"mcp-server",
+		"model-context-protocol",
+		"ai-agent",
+		"llm-tools"
 	],
 	"license": "MIT",
 	"author": "Florian Mousseau <florian.mousseau@gmail.com>",
 	"homepage": "https://truecopy.dev",
+	"mcpName": "io.github.truecopydev/truecopy",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/truecopydev/truecopy.git"
