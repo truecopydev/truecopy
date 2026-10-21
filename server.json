@@ -8,13 +8,13 @@
 		"source": "github"
 	},
 	"websiteUrl": "https://github.com/truecopydev/truecopy#use-it-from-an-assistant-with-nothing-installed",
-	"version": "2.0.15",
+	"version": "2.0.16",
 	"packages": [
 		{
 			"registryType": "npm",
 			"registryBaseUrl": "https://registry.npmjs.org",
 			"identifier": "truecopy",
-			"version": "2.0.15",
+			"version": "2.0.16",
 			"runtimeHint": "npx",
 			"transport": {
 				"type": "stdio"
