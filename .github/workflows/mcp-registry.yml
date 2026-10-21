@@ -98,9 +98,16 @@ jobs:
       - name: Publish the server entry
         run: ./mcp-publisher publish
 
+      # By exact name and version, and not at once: the search index of the
+      # registry lagged the publish by more than the half second this step
+      # took on 2026-10-21, and reported a published entry as missing.
       - name: The registry lists it
         run: |
-          name=$(node -p "require('./server.json').name")
+          name=$(node -p "encodeURIComponent(require('./server.json').name)")
           version=$(node -p "require('./server.json').version")
-          curl --proto '=https' --tlsv1.2 -fsS "https://registry.modelcontextprotocol.io/v0/servers?search=$name" | grep -q "\"version\":\"$version\"" \
+          for attempt in 1 2 3 4 5 6; do
+            curl --proto '=https' --tlsv1.2 -fsS "https://registry.modelcontextprotocol.io/v0/servers/$name/versions/$version" > entry.json && break
+            echo "not listed yet (attempt $attempt)"; sleep 10
+          done
+          grep -q "\"version\":\"$version\"" entry.json \
             || { echo "::error::$name $version is not listed."; exit 1; }
