@@ -22,11 +22,18 @@ on:
         description: Tag already published to npm, with the v prefix (e.g. v2.0.16).
         required: true
         type: string
+      ref:
+        description: Commit to read server.json from. Defaults to the tag.
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       tag:
         description: Tag already published to npm, with the v prefix (e.g. v2.0.16).
         required: true
+      ref:
+        description: Commit to read server.json from, when the tag's entry was refused and the fix landed on main. Defaults to the tag.
+        required: false
 
 permissions:
   contents: read
@@ -39,7 +46,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.tag }}
+          # A tag is final, so an entry the registry refused is fixed on main
+          # and replayed from there; the version checks below still hold.
+          ref: ${{ inputs.ref || inputs.tag }}
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:

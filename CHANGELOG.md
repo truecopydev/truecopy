@@ -9,6 +9,10 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The MCP registry entry of 2.0.16 was refused: its description ran over the registry's 100 characters, and nothing before the tag had checked it.** `npm run skill` now checks the length with the versions, and `mcp-registry.yml` takes a `ref` to replay an entry from a commit that fixed it, the tag staying where it points.
+
 ## [2.0.16] - 2026-10-21
 
 ### Added

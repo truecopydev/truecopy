@@ -130,6 +130,15 @@ for (const [where, version] of [
 	}
 }
 
+/* The registry refuses a description over 100 characters, and does so after
+ * npm has published: the limit is checked here, before the tag exists. */
+const DESCRIPTION_LIMIT = 100;
+if (server.description.length > DESCRIPTION_LIMIT) {
+	problems.push(
+		`server.json description is ${server.description.length} characters, the MCP registry takes ${DESCRIPTION_LIMIT}`
+	);
+}
+
 /* And the frontmatter a skill is loaded by. Absent, it never triggers at all. */
 const frontmatter = skill.match(/^---\n([\s\S]*?)\n---/);
 if (frontmatter === null) problems.push('SKILL.md has no frontmatter');
