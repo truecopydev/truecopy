@@ -14,6 +14,16 @@ release PR is what stamps them.
 - **`citedText(rows, cited, first, 'apart')` keeps the cells of the cited rows apart**, with `|` between cells and between rows. Joined by a space, the default, two cells `12` and `345` read as `12 345`, and `carriesNumber` then accepted `12345`, a figure neither cell printed. Apart, no number is read across a cell, and a figure the cut split in two is no longer carried, which is why it arrives as a choice and not as a new default. `CellJoin` names the two values.
 - **`checkExtraction(document, { ..., absentFigures: 'review' })` lets a row carrying a figure printed nowhere decide the verdict.** Left out, such a row is listed in `rowsToReview` and the verdict follows the total alone, so `40 + 60` against a page printing only `100` came back `read`. With `'review'` it comes back `needs-review`. Opt in, because it moves the verdict of a caller whose rows carry figures it computed.
 
+### Fixed
+
+- **The MCP registry entry of 2.0.16 was refused: its description ran over the registry's 100 characters, and nothing before the tag had checked it.** `npm run skill` now checks the length with the versions, and `mcp-registry.yml` takes a `ref` to replay an entry from a commit that fixed it, the tag staying where it points. The listing check that follows a publish reads the entry by exact name and version, with a few retries: the search index lagged the publish and reported a published entry as missing.
+
+## [2.0.16] - 2026-10-21
+
+### Added
+
+- **The MCP server opens every answer with a verdict, `reliable`, `doubtful` or `unreadable`, and serves two more tools, `find_amounts` and `find_dates`.** An assistant reading a PDF and getting a figure wrong without knowing it is the failure this package exists to prevent, and a tool that only listed rows left the judgement to the model. Now `read_table`, `find_amounts` and `find_dates` carry `verdict` in their data and as their first line of text, with what `reliable` is not; a file that does not open answers `unreadable` with its reason. `find_amounts` lists the figures written with a given number of decimals (two by default), `find_dates` the cells that start with a date in the day-month order stated, each with the row and column a citation names. `check_citations` carries the verdict of the reading it checked against, so a citation confirmed on a doubtful page is confirmed on a doubtful page. `npx truecopy mcp` starts the same server as `truecopy-mcp`, and `server.json` registers it with the MCP registry as `io.github.truecopydev/truecopy` once a version is on npm. An argument the schema does not admit (`decimals: 2.5`, `dateOrder: "mdy"`, a year out of range) is refused by name rather than rounded, defaulted or dropped: a figure found under a guessed argument reads exactly like one found under the stated one.
+
 ## [2.0.15] - 2026-10-14
 
 ### Added

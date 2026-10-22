@@ -1,0 +1,113 @@
+# Publish the server entry to the MCP registry, after the npm package is out.
+#
+# The registry holds metadata only: `server.json` names the npm package and the
+# version, and the registry checks that the published package.json carries the
+# matching `mcpName`. So this runs as the last job of the `publish` workflow,
+# on the tag it published, and only once npm actually serves that version. A
+# dispatch with the tag replays it when that job was missed.
+#
+# Called, not triggered by `workflow_run`: a job that reacts to another run
+# and checks out that run's commit is the shape of a privileged workflow
+# executing untrusted code, and the scanners say so. Here the tag is a
+# maintainer's dispatch input, the same one `publish` checks out.
+#
+# Authenticated by GitHub OIDC: the registry grants the io.github.<owner>/*
+# namespace to a job of a repository that owner holds. No secret to rotate.
+name: mcp-registry
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag already published to npm, with the v prefix (e.g. v2.0.16).
+        required: true
+        type: string
+      ref:
+        description: Commit to read server.json from. Defaults to the tag.
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag already published to npm, with the v prefix (e.g. v2.0.16).
+        required: true
+      ref:
+        description: Commit to read server.json from, when the tag's entry was refused and the fix landed on main. Defaults to the tag.
+        required: false
+
+permissions:
+  contents: read
+  id-token: write # the claim that authenticates this run to the registry
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # A tag is final, so an entry the registry refused is fixed on main
+          # and replayed from there; the version checks below still hold.
+          ref: ${{ inputs.ref || inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 20
+
+      # The registry refuses an entry whose package is not on npm yet, and
+      # publishing a version npm does not serve would leave a dangling entry.
+      - name: server.json, package.json and npm agree
+        run: |
+          declared=$(node -p "require('./package.json').version")
+          entry=$(node -p "require('./server.json').version")
+          name=$(node -p "require('./package.json').name")
+          if [ "$declared" != "$entry" ]; then
+            echo "::error::package.json $declared, server.json $entry - one of them is wrong."
+            exit 1
+          fi
+          for attempt in 1 2 3 4 5 6; do
+            served=$(npm view "$name@$declared" version 2>/dev/null || true)
+            [ "$served" = "$declared" ] && break
+            echo "npm does not serve $name@$declared yet (attempt $attempt)"; sleep 30
+          done
+          if [ "$served" != "$declared" ]; then
+            echo "::error::npm does not serve $name@$declared; publish first."
+            exit 1
+          fi
+
+      # Pinned and checked: this job holds the OIDC claim that writes to the
+      # registry namespace, so what runs here is not "whatever latest is today".
+      # The digest is the one in registry_<version>_checksums.txt of that release.
+      - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: 1.8.1
+          MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          curl --proto '=https' --tlsv1.2 -fsSLo mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          ./mcp-publisher --help >/dev/null
+
+      - name: Validate server.json
+        run: ./mcp-publisher validate
+
+      - name: Authenticate to the MCP registry
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish the server entry
+        run: ./mcp-publisher publish
+
+      # By exact name and version, and not at once: the search index of the
+      # registry lagged the publish by more than the half second this step
+      # took on 2026-10-21, and reported a published entry as missing.
+      - name: The registry lists it
+        run: |
+          name=$(node -p "encodeURIComponent(require('./server.json').name)")
+          version=$(node -p "require('./server.json').version")
+          for attempt in 1 2 3 4 5 6; do
+            curl --proto '=https' --tlsv1.2 -fsS "https://registry.modelcontextprotocol.io/v0/servers/$name/versions/$version" > entry.json && break
+            echo "not listed yet (attempt $attempt)"; sleep 10
+          done
+          grep -q "\"version\":\"$version\"" entry.json \
+            || { echo "::error::$name $version is not listed."; exit 1; }
