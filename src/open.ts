@@ -224,6 +224,10 @@ interface PdfPage {
 	cleanup(): void;
 }
 
+/** Anything a cancel may return that settles later. */
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+	typeof (value as { then?: unknown } | null)?.then === 'function';
+
 /**
  * Bound a promise in time. The timer is always cleared, even when the read wins
  * the race: a forgotten timer keeps the process awake and fails tests long
@@ -253,8 +257,10 @@ export async function withDeadline<T>(
 				Object.defineProperty(refusal, 'cause', { value: failure, configurable: true });
 			};
 			try {
+				// Any thenable, not only a native promise: a cancel from another
+				// promise library rejects just as unhandled.
 				const stopping = onExpire?.();
-				if (stopping instanceof Promise) stopping.catch(blame);
+				if (isThenable(stopping)) Promise.resolve(stopping).catch(blame);
 			} catch (failure) {
 				blame(failure);
 			}

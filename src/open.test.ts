@@ -48,6 +48,16 @@ describe('withDeadline', () => {
 		expect(refusal.cause).toBe(late);
 	});
 
+	it('catches a cancel that returns a thenable rather than a native promise', async () => {
+		const late = new Error('destroy failed');
+		const thenable = { then: (_: unknown, reject: (reason: Error) => void) => reject(late) };
+		const refusal = await withDeadline(new Promise<never>(() => {}), 5, () => thenable).catch(
+			(error: unknown) => error as UnreadableDocument
+		);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(refusal.cause).toBe(late);
+	});
+
 	it('gives up on a read that never returns', async () => {
 		// Without this bound the screen stays on "reading the file..." with no
 		// button, no message and no way out.
