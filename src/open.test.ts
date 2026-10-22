@@ -27,6 +27,27 @@ describe('withDeadline', () => {
 		await expect(refused).rejects.toMatchObject({ reason: 'too-slow', cause: broken });
 	});
 
+	it('answers too-slow even when the cancel settles the work at once', async () => {
+		// The cancel rejects the work synchronously. Settled after it, the refusal
+		// would lose the race to the work's own "aborted".
+		const handle: { abort?: (reason: Error) => void } = {};
+		const work = new Promise<string>((_, reject) => {
+			handle.abort = reject;
+		});
+		const refused = withDeadline(work, 5, () => handle.abort?.(new Error('aborted')));
+		await expect(refused).rejects.toMatchObject({ reason: 'too-slow' });
+	});
+
+	it('keeps a cancel that rejects later from escaping, and names it', async () => {
+		const late = new Error('destroy failed');
+		const refusal = await withDeadline(new Promise<never>(() => {}), 5, () =>
+			Promise.reject(late)
+		).catch((error: unknown) => error as UnreadableDocument);
+		expect(refusal.reason).toBe('too-slow');
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(refusal.cause).toBe(late);
+	});
+
 	it('gives up on a read that never returns', async () => {
 		// Without this bound the screen stays on "reading the file..." with no
 		// button, no message and no way out.

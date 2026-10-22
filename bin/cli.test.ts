@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -111,5 +111,24 @@ describe('npx truecopy', () => {
 		const { out, code } = run('nowhere/at/all.pdf');
 		expect(code).toBe(1);
 		expect(out).toContain('could not read that file');
+	});
+});
+
+describe('npx truecopy mcp', () => {
+	it('starts the server, which answers on standard output and nothing else', async () => {
+		// One package name has to be enough: the registry entry starts it this way.
+		const child = spawn(process.execPath, [CLI, 'mcp'], { stdio: ['pipe', 'pipe', 'pipe'] });
+		let out = '';
+		child.stdout.setEncoding('utf8').on('data', (chunk: string) => (out += chunk));
+		const closed = new Promise<number | null>((resolve) => child.on('close', resolve));
+		child.stdin.end(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' })}\n`);
+		expect(await closed).toBe(0);
+		const answer = JSON.parse(out) as { result: { tools: { name: string }[] } };
+		expect(answer.result.tools.map((tool) => tool.name)).toEqual([
+			'read_table',
+			'find_amounts',
+			'find_dates',
+			'check_citations'
+		]);
 	});
 });

@@ -232,30 +232,32 @@ interface PdfPage {
  * `onExpire` runs when the deadline is reached. Refusing only stops the
  * WAITING: the work goes on unless something stops it, and a caller that
  * retries piles up engines that never end. Pass what cancels the work.
+ *
+ * The refusal is settled BEFORE the cancel runs. A cancel that settles the work
+ * at once would otherwise win the race with the work's own error, and the
+ * caller would read "aborted" where the answer is `too-slow`. A cancel that
+ * throws, or that returns a promise which rejects, rides on the refusal as its
+ * `cause` and never escapes: under Node an unhandled rejection ends the process.
  */
 export async function withDeadline<T>(
 	work: Promise<T>,
 	milliseconds = DEFAULT_LIMITS.deadlineMilliseconds,
-	onExpire?: () => void
+	onExpire?: () => unknown
 ): Promise<T> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const tooLong = new Promise<never>((_, reject) => {
 		timer = setTimeout(() => {
-			// A cancel that throws must not take the refusal with it: the caller
-			// would wait for ever, and under Node the throw would end the process.
-			let failure: unknown;
+			const refusal = new UnreadableDocument('too-slow', 'This document does not finish opening.');
+			reject(refusal);
+			const blame = (failure: unknown): void => {
+				Object.defineProperty(refusal, 'cause', { value: failure, configurable: true });
+			};
 			try {
-				onExpire?.();
-			} catch (error) {
-				failure = error;
+				const stopping = onExpire?.();
+				if (stopping instanceof Promise) stopping.catch(blame);
+			} catch (failure) {
+				blame(failure);
 			}
-			reject(
-				new UnreadableDocument(
-					'too-slow',
-					'This document does not finish opening.',
-					failure === undefined ? undefined : { cause: failure }
-				)
-			);
 		}, milliseconds);
 	});
 	try {

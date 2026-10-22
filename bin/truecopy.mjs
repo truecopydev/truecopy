@@ -27,6 +27,7 @@ const HELP = `truecopy - see what a reading of your document decides
   npx truecopy <file>            the cut, the columns, and what is not vouched for
   npx truecopy explain <file>    the same
   npx truecopy --json <file>     the same reading as data, for a program
+  npx truecopy mcp               serve the reading to an assistant over MCP, on stdio
 
   Any file it can open: a PDF, a Word document, a CSV, a paste saved to disk.
 `;
@@ -67,6 +68,16 @@ function asJson(table) {
 }
 
 async function run(argv) {
+	/*
+	 * The server as a verb, so that one package name is enough to start it:
+	 * a registry entry names `truecopy mcp`, and `truecopy-mcp` stays for the
+	 * configurations already written. Nothing else is printed here: the
+	 * server owns standard output from this line on.
+	 */
+	if (argv[0] === 'mcp') {
+		await import('./truecopy-mcp.mjs');
+		return undefined;
+	}
 	const path = fileFrom(argv);
 	if (path === null || path === '--help' || path === '-h') {
 		process.stdout.write(HELP);

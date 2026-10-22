@@ -1,0 +1,39 @@
+{
+	"$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+	"name": "io.github.truecopydev/truecopy",
+	"title": "truecopy",
+	"description": "Read tables, figures and dates out of a PDF, Word file, CSV or paste, with a verdict on the reading.",
+	"repository": {
+		"url": "https://github.com/truecopydev/truecopy",
+		"source": "github"
+	},
+	"websiteUrl": "https://github.com/truecopydev/truecopy#use-it-from-an-assistant-with-nothing-installed",
+	"version": "2.0.16",
+	"packages": [
+		{
+			"registryType": "npm",
+			"registryBaseUrl": "https://registry.npmjs.org",
+			"identifier": "truecopy",
+			"version": "2.0.16",
+			"runtimeHint": "npx",
+			"transport": {
+				"type": "stdio"
+			},
+			"packageArguments": [
+				{
+					"type": "positional",
+					"value": "mcp",
+					"description": "The subcommand that starts the MCP server."
+				}
+			],
+			"environmentVariables": [
+				{
+					"name": "TRUECOPY_MCP_ROOT",
+					"description": "A directory the server may not read outside of, symbolic links resolved. Unset, it reads what the account running it can read.",
+					"isRequired": false,
+					"format": "filepath"
+				}
+			]
+		}
+	]
+}

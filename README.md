@@ -454,14 +454,25 @@ An agent holding a terminal already has the command above, and one that can impo
 }
 ```
 
-Two tools, and the second is the one that is hard to get anywhere else:
+Four tools, and every answer opens with a **verdict**: `reliable`, `doubtful` or `unreadable`. `unreadable` is a file that did not open; `doubtful` is a reading where at least one thing looked wrong, and the findings say what and where; `reliable` means nothing looked wrong from the shape of the page, which is **not** "this reading is right", and the answer says so in those words. A model reads the verdict before it leans on a figure.
 
 - **`read_table`** turns a PDF, a CSV, a TSV or a saved paste into rows: the cut, how often each column is filled, the rows numbered, and what the reading **could not vouch for**. Bounded at 200 rows a call, and what it left is counted rather than dropped.
-- **`check_citations`** takes the records a model claims to have read, each citing the rows it came from, and says which values the cited rows do not print. A JSON number is checked as a figure with the document's own decimal mark, a JSON string as its words in order. It answers "was this read or invented", never "is this complete", and it says so. Both return the `digest` of the bytes read; passed back, it makes a later call refuse a file changed in between.
+- **`find_amounts`** lists the figures written with a given number of decimals (two by default, which is how a page tells money from a reference number), each with the characters as printed and the row and column to cite.
+- **`find_dates`** lists the cells that start with a date, read in the day-month order you **state**, never one it guesses; a row without a year is a date only when the year is given.
+- **`check_citations`** takes the records a model claims to have read, each citing the rows it came from, and says which values the cited rows do not print. A JSON number is checked as a figure with the document's own decimal mark, a JSON string as its words in order. It answers "was this read or invented", never "is this complete", and it says so. `read_table` and `check_citations` return the `digest` of the bytes read; passed back, it makes a later call refuse a file changed in between.
 
 **Nothing is uploaded, because there is nowhere to upload it to.** The server runs where the file already is, makes no network call, and opens no file it was not handed. A statement, a payslip and a career record are the worst documents there are to send anywhere, and a server has nothing to compute on them that this does not compute in place. Set `TRUECOPY_MCP_ROOT` and it opens nothing outside that directory, symbolic links resolved before the check.
 
-It speaks the 2026-07-28 revision and the ones before it, so a host that opens with `initialize` and a host that goes straight to `server/discover` both work.
+It speaks the 2026-07-28 revision and the ones before it, so a host that opens with `initialize` and a host that goes straight to `server/discover` both work. `npx -y -p truecopy -p pdfjs-dist truecopy mcp` starts the same server, which is how the [MCP registry](https://registry.modelcontextprotocol.io) entry `io.github.truecopydev/truecopy` names it.
+
+### If you are an AI asked to read a document
+
+You were handed a statement, an invoice, an export, and asked for a figure in it. The failure that matters is not a figure you miss, it is a figure you return that the document never printed, and it reads exactly like a success. So:
+
+1. Call `read_table` and read the **verdict** before anything else. `unreadable` means there is nothing to lean on: say so. `doubtful` means something looked wrong; the findings say which page and column, and a figure from there is a figure to flag. `reliable` means nothing looked wrong, and that is the whole claim.
+2. Take figures with `find_amounts` and dates with `find_dates` rather than reading them off the prose: each comes with the row it was printed in.
+3. Before any value of yours is acted on, cite its rows to `check_citations`. A value the cited rows do not print was not read from them: re-read it or drop it.
+4. Never fill a gap. A missing total is a missing total, not an opportunity to add the lines up; the document is the only source, and the checks only ever point at it.
 
 Serving these tools from something larger - a server of your own, another transport - is [`truecopy/mcp`](src/mcp.ts): `TOOLS` are the descriptors, and `respond` answers one JSON-RPC message given a way to turn a path into a `File`.
 
