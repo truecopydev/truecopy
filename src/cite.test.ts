@@ -36,6 +36,17 @@ describe('citedText', () => {
 		expect(citedText(rows, [2, 0])).toBe('d e a b');
 	});
 
+	it('keeps two cells apart when asked, so no figure is read across them', () => {
+		const rows = [['12', '345'], ['67']];
+		expect(carriesNumber(citedText(rows, [0]), '12345')).toBe(true);
+		const apart = citedText(rows, [0, 1], 0, 'apart');
+		expect(apart).toBe('12 | 345 | 67');
+		expect(carriesNumber(apart, '12345')).toBe(false);
+		expect(carriesNumber(apart, '345')).toBe(true);
+		expect(carriesNumber(apart, '34567')).toBe(false);
+		expect(carriesText(apart, '12 345')).toBe(true);
+	});
+
 	it('reads citations against the numbering the model saw', () => {
 		expect(citedText([['a'], ['b']], [41], 40)).toBe('b');
 	});
