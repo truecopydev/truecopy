@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.17] - 2026-10-22
+
 ### Added
 
 - **`citedText(rows, cited, first, 'apart')` keeps the cells of the cited rows apart**, with `|` between cells and between rows. Joined by a space, the default, two cells `12` and `345` read as `12 345`, and `carriesNumber` then accepted `12345`, a figure neither cell printed. Apart, no number is read across a cell, and a figure the cut split in two is no longer carried, which is why it arrives as a choice and not as a new default. `CellJoin` names the two values.
