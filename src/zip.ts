@@ -25,7 +25,10 @@ type Unarchivable =
 	/** The entry inflates to more than the caller allowed. A small archive can
 	 *  carry a very large member, and a reader that trusts the declared size
 	 *  hands a browser tab a gigabyte it never agreed to. */
-	| 'entry-too-big';
+	| 'entry-too-big'
+	/** The entry does not match the length or the CRC-32 its directory declares:
+	 *  a byte changed, or the part was cut, after the archive was written. */
+	| 'damaged-archive';
 
 export class UnreadableArchive extends Error {
 	readonly reason: Unarchivable;
@@ -55,6 +58,7 @@ const MAXIMUM_COMMENT = 0xffff;
 interface Entry {
 	name: string;
 	method: number;
+	crc: number;
 	compressedSize: number;
 	uncompressedSize: number;
 	localHeaderOffset: number;
@@ -105,6 +109,7 @@ function entriesOf(bytes: Uint8Array, view: DataView): Entry[] {
 		entries.push({
 			name: names.decode(bytes.subarray(at + 46, at + 46 + nameLength)),
 			method: view.getUint16(at + 10, true),
+			crc: view.getUint32(at + 16, true),
 			compressedSize: view.getUint32(at + 20, true),
 			uncompressedSize: view.getUint32(at + 24, true),
 			localHeaderOffset: view.getUint32(at + 42, true)
@@ -182,6 +187,15 @@ export async function fileFromArchive(
 	if (entry.compressedSize === NEEDS_ZIP64 || entry.uncompressedSize === NEEDS_ZIP64) {
 		throw new UnreadableArchive('unsupported-archive', 'This archive is ZIP64.');
 	}
+	return intact(entry, await contentOf(bytes, view, entry, maximumBytes));
+}
+
+async function contentOf(
+	bytes: Uint8Array,
+	view: DataView,
+	entry: Entry,
+	maximumBytes: number
+): Promise<Uint8Array> {
 	const data = compressedBytes(bytes, view, entry);
 	if (entry.method === STORED) {
 		if (data.byteLength > maximumBytes) {
@@ -196,6 +210,39 @@ export async function fileFromArchive(
 		);
 	}
 	return inflate(data, maximumBytes);
+}
+
+/**
+ * The content, once it is shown to be what the directory declared.
+ *
+ * Length AND CRC-32, both from the central directory. Without them a stored
+ * entry whose digit was changed, or a part cut short before it was zipped
+ * again, reads as a sound document: the digest of the file says which bytes
+ * were read, never that the archive agrees with itself.
+ */
+function intact(entry: Entry, content: Uint8Array): Uint8Array {
+	if (content.byteLength !== entry.uncompressedSize || crc32(content) !== entry.crc) {
+		throw new UnreadableArchive(
+			'damaged-archive',
+			'This archive is damaged: its content does not match what it declares.'
+		);
+	}
+	return content;
+}
+
+let crcTable: Uint32Array | null = null;
+
+/** CRC-32 as ZIP computes it. The table is built once, on first use: an entry
+ *  can run to megabytes, and the bit loop costs eight times the table lookup. */
+export function crc32(bytes: Uint8Array): number {
+	crcTable ??= Uint32Array.from({ length: 256 }, (_, index) => {
+		let crc = index;
+		for (let bit = 0; bit < 8; bit++) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+		return crc >>> 0;
+	});
+	let crc = 0xffffffff;
+	for (const byte of bytes) crc = (crc >>> 8) ^ crcTable[(crc ^ byte) & 0xff];
+	return (crc ^ 0xffffffff) >>> 0;
 }
 
 /** Whether these bytes open like a ZIP. Two bytes, and it is what tells a

@@ -354,27 +354,31 @@ async function openOffice(bytes: Uint8Array, file: File, limits: Limits): Promis
 		return document;
 	} catch (error) {
 		if (error instanceof UnreadableDocument) throw error;
-		if (error instanceof UnreadableArchive) {
-			if (error.reason === 'entry-absent') {
-				throw new UnreadableDocument(
-					'binary',
-					'This file is an archive with no word processing document in it.',
-					{ cause: error }
-				);
-			}
-			if (error.reason === 'entry-too-big') {
-				throw new UnreadableDocument('too-big', 'This document holds more than expected.', {
-					cause: error
-				});
-			}
-		}
+		const named = error instanceof UnreadableArchive ? ARCHIVE_REFUSALS[error.reason] : undefined;
 		throw new UnreadableDocument(
-			'not-opened',
-			'I could not open this document. If it is password-protected, save an unprotected copy.',
+			named?.reason ?? 'not-opened',
+			named?.message ??
+				'I could not open this document. If it is password-protected, save an unprotected copy.',
 			{ cause: error }
 		);
 	}
 }
+
+/** What an archive refusal means for the document inside it. A reason left out
+ *  here is the engine saying no, for a reason it does not share. */
+const ARCHIVE_REFUSALS: Partial<
+	Record<UnreadableArchive['reason'], { reason: Unreadable; message: string }>
+> = {
+	'entry-absent': {
+		reason: 'binary',
+		message: 'This file is an archive with no word processing document in it.'
+	},
+	'entry-too-big': { reason: 'too-big', message: 'This document holds more than expected.' },
+	'damaged-archive': {
+		reason: 'not-opened',
+		message: 'This document is damaged: its content does not match what the file declares.'
+	}
+};
 
 /** Open a dropped file. The only path. The document carries the digest of the bytes it was read from. */
 export async function openDocument(file: File, options: OpenOptions = {}): Promise<Document> {

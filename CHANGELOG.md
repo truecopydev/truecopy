@@ -11,6 +11,7 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **A `.docx` or `.odt` whose part no longer matches its archive is refused, not read.** The archive reader took the bytes of an entry as they came: a stored entry with one digit changed, or a part cut short and zipped again, was read as a sound document, and the digest of the file only ever said which bytes were read. Every entry is now checked against the length and the CRC-32 its central directory declares, and a mismatch is refused as `not-opened`, with a message that says the document is damaged rather than asking for a password. A sound archive reads exactly as before.
 - **The MCP registry entry of 2.0.16 was refused: its description ran over the registry's 100 characters, and nothing before the tag had checked it.** `npm run skill` now checks the length with the versions, and `mcp-registry.yml` takes a `ref` to replay an entry from a commit that fixed it, the tag staying where it points. The listing check that follows a publish reads the entry by exact name and version, with a few retries: the search index lagged the publish and reported a published entry as missing.
 
 ## [2.0.16] - 2026-10-21

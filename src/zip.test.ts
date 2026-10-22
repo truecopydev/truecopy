@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { docxWithBody } from './kit.js';
-import { fileFromArchive, looksLikeArchive, UnreadableArchive } from './zip.js';
+import { crc32, fileFromArchive, looksLikeArchive, UnreadableArchive } from './zip.js';
 
 const BODY = 'word/document.xml';
 
@@ -119,6 +119,43 @@ describe('fileFromArchive', () => {
 			compress: true
 		});
 		expect(await reasonOf(compressed, BODY, 10)).toBe('entry-too-big');
+	});
+});
+
+describe('an entry that does not match its directory', () => {
+	/** The archive with one byte of its stored content changed, and its CRC left
+	 *  as written. */
+	function withContentByte(bytes: Uint8Array, from: string, to: string): Uint8Array {
+		const text = new TextDecoder('latin1').decode(bytes);
+		const at = text.indexOf(from);
+		if (at === -1) throw new Error('text absent from the fixture');
+		const copy = bytes.slice();
+		copy[at] = to.charCodeAt(0);
+		return copy;
+	}
+
+	it('refuses a stored entry whose content no longer matches its CRC', async () => {
+		const bytes = await docxWithBody('<w:p><w:r><w:t>Total 1</w:t></w:r></w:p>');
+		expect(await reasonOf(withContentByte(bytes, '1</w:t>', '7'))).toBe('damaged-archive');
+	});
+
+	it('refuses an entry shorter than the length its directory declares', async () => {
+		expect(await reasonOf(withField(await archive(), CENTRAL, 24, 9_999, 32))).toBe(
+			'damaged-archive'
+		);
+	});
+
+	it('refuses a deflated entry whose CRC was changed', async () => {
+		const compressed = await docxWithBody('<w:p><w:r><w:t>Article 1</w:t></w:r></w:p>', {
+			compress: true
+		});
+		expect(await reasonOf(withField(compressed, CENTRAL, 16, 1, 32))).toBe('damaged-archive');
+	});
+});
+
+describe('crc32', () => {
+	it('matches the reference value of the standard check string', () => {
+		expect(crc32(new TextEncoder().encode('123456789'))).toBe(0xcbf43926);
 	});
 });
 

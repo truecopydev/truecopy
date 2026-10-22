@@ -361,6 +361,19 @@ describe('openDocument, on what is neither a PDF nor plain text', () => {
 		expect(await reasonOf(new File([damaged as BlobPart], 'accord.docx'))).toBe('not-opened');
 	});
 
+	it('says a .docx is damaged when a stored byte no longer matches its CRC', async () => {
+		const bytes = await docxWithBody(paragraph('Total 1'));
+		const text = new TextDecoder('latin1').decode(bytes);
+		const damaged = bytes.slice();
+		damaged[text.indexOf('Total 1') + 6] = '7'.charCodeAt(0);
+		await expect(openDocument(new File([damaged as BlobPart], 'total.docx'))).rejects.toMatchObject(
+			{
+				reason: 'not-opened',
+				message: expect.stringContaining('damaged')
+			}
+		);
+	});
+
 	it('refuses a .docx whose archive is cut short', async () => {
 		// Truncated download: the container opens on PK and has no end record. It
 		// is not a Word document that failed to open, and it is not text either.
