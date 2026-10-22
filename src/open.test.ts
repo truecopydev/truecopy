@@ -9,11 +9,53 @@ import {
 	type OpenOptions,
 	type PdfEngine
 } from './open.js';
+import { explainDocument } from './explain.js';
 import { docxWithBody, docxWithText, odtWithText, pdfWithPages, pdfWithText } from './kit.js';
 
 describe('withDeadline', () => {
 	it('lets a read that finishes through', async () => {
 		await expect(withDeadline(Promise.resolve('read'), 50)).resolves.toBe('read');
+	});
+
+	it('still refuses when the cancel it was given throws', async () => {
+		// A throw inside the timer would escape the promise: the caller would wait
+		// for ever, and under Node the process would end.
+		const broken = new Error('cannot cancel');
+		const refused = withDeadline(new Promise<string>(() => {}), 5, () => {
+			throw broken;
+		});
+		await expect(refused).rejects.toMatchObject({ reason: 'too-slow', cause: broken });
+	});
+
+	it('answers too-slow even when the cancel settles the work at once', async () => {
+		// The cancel rejects the work synchronously. Settled after it, the refusal
+		// would lose the race to the work's own "aborted".
+		const handle: { abort?: (reason: Error) => void } = {};
+		const work = new Promise<string>((_, reject) => {
+			handle.abort = reject;
+		});
+		const refused = withDeadline(work, 5, () => handle.abort?.(new Error('aborted')));
+		await expect(refused).rejects.toMatchObject({ reason: 'too-slow' });
+	});
+
+	it('keeps a cancel that rejects later from escaping, and names it', async () => {
+		const late = new Error('destroy failed');
+		const refusal = await withDeadline(new Promise<never>(() => {}), 5, () =>
+			Promise.reject(late)
+		).catch((error: unknown) => error as UnreadableDocument);
+		expect(refusal.reason).toBe('too-slow');
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(refusal.cause).toBe(late);
+	});
+
+	it('catches a cancel that returns a thenable rather than a native promise', async () => {
+		const late = new Error('destroy failed');
+		const thenable = { then: (_: unknown, reject: (reason: Error) => void) => reject(late) };
+		const refusal = await withDeadline(new Promise<never>(() => {}), 5, () => thenable).catch(
+			(error: unknown) => error as UnreadableDocument
+		);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(refusal.cause).toBe(late);
 	});
 
 	it('gives up on a read that never returns', async () => {
@@ -123,6 +165,17 @@ describe('openDocument', () => {
 			maximumPages: 1
 		});
 		expect(document.pages.map((page) => page.pageNumber)).toEqual([2]);
+		// Page 3 was wanted and never opened: the reading says so.
+		expect(document.pagesUnread).toBe(1);
+	});
+
+	it('says a reading is partial when the cap stopped it, and only then', async () => {
+		const cut = await openDocument(threePages(), { maximumPages: 1 });
+		expect(cut.pagesUnread).toBe(2);
+		expect(explainDocument(cut)).toContain('2 more page(s) left unread past maximumPages');
+		const whole = await openDocument(threePages());
+		expect(whole).not.toHaveProperty('pagesUnread');
+		expect(explainDocument(whole)).not.toContain('left unread');
 	});
 });
 
@@ -226,6 +279,171 @@ describe('the reason a document was refused', () => {
 		);
 		expect(missing.reason).toBe('no-engine');
 		expect(missing.message).toContain('pdfjs-dist');
+	});
+
+	it('stops the engine when the deadline refuses the read', async () => {
+		// Refusing only ends the wait. An engine still loading after the refusal
+		// keeps its worker and its memory, and a caller that retries piles them up.
+		let destroyed = 0;
+		const stuck = {
+			getDocument: () => ({
+				promise: new Promise<never>(() => {}),
+				destroy: async () => {
+					destroyed += 1;
+				}
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'stuck.pdf', {
+			type: 'application/pdf'
+		});
+		expect((await refusal(file, { pdfjs: stuck, deadlineMilliseconds: 5 })).reason).toBe(
+			'too-slow'
+		);
+		expect(destroyed).toBe(1);
+
+		// A destroy that fails on top of the refusal does not replace it.
+		const failing = {
+			getDocument: () => ({
+				promise: new Promise<never>(() => {}),
+				destroy: () => Promise.reject(new Error('worker already gone'))
+			})
+		} as unknown as PdfEngine;
+		expect((await refusal(file, { pdfjs: failing, deadlineMilliseconds: 5 })).reason).toBe(
+			'too-slow'
+		);
+	});
+
+	it('stops opening pages once the deadline has passed', async () => {
+		let opened = 0;
+		let destroyed = 0;
+		const slow = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 50,
+					getPage: async () => {
+						opened += 1;
+						await new Promise((resolve) => setTimeout(resolve, 4));
+						return {
+							getViewport: () => ({ width: 600, height: 800 }),
+							getTextContent: async () => ({ items: [] }),
+							cleanup: () => undefined
+						};
+					}
+				}),
+				destroy: async () => {
+					destroyed += 1;
+				}
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'slow.pdf', {
+			type: 'application/pdf'
+		});
+		await refusal(file, { pdfjs: slow, deadlineMilliseconds: 10 });
+		await new Promise((resolve) => setTimeout(resolve, 30));
+		const after = opened;
+		await new Promise((resolve) => setTimeout(resolve, 30));
+		expect(opened).toBe(after);
+		expect(opened).toBeLessThan(50);
+		expect(destroyed).toBe(1);
+	});
+
+	it('asks nothing more of a page that arrives after the deadline', async () => {
+		// An engine whose destroy() leaves the page in flight to resolve anyway.
+		let laidOut = 0;
+		let cleaned = 0;
+		const late = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: async () => {
+						await new Promise((resolve) => setTimeout(resolve, 20));
+						return {
+							getViewport: () => ({ width: 600, height: 800 }),
+							getTextContent: async () => {
+								laidOut += 1;
+								return { items: [] };
+							},
+							cleanup: () => {
+								cleaned += 1;
+							}
+						};
+					}
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'late-page.pdf', {
+			type: 'application/pdf'
+		});
+		expect((await refusal(file, { pdfjs: late, deadlineMilliseconds: 5 })).reason).toBe('too-slow');
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		expect(laidOut).toBe(0);
+		expect(cleaned).toBe(1);
+	});
+
+	it('refuses a page whose text arrives after the deadline', async () => {
+		let viewed = 0;
+		const late = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: async () => ({
+						getViewport: () => {
+							viewed += 1;
+							return { width: 600, height: 800 };
+						},
+						getTextContent: async () => {
+							await new Promise((resolve) => setTimeout(resolve, 20));
+							return { items: [] };
+						},
+						cleanup: () => undefined
+					})
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'late-text.pdf', {
+			type: 'application/pdf'
+		});
+		expect((await refusal(file, { pdfjs: late, deadlineMilliseconds: 5 })).reason).toBe('too-slow');
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		expect(viewed).toBe(1);
+	});
+
+	it('counts the pages left past the cap without walking them', async () => {
+		// The page count is what the file declares. Walking a billion page
+		// numbers past a cap of one would block the thread, deadline included.
+		const declared = 1_000_000_000;
+		const huge = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: declared,
+					getPage: async () => ({
+						getViewport: () => ({ width: 600, height: 800 }),
+						getTextContent: async () => ({
+							items: [{ str: 'a', transform: [1, 0, 0, 1, 10, 700], width: 5 }]
+						}),
+						cleanup: () => undefined
+					})
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'huge.pdf', {
+			type: 'application/pdf'
+		});
+		const document = await openDocument(file, { pdfjs: huge, maximumPages: 1 });
+		expect(document.pagesUnread).toBe(declared - 1);
+
+		// A caller choosing pages still has its choice asked page by page, so
+		// the walk lets the deadline in rather than hold the thread.
+		const refused = await refusal(file, {
+			pdfjs: huge,
+			maximumPages: 1,
+			keepPage: () => false,
+			deadlineMilliseconds: 20
+		});
+		expect(refused.reason).toBe('too-slow');
 	});
 
 	it('names a read that ran out of time', async () => {

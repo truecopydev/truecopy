@@ -224,21 +224,47 @@ interface PdfPage {
 	cleanup(): void;
 }
 
+/** Anything a cancel may return that settles later. */
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+	typeof (value as { then?: unknown } | null)?.then === 'function';
+
 /**
  * Bound a promise in time. The timer is always cleared, even when the read wins
  * the race: a forgotten timer keeps the process awake and fails tests long
  * after they passed.
+ *
+ * `onExpire` runs when the deadline is reached. Refusing only stops the
+ * WAITING: the work goes on unless something stops it, and a caller that
+ * retries piles up engines that never end. Pass what cancels the work.
+ *
+ * The refusal is settled BEFORE the cancel runs. A cancel that settles the work
+ * at once would otherwise win the race with the work's own error, and the
+ * caller would read "aborted" where the answer is `too-slow`. A cancel that
+ * throws, or that returns a promise which rejects, rides on the refusal as its
+ * `cause` and never escapes: under Node an unhandled rejection ends the process.
  */
 export async function withDeadline<T>(
 	work: Promise<T>,
-	milliseconds = DEFAULT_LIMITS.deadlineMilliseconds
+	milliseconds = DEFAULT_LIMITS.deadlineMilliseconds,
+	onExpire?: () => unknown
 ): Promise<T> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const tooLong = new Promise<never>((_, reject) => {
-		timer = setTimeout(
-			() => reject(new UnreadableDocument('too-slow', 'This document does not finish opening.')),
-			milliseconds
-		);
+		timer = setTimeout(() => {
+			const refusal = new UnreadableDocument('too-slow', 'This document does not finish opening.');
+			reject(refusal);
+			const blame = (failure: unknown): void => {
+				Object.defineProperty(refusal, 'cause', { value: failure, configurable: true });
+			};
+			try {
+				// Any thenable, not only a native promise: a cancel from another
+				// promise library rejects just as unhandled.
+				const stopping = onExpire?.();
+				if (isThenable(stopping)) Promise.resolve(stopping).catch(blame);
+			} catch (failure) {
+				blame(failure);
+			}
+		}, milliseconds);
 	});
 	try {
 		return await Promise.race([work, tooLong]);
@@ -416,10 +442,16 @@ async function openBytes(
 		return documentFromText(new TextDecoder(encoding).decode(bytes), file.name);
 	}
 
+	const run: PdfRun = { expired: false };
 	try {
 		const document = await withDeadline(
-			pagesFromPdf(data, file.name, limits, options),
-			limits.deadlineMilliseconds
+			pagesFromPdf(data, file.name, limits, options, run),
+			limits.deadlineMilliseconds,
+			() => {
+				run.expired = true;
+				// The refusal is already on its way; a destroy that fails on top of it has nobody left to tell.
+				run.stop?.().catch(() => undefined);
+			}
 		);
 		if (document.text.trim() === '') {
 			throw new UnreadableDocument(
@@ -468,11 +500,31 @@ async function loadDefaultEngine(): Promise<PdfEngine> {
 	}
 }
 
+/** How many page numbers a PDF read walks before it lets a timer run. */
+const YIELD_EVERY_PAGES = 4096;
+
+function nextTurn(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** What the deadline needs to stop a PDF read rather than walk away from it. */
+interface PdfRun {
+	expired: boolean;
+	stop?: () => Promise<void>;
+}
+
+/** Destroy the loading task once, whichever of the deadline and the read gets there first. */
+function stopperOf(task: { destroy(): Promise<void> }): () => Promise<void> {
+	let stopping: Promise<void> | undefined;
+	return () => (stopping ??= task.destroy());
+}
+
 async function pagesFromPdf(
 	data: ArrayBuffer,
 	name: string,
 	limits: Limits,
-	options: OpenOptions
+	options: OpenOptions,
+	run: PdfRun
 ): Promise<Document> {
 	/*
 	 * The legacy build by default, and it is a deliberate choice: the modern one
@@ -481,6 +533,10 @@ async function pagesFromPdf(
 	 * OpenOptions, where that trade is weighed.
 	 */
 	const pdfjs = options.pdfjs ?? (await loadDefaultEngine());
+	// The engine may arrive after the deadline: a task created now would have
+	// nobody left to destroy it, and every retry would add one.
+	if (run.expired)
+		throw new UnreadableDocument('too-slow', 'This document does not finish opening.');
 
 	/*
 	 * The worker exists only in a browser, and only when the caller resolved its
@@ -507,27 +563,76 @@ async function pagesFromPdf(
 		...(options.cMapUrl === undefined ? {} : { cMapUrl: options.cMapUrl }),
 		...(options.cMapPacked === undefined ? {} : { cMapPacked: options.cMapPacked })
 	});
-	const pdf = await task.promise;
+	const stop = stopperOf(task);
+	run.stop = stop;
 	try {
-		const pages: TextPage[] = [];
-		const wanted = options.keepPage ?? (() => true);
-		// The cap counts the pages OPENED, so it bounds the work whichever pages
-		// are asked for. Skipping is what costs nothing: a page that is never
-		// opened is never laid out, and that is the whole saving.
-		for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-			if (pages.length >= limits.maximumPages) break;
-			if (!wanted(pageNumber)) continue;
-			const page = await pdf.getPage(pageNumber);
-			const viewport = page.getViewport({ scale: 1 });
-			const content = await page.getTextContent();
-			const items = positionedItems(content.items);
-			pages.push(
-				pageFrom(pageNumber, viewport.width, viewport.height, items, options.superscripts ?? false)
-			);
-			page.cleanup();
-		}
-		return documentFrom(pages, 'pdf', name);
+		const { pages, pagesUnread } = await readPages(await task.promise, limits, options, run);
+		const document = documentFrom(pages, 'pdf', name);
+		return pagesUnread === 0 ? document : { ...document, pagesUnread };
 	} finally {
-		await task.destroy();
+		await stop();
 	}
+}
+
+/**
+ * Open the pages a read wants, up to the cap, and count those the cap left.
+ * The cap counts the pages OPENED, so it bounds the work whichever pages are
+ * asked for. Skipping is what costs nothing: a page that is never opened is
+ * never laid out, and that is the whole saving.
+ */
+async function readPages(
+	pdf: PdfFile,
+	limits: Limits,
+	options: OpenOptions,
+	run: PdfRun
+): Promise<{ pages: TextPage[]; pagesUnread: number }> {
+	const pages: TextPage[] = [];
+	const wanted = options.keepPage ?? (() => true);
+	let pagesUnread = 0;
+	for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+		// A page count is whatever the file declares, so a skipping loop can
+		// run long without awaiting anything: let the deadline in now and then.
+		if (pageNumber % YIELD_EVERY_PAGES === 0) await nextTurn();
+		if (run.expired) break;
+		const full = pages.length >= limits.maximumPages;
+		if (full && options.keepPage === undefined) {
+			return { pages, pagesUnread: pdf.numPages - pageNumber + 1 };
+		}
+		if (!wanted(pageNumber)) continue;
+		if (full) {
+			pagesUnread += 1;
+			continue;
+		}
+		pages.push(await textPageOf(pdf, pageNumber, options.superscripts ?? false, run));
+	}
+	return { pages, pagesUnread };
+}
+
+function abandoned(page: PdfPage): never {
+	page.cleanup();
+	throw new UnreadableDocument('too-slow', 'This document does not finish opening.');
+}
+
+async function textPageOf(
+	pdf: PdfFile,
+	pageNumber: number,
+	superscripts: boolean,
+	run: PdfRun
+): Promise<TextPage> {
+	// An engine whose cancel does not reject what is in flight still answers
+	// after the refusal: each answer is checked before more work is asked of it.
+	const page = await pdf.getPage(pageNumber);
+	if (run.expired) return abandoned(page);
+	const viewport = page.getViewport({ scale: 1 });
+	const content = await page.getTextContent();
+	if (run.expired) return abandoned(page);
+	const text = pageFrom(
+		pageNumber,
+		viewport.width,
+		viewport.height,
+		positionedItems(content.items),
+		superscripts
+	);
+	page.cleanup();
+	return text;
 }

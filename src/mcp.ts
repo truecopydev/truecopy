@@ -104,6 +104,13 @@ const PAGES_FIELD = {
 		'How many pages to open. Defaults to 40, which bounds a runaway read rather than describing your document: raise it for an annual report.'
 } as const;
 
+const DIGEST_FIELD = {
+	type: 'string',
+	pattern: '^[0-9a-f]{64}$',
+	description:
+		'The digest read_table returned for this file. When given, the call is refused if the file has changed since: its rows would no longer be the ones numbered.'
+} as const;
+
 const FINDING_SCHEMA = {
 	type: 'object',
 	properties: {
@@ -137,18 +144,29 @@ export type Verdict = 'reliable' | 'doubtful' | 'unreadable';
 
 const VERDICT_FIELD = { type: 'string', enum: ['reliable', 'doubtful', 'unreadable'] } as const;
 
-/** The verdict of a reading that opened: doubtful as soon as one thing looked wrong. */
-export function verdictOf(findings: readonly Finding[]): Verdict {
-	return findings.length === 0 ? 'reliable' : 'doubtful';
+/**
+ * The verdict of a reading that opened: doubtful as soon as one thing looked
+ * wrong, or as soon as `maximumPages` left a page unread. A reading cut at the
+ * bound has nothing wrong on the pages it holds, and is still not the document.
+ */
+export function verdictOf(findings: readonly Finding[], pagesUnread = 0): Verdict {
+	return findings.length === 0 && pagesUnread === 0 ? 'reliable' : 'doubtful';
 }
+
+const tableVerdict = (table: Table): Verdict =>
+	verdictOf(table.findings, table.document.pagesUnread);
 
 const RELIABLE_MEANS =
 	'nothing looked wrong from the shape of the page. That is not the same as "this reading is right".';
 
 function verdictLine(table: Table): string {
-	const verdict = verdictOf(table.findings);
-	if (verdict === 'reliable') return `verdict: reliable - ${RELIABLE_MEANS}`;
-	return `verdict: doubtful - ${table.findings.length} thing(s) looked wrong. Read the doubts below before leaning on a figure.`;
+	if (tableVerdict(table) === 'reliable') return `verdict: reliable - ${RELIABLE_MEANS}`;
+	const unread = table.document.pagesUnread ?? 0;
+	const reasons = [
+		...(table.findings.length === 0 ? [] : [`${table.findings.length} thing(s) looked wrong`]),
+		...(unread === 0 ? [] : [`${unread} page(s) left unread past maximumPages`])
+	];
+	return `verdict: doubtful - ${reasons.join(', and ')}. Read the doubts below before leaning on a figure.`;
 }
 
 const ROWS_FIELDS = {
@@ -212,7 +230,8 @@ export const TOOLS = [
 					maximum: MAXIMUM_ROWS,
 					description: `Rows to return, at most ${MAXIMUM_ROWS}. Defaults to ${DEFAULT_ROWS}. What is left is counted and named, never silently dropped.`
 				},
-				maximumPages: PAGES_FIELD
+				maximumPages: PAGES_FIELD,
+				digest: DIGEST_FIELD
 			},
 			required: ['path'],
 			additionalProperties: false
@@ -221,12 +240,14 @@ export const TOOLS = [
 			type: 'object',
 			properties: {
 				file: { type: 'string' },
+				digest: { type: 'string' },
 				verdict: VERDICT_FIELD,
 				origin: { type: 'string', enum: [...ORIGINS] },
 				rows: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
 				firstRowNumber: { type: 'integer' },
 				totalRows: { type: 'integer' },
 				more: { type: 'boolean' },
+				pagesUnread: { type: 'integer', minimum: 0 },
 				pages: {
 					type: 'array',
 					items: {
@@ -248,6 +269,7 @@ export const TOOLS = [
 				'firstRowNumber',
 				'totalRows',
 				'more',
+				'pagesUnread',
 				'pages',
 				'findings'
 			]
@@ -375,7 +397,7 @@ export const TOOLS = [
 		name: 'check_citations',
 		title: 'Check values against the rows they were read from',
 		description:
-			'Verify that every value really appears in the rows it cites. A model turning cells into records fails one visible way, it misses a record, and one invisible way: it returns a plausible value the document never printed - a town deduced from a postcode, a rounded figure, a recomposed date - which reads exactly like a successful extraction. Each value is looked up in the cited rows and NOWHERE else, so nothing can be produced, only pointed at. A JSON number is checked as a figure, a JSON string as its words in order. Cite the row numbers read_table returned, for the same file and the same maximumPages: a different page bound is a different reading, and its rows are numbered differently.',
+			'Verify that every value really appears in the rows it cites. A model turning cells into records fails one visible way, it misses a record, and one invisible way: it returns a plausible value the document never printed - a town deduced from a postcode, a rounded figure, a recomposed date - which reads exactly like a successful extraction. Each value is looked up in the cited rows and NOWHERE else, so nothing can be produced, only pointed at. A JSON number is checked as a figure, a JSON string as its words in order. Cite the row numbers read_table returned, for the same file and the same maximumPages: a different page bound is a different reading, and its rows are numbered differently. Pass back the digest read_table returned, and a file changed since is refused rather than checked against rows it no longer has.',
 		inputSchema: {
 			type: 'object',
 			properties: {
@@ -403,7 +425,8 @@ export const TOOLS = [
 						additionalProperties: false
 					}
 				},
-				maximumPages: PAGES_FIELD
+				maximumPages: PAGES_FIELD,
+				digest: DIGEST_FIELD
 			},
 			required: ['path', 'records'],
 			additionalProperties: false
@@ -412,6 +435,7 @@ export const TOOLS = [
 			type: 'object',
 			properties: {
 				file: { type: 'string' },
+				digest: { type: 'string' },
 				verdict: VERDICT_FIELD,
 				checked: { type: 'integer' },
 				carried: { type: 'integer' },
@@ -504,6 +528,21 @@ async function reading(
 }
 
 /**
+ * The refusal owed to a call made against an earlier version of the file, or
+ * null. Every call opens the path again, so a second page or a check could
+ * otherwise land on a file replaced in between, with row numbers that belong
+ * to the first one. A caller that sends no digest has asked for no such check.
+ */
+function changedSince(args: Record<string, unknown>, table: Table): Outcome | null {
+	const expected = stringAt(args, 'digest');
+	if (expected === null || expected === table.document.digest) return null;
+	return {
+		text: `${table.document.name} has changed since the reading of digest ${expected}: its rows are no longer the ones numbered. Call read_table again.`,
+		failed: true
+	};
+}
+
+/**
  * The rows a call returns, and what it leaves behind.
  *
  * Bounded because a document has no bound and a context window does; ANNOUNCED
@@ -541,6 +580,8 @@ async function runReadTable(
 	if (path === null) return { text: 'read_table needs a path to a file.', failed: true };
 
 	const table = await reading(args, capabilities, path);
+	const changed = changedSince(args, table);
+	if (changed !== null) return changed;
 	const cut = windowOf(table, args);
 	/*
 	 * The listing explain would print is suppressed here and printed below
@@ -554,12 +595,14 @@ async function runReadTable(
 		text: [report, verdictLine(table), rowBlock(cut), describeDoubts(table.warnings)].join('\n\n'),
 		data: {
 			file: table.document.name,
-			verdict: verdictOf(table.findings),
+			digest: table.document.digest,
+			verdict: tableVerdict(table),
 			origin: table.document.origin,
 			rows: cut.rows,
 			firstRowNumber: cut.from,
 			totalRows: cut.total,
 			more: cut.more,
+			pagesUnread: table.document.pagesUnread ?? 0,
 			pages: table.document.pages.map((page, index) => ({
 				number: page.pageNumber,
 				boundaries: table.boundaries[index]
@@ -619,7 +662,7 @@ function foundText(table: Table, head: string, lines: string[], tail: string): s
 function foundData(table: Table, cut: ReturnType<typeof windowOf>, own: object) {
 	return {
 		file: table.document.name,
-		verdict: verdictOf(table.findings),
+		verdict: tableVerdict(table),
 		...own,
 		firstRowNumber: cut.from,
 		totalRows: cut.total,
@@ -803,6 +846,8 @@ async function runCheckCitations(
 	}
 
 	const table = await reading(args, capabilities, path);
+	const changed = changedSince(args, table);
+	if (changed !== null) return changed;
 	const mark = decimalMarkOf(table.document.text);
 	const checked = claims.map((claim, index) => checkOne(claim, index, table.rows, mark));
 
@@ -818,7 +863,8 @@ async function runCheckCitations(
 		text: citationText(table, total, missing),
 		data: {
 			file: table.document.name,
-			verdict: verdictOf(table.findings),
+			digest: table.document.digest,
+			verdict: tableVerdict(table),
 			checked: total,
 			carried: total - missing.length,
 			records: checked
