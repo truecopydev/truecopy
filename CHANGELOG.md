@@ -9,6 +9,11 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`citedText(rows, cited, first, 'apart')` keeps the cells of the cited rows apart**, with `|` between cells and between rows. Joined by a space, the default, two cells `12` and `345` read as `12 345`, and `carriesNumber` then accepted `12345`, a figure neither cell printed. Apart, no number is read across a cell, and a figure the cut split in two is no longer carried, which is why it arrives as a choice and not as a new default. `CellJoin` names the two values.
+- **`checkExtraction(document, { ..., absentFigures: 'review' })` lets a row carrying a figure printed nowhere decide the verdict.** Left out, such a row is listed in `rowsToReview` and the verdict follows the total alone, so `40 + 60` against a page printing only `100` came back `read`. With `'review'` it comes back `needs-review`. Opt in, because it moves the verdict of a caller whose rows carry figures it computed.
+
 ### Fixed
 
 - **An archive entry that does not match its CRC-32 or its declared size is refused (`entry-corrupt`).** A damaged byte inside a stored `.docx` or `.odt` part is still well formed XML, so a changed digit read as a figure the document never printed. `openDocument` now refuses such a file as `not-opened`. A file an editor wrote is untouched: no reading moves.

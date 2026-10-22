@@ -379,6 +379,24 @@ describe('checkExtraction', () => {
 		]);
 	});
 
+	it('lets a row printed nowhere decide the verdict when asked', () => {
+		// 40 + 60 closes on the 100 the page declares, and neither figure is on it.
+		const total = documentFromText(['TOTAL 100,00'].join('\n'), 'total.txt');
+		const made = {
+			records: [{ amount: 40 }, { amount: 60 }],
+			amountOf: (row: { amount: number }) => row.amount,
+			declared: [100],
+			unit: 'EUR'
+		};
+		expect(checkExtraction(total, made).verdict).toBe('read');
+		const strict = checkExtraction(total, { ...made, absentFigures: 'review' as const });
+		expect(strict.verdict).toBe('needs-review');
+		expect(strict.rowsToReview).toHaveLength(2);
+		expect(checkExtraction(page, { ...extraction, absentFigures: 'review' as const }).verdict).toBe(
+			'read'
+		);
+	});
+
 	it('shows a flagged row the way the caller words it', () => {
 		const invented = {
 			...extraction,
