@@ -24,8 +24,7 @@
  * stdout are moved to stderr before anything is loaded.
  */
 
-import { readFile } from 'node:fs/promises';
-import { readFileSync, realpathSync } from 'node:fs';
+import { openAsBlob, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { respond } from '../dist/mcp.js';
@@ -70,10 +69,16 @@ function within(path) {
 	throw new Error(`outside TRUECOPY_MCP_ROOT: ${basename(path)}`);
 }
 
-/** The one impure capability the protocol needs: bytes behind a path. */
+/**
+ * The one impure capability the protocol needs: bytes behind a path.
+ *
+ * Handed over as a blob backed by the file, not read: the library refuses a
+ * file over its size limit from `size` alone, so a three gigabyte path costs a
+ * stat rather than three gigabytes of this process.
+ */
 async function open(path) {
 	const full = within(resolve(path));
-	const bytes = await readFile(full);
+	const bytes = await openAsBlob(full);
 	return new File([bytes], basename(full), {
 		type: full.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'text/plain'
 	});
@@ -91,6 +96,27 @@ function send(message) {
  */
 let pending = '';
 
+/*
+ * Two readings at a time, and the rest wait their turn. A reading holds a whole
+ * document in memory and parts of it are synchronous, so ten calls at once
+ * would take the memory of ten documents and keep `ping` waiting behind all of
+ * them. Only tool calls queue: everything else is answered as it arrives.
+ */
+const READINGS_AT_ONCE = 2;
+let running = 0;
+const waiting = [];
+
+async function inTurn(work) {
+	if (running >= READINGS_AT_ONCE) await new Promise((go) => waiting.push(go));
+	running += 1;
+	try {
+		return await work();
+	} finally {
+		running -= 1;
+		waiting.shift()?.();
+	}
+}
+
 async function take(line) {
 	if (line.trim() === '') return;
 	let message;
@@ -106,7 +132,10 @@ async function take(line) {
 	 * while one runs concludes the server is dead. Each answer is written by a
 	 * single call, so two of them cannot interleave on the stream.
 	 */
-	const answer = await respond(message, { open, version });
+	const answer =
+		message?.method === 'tools/call'
+			? await inTurn(() => respond(message, { open, version }))
+			: await respond(message, { open, version });
 	if (answer !== null) send(answer);
 }
 

@@ -30,7 +30,7 @@
  * one would go silent against every client shipped before July 2026.
  */
 
-import { carriesNumber, carriesText, citedText, numberedRows } from './cite.js';
+import { carriesNumber, carriesText, citedText, numberedRows, type CellJoin } from './cite.js';
 import { ORIGINS } from './document.js';
 import { describeDoubts, explainReading } from './explain.js';
 import { decimalMarkOf, findNumbers, readLeadingDate, type DecimalMark } from './notation.js';
@@ -426,7 +426,13 @@ export const TOOLS = [
 					}
 				},
 				maximumPages: PAGES_FIELD,
-				digest: DIGEST_FIELD
+				digest: DIGEST_FIELD,
+				cells: {
+					type: 'string',
+					enum: ['joined', 'apart'],
+					description:
+						'joined (default) reads the cited cells as one text, so a figure the cut split in two is still found, and two cells 12 and 345 also carry 12345. apart reads no number and no word across two cells.'
+				}
 			},
 			required: ['path', 'records'],
 			additionalProperties: false
@@ -510,6 +516,12 @@ function boundedAt(
 function dateOrderAt(args: Record<string, unknown>): 'DMY' | 'MDY' | null {
 	const value = args.dateOrder ?? 'DMY';
 	return value === 'DMY' || value === 'MDY' ? value : null;
+}
+
+/** How the cited cells are joined, stated or defaulted, and never read off a typo. */
+function cellsAt(args: Record<string, unknown>): CellJoin | null {
+	const value = args.cells ?? 'joined';
+	return value === 'joined' || value === 'apart' ? value : null;
 }
 
 /** An argument the schema does not admit is refused by name, so the caller fixes the call. */
@@ -787,8 +799,14 @@ function claimAt(value: unknown): Claim | null {
 }
 
 /** One record checked: which of its values the rows it cited do not carry. */
-function checkOne(claim: Claim, index: number, rows: string[][], mark: DecimalMark | null) {
-	const source = citedText(rows, claim.rows, 1);
+function checkOne(
+	claim: Claim,
+	index: number,
+	rows: string[][],
+	mark: DecimalMark | null,
+	cells: CellJoin
+) {
+	const source = citedText(rows, claim.rows, 1, cells);
 	return {
 		record: index + 1,
 		rows: claim.rows,
@@ -837,6 +855,11 @@ async function runCheckCitations(
 		return { text: 'check_citations needs a path and a records array.', failed: true };
 	}
 
+	const cells = cellsAt(args);
+	if (cells === null) {
+		return badArgument('check_citations', 'cells', 'joined or apart');
+	}
+
 	const claims = given.map(claimAt).filter((claim): claim is Claim => claim !== null);
 	if (claims.length !== given.length) {
 		return {
@@ -849,7 +872,7 @@ async function runCheckCitations(
 	const changed = changedSince(args, table);
 	if (changed !== null) return changed;
 	const mark = decimalMarkOf(table.document.text);
-	const checked = claims.map((claim, index) => checkOne(claim, index, table.rows, mark));
+	const checked = claims.map((claim, index) => checkOne(claim, index, table.rows, mark, cells));
 
 	const total = claims.reduce((count, claim) => count + Object.keys(claim.values).length, 0);
 	const missing = checked.flatMap((record) =>

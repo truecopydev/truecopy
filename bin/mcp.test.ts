@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -121,6 +121,27 @@ describe('truecopy-mcp', () => {
 			expect(() => JSON.parse(line)).not.toThrow();
 		}
 		expect(err).toContain('standardFontDataUrl');
+	});
+
+	it('refuses a file over the size limit without reading it into memory', async () => {
+		// Sparse: three gigabytes on the file system, none of them on the disk.
+		const huge = onDisk('huge.pdf', '');
+		truncateSync(huge.path, 3 * 1024 ** 3);
+		const { answers } = await drive([call('read_table', { path: huge.path })]);
+		const result = answers[0].result as { isError: boolean; content: { text: string }[] };
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toContain('This file is over 20 MB.');
+	});
+
+	it('answers every reading of a burst, in turn, and ping alongside', async () => {
+		const burst = [1, 2, 3, 4, 5].map((id) => call('read_table', { path: STATEMENT.path }, id));
+		const { answers } = await drive([...burst, { jsonrpc: '2.0', id: 6, method: 'ping' }]);
+		expect(answers.map((answer) => answer.id).sort()).toEqual([1, 2, 3, 4, 5, 6]);
+		for (const answer of answers.filter((one) => one.id !== 6)) {
+			expect((answer.result as { content: { text: string }[] }).content[0].text).toContain(
+				'CARTE AMAZON'
+			);
+		}
 	});
 
 	it('answers nothing to a line that carries no request', async () => {

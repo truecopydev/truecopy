@@ -389,6 +389,34 @@ describe('check_citations', () => {
 		}
 	});
 
+	it('reads no figure across two cells when asked to keep them apart', async () => {
+		// Joined, the cells 12 and 345 print `12 345`, a thousands group carrying a
+		// figure neither cell holds. Apart is the caller's choice, not the default:
+		// it also loses a figure the cut split across two cells.
+		const split = serving(pasted('split.txt', 'REF A;12;345\nREF B;7;8'));
+		const claim = { path: '/split.txt', records: [{ rows: [1], values: { total: 12345 } }] };
+		const joined = await call('check_citations', claim, split);
+		expect(joined.structuredContent).toMatchObject({ carried: 1 });
+		const apart = await call('check_citations', { ...claim, cells: 'apart' }, split);
+		expect(apart.structuredContent).toMatchObject({ carried: 0 });
+		const kept = await call(
+			'check_citations',
+			{ ...claim, cells: 'apart', records: [{ rows: [1], values: { first: 12, second: 345 } }] },
+			split
+		);
+		expect(kept.structuredContent).toMatchObject({ checked: 2, carried: 2 });
+	});
+
+	it('refuses a way of joining cells it does not know', async () => {
+		const result = await call(
+			'check_citations',
+			{ path: '/s.txt', records: [], cells: 'glued' },
+			serving(pasted('s.txt', STATEMENT))
+		);
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toBe('check_citations: cells must be joined or apart.');
+	});
+
 	it('refuses a call with no path or no records', async () => {
 		const capabilities = serving(pasted('s.txt', STATEMENT));
 		expect((await call('check_citations', { records: [] }, capabilities)).isError).toBe(true);

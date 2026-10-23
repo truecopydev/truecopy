@@ -9,6 +9,15 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`check_citations` takes `cells: 'apart'`**, the MCP side of `citedText(..., 'apart')`. The server joined the cited cells with a space, so two cells `12` and `345` still carried `12345` for any model checking its records over MCP, with no way to ask otherwise. Left out, the check reads as before; `'apart'` reads no number and no word across two cells. Any other value is refused by name.
+
+### Fixed
+
+- **`truecopy-mcp` no longer reads a file into memory before its size is checked.** The path is handed to the library as a blob backed by the file, so a file over the 20 MB limit is refused from its size alone instead of being read whole first. No reading moves.
+- **`truecopy-mcp` runs two readings at a time and queues the rest.** A burst of tool calls opened every document at once; `ping` and the other requests are still answered as they arrive.
+
 ## [2.0.17] - 2026-10-22
 
 ### Added
