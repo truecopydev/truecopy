@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.18] - 2026-10-23
+
 ### Added
 
 - **`check_citations` takes `cells: 'apart'`**, the MCP side of `citedText(..., 'apart')`. The server joined the cited cells with a space, so two cells `12` and `345` still carried `12345` for any model checking its records over MCP, with no way to ask otherwise. Left out, the check reads as before; `'apart'` reads no number and no word across two cells. Any other value is refused by name.
