@@ -106,14 +106,17 @@ const READINGS_AT_ONCE = 2;
 let running = 0;
 const waiting = [];
 
+/* A finished reading hands its slot straight to the next one in line, so no
+ * call arriving in between can take it and make three. */
 async function inTurn(work) {
 	if (running >= READINGS_AT_ONCE) await new Promise((go) => waiting.push(go));
-	running += 1;
+	else running += 1;
 	try {
 		return await work();
 	} finally {
-		running -= 1;
-		waiting.shift()?.();
+		const next = waiting.shift();
+		if (next === undefined) running -= 1;
+		else next();
 	}
 }
 
