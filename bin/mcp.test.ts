@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { pdfWithText } from '../src/kit.js';
+import { pdfWithPages, pdfWithText } from '../src/kit.js';
 
 /*
  * The server has to RUN, and only running it says whether it does. What is
@@ -133,15 +133,28 @@ describe('truecopy-mcp', () => {
 		expect(result.content[0].text).toContain('This file is over 20 MB.');
 	});
 
-	it('answers every reading of a burst, in turn, and ping alongside', async () => {
-		const burst = [1, 2, 3, 4, 5].map((id) => call('read_table', { path: STATEMENT.path }, id));
-		const { answers } = await drive([...burst, { jsonrpc: '2.0', id: 6, method: 'ping' }]);
-		expect(answers.map((answer) => answer.id).sort()).toEqual([1, 2, 3, 4, 5, 6]);
-		for (const answer of answers.filter((one) => one.id !== 6)) {
-			expect((answer.result as { content: { text: string }[] }).content[0].text).toContain(
-				'CARTE AMAZON'
-			);
-		}
+	it('reads two documents at a time, the third waits its turn, ping does not', async () => {
+		// Two long PDFs, then a pasted line that reads in no time. Run together, the
+		// line would be answered first; queued, it starts only once a PDF is done.
+		const page = Array.from({ length: 60 }, (_, row) =>
+			['02/05/2026', `LIGNE ${row}`, '12,40'].map((word, column) => ({
+				word,
+				x: [50, 150, 430][column],
+				y: 760 - row * 12
+			}))
+		).flat();
+		const long = onDisk('long.pdf', pdfWithPages(Array.from({ length: 40 }, () => page)));
+		const short = onDisk('short.txt', '02/05/2026;CARTE AMAZON;12,40');
+		const { answers } = await drive([
+			call('read_table', { path: long.path }, 1),
+			call('read_table', { path: long.path }, 2),
+			call('read_table', { path: short.path }, 3),
+			{ jsonrpc: '2.0', id: 4, method: 'ping' }
+		]);
+		const order = answers.map((answer) => answer.id);
+		expect(order[0]).toBe(4);
+		expect(order.indexOf(3)).toBeGreaterThan(Math.min(order.indexOf(1), order.indexOf(2)));
+		expect([...order].sort()).toEqual([1, 2, 3, 4]);
 	});
 
 	it('answers nothing to a line that carries no request', async () => {
