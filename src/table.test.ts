@@ -378,4 +378,32 @@ describe('what readTable refuses to vouch for', () => {
 		expect(cut.rows[0]).toEqual(['aa', '9999', '888888888888']);
 		expect(wide.rows[0]).toEqual(['aa', '9999 888888888888']);
 	});
+
+	it('cuts a quantity from the name printed one space after it, when number edges are read', async () => {
+		/*
+		 * A portfolio page: quantities flush right at character 12, the name of
+		 * the holding one space later, the currency at 40. One space is under the
+		 * gap, so the default cut keeps quantity and name in one cell; the option
+		 * reads the agreed right edge of the figures as the boundary it is.
+		 */
+		const lineAt = (pieces: [number, string][]): string =>
+			pieces.reduce((line, [x, text]) => line.padEnd(x, ' ') + text, '');
+		const lines: string[] = [];
+		for (let i = 0; i < 12; i++) {
+			const quantity = `${'9'.repeat(1 + (i % 4))}.000,00`;
+			lines.push(
+				lineAt([
+					[12 - quantity.length, quantity],
+					[13, 'ABC ARBITRAGE'],
+					[40, 'EUR']
+				])
+			);
+		}
+		const paste = new File([lines.join('\n')], 'paste.txt', { type: 'text/plain' });
+
+		const welded = await readTable(paste);
+		const cut = await readTable(paste, { numberEdges: true });
+		expect(welded.rows[0]).toEqual(['9.000,00 ABC ARBITRAGE', 'EUR']);
+		expect(cut.rows[0]).toEqual(['9.000,00', 'ABC ARBITRAGE', 'EUR']);
+	});
 });
