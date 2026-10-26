@@ -91,6 +91,32 @@ describe('leading figures', () => {
 			['575.000,00', 'NEKKAR', 'c']
 		]);
 	});
+	it('splits on a doubled, no-break or thin space as on a plain one', () => {
+		const cells = [
+			['240 ABC'],
+			['240\u00A0ABC'],
+			['240\u202FABC'],
+			['240  ABC'],
+			['240\u00A0000,00\u00A0ABC']
+		];
+		expect(splitLeadingFigures(cells)).toEqual([
+			['240', 'ABC'],
+			['240', 'ABC'],
+			['240', 'ABC'],
+			['240', 'ABC'],
+			['240\u00A0000,00', 'ABC']
+		]);
+	});
+
+	it('keeps a quantity followed by an all-number reference whole, on the label side', () => {
+		const cells = [['240 ABC'], ['575 NEKKAR'], ['240 1234']];
+		expect(splitLeadingFigures(cells)).toEqual([
+			['240', 'ABC'],
+			['575', 'NEKKAR'],
+			['', '240 1234']
+		]);
+	});
+
 	it('leaves two street numbers in a column of names alone', () => {
 		const names = [
 			['12 rue Victor Hugo'],

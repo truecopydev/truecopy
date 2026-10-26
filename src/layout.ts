@@ -658,16 +658,18 @@ export function splitLeadingFigures(cells: string[][], minimumSupport = 0.15): s
 	);
 }
 
-/** "240.000,00 ABC ARBITRAGE" as its figure and its label, or null. The figure
+/** "240.000,00 ABC ARBITRAGE" as its figure and its label, or null. The
+ *  space between them may be doubled, no-break or thin, as a run prints it. The figure
  *  may be printed in groups ("3 710 818 ALS LTD") and signed ("-240 ABC", a
  *  short position); a number followed by a number is not the pattern, so
  *  "1 358 522" alone stays one figure. The label opens on a letter, on digits
  *  glued to a letter ("3M") or on a parenthesis around a word ("(ABC)") - never
  *  on "(522)", which is a negative printed in groups. */
 function leadingFigure(text: string): { figure: string; label: string } | null {
-	const match = /^([-+]?(?:\d[\d .,'\u00A0]*\d|\d)) ((?:\p{L}|\d+\p{L}|\((?=\p{L})).*)$/u.exec(
-		text
-	);
+	const match =
+		/^([-+]?(?:\d[\d .,'\u00A0\u202F\u2009]*\d|\d))[ \u00A0\u202F\u2009]+((?:\p{L}|\d+\p{L}|\((?=\p{L})).*)$/u.exec(
+			text
+		);
 	if (match === null || !isOnlyNumber(match[1])) return null;
 	return { figure: match[1], label: match[2] };
 }
