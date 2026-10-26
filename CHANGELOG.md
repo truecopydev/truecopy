@@ -9,6 +9,11 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`truecopy-mcp` refuses a `from`, `limit` or `maximumPages` its schema does not admit, by name.** A `limit` over 2000 was cut down to 2000 and a `from` of 0, a fraction or a string read as the default, all in silence: a caller that asked for rows 0 to 5000 got rows 1 to 2000 under a `reliable` verdict, with nothing to say the window was not the one it asked for. The three now answer as `decimals` and `year` already did, `read_table: limit must be a whole number from 1 to 2000.`, on every tool. A call within its schema reads exactly as before.
+- **Every tool's `outputSchema` declares the refusal it can answer with.** A file that will not open answers `{ verdict: 'unreadable', reason? }` and nothing else, and the schema required `rows`, `file` and the counts of it, so a client validating `structuredContent` rejected the one answer that says "do not lean on this". The schema now admits the refusal and still requires the whole reading of a `reliable` or `doubtful` verdict; `reason` is declared. No answer changes.
+
 ## [2.0.19] - 2026-10-26
 
 ### Added
