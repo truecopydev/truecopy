@@ -234,11 +234,37 @@ describe('read_table', () => {
 	it('keeps the numbers of the window it was asked for', async () => {
 		const result = await call(
 			'read_table',
-			{ path: 's.txt', from: 3, limit: 5000 },
+			{ path: 's.txt', from: 3, limit: 2000 },
 			serving(pasted('s.txt', STATEMENT))
 		);
 		expect((result.structuredContent as { firstRowNumber: number }).firstRowNumber).toBe(3);
 		expect(result.content[0].text).toContain('3 | 05/05/2026');
+	});
+
+	it('refuses a window its schema does not admit, by name, rather than cutting it in silence', async () => {
+		// limit: 5000 used to come back as 2000 rows under a reliable verdict, and
+		// from: 0 as the start: a window that was not the one asked for, unsaid.
+		const serve = serving(pasted('s.txt', STATEMENT));
+		const refusals: [Record<string, unknown>, string][] = [
+			[{ limit: 5000 }, 'read_table: limit must be a whole number from 1 to 2000.'],
+			[{ limit: 0 }, 'read_table: limit must be a whole number from 1 to 2000.'],
+			[{ limit: '2' }, 'read_table: limit must be a whole number from 1 to 2000.'],
+			[{ from: 0 }, 'read_table: from must be a whole number of 1 or more.'],
+			[{ from: 2.5 }, 'read_table: from must be a whole number of 1 or more.'],
+			[{ maximumPages: 0 }, 'read_table: maximumPages must be a whole number of 1 or more.']
+		];
+		for (const [bound, text] of refusals) {
+			const result = await call('read_table', { path: 's.txt', ...bound }, serve);
+			expect(result.isError).toBe(true);
+			expect(result.content[0].text).toBe(text);
+			expect(result.structuredContent).toBeUndefined();
+		}
+		for (const tool of ['find_amounts', 'find_dates', 'check_citations']) {
+			const result = await call(tool, { path: 's.txt', maximumPages: -1, records: [] }, serve);
+			expect(result.content[0].text).toBe(
+				`${tool}: maximumPages must be a whole number of 1 or more.`
+			);
+		}
 	});
 
 	it('says there is no such row rather than pretending there is', async () => {
@@ -486,7 +512,60 @@ describe('a reading named by its digest', () => {
 	});
 });
 
+/**
+ * Whether a structured answer satisfies the advertised schema: every required
+ * field of the one `oneOf` branch whose verdict admits it, and no field the
+ * schema does not name. Enough of JSON Schema to catch the two drifts seen
+ * here, a refusal with no `rows` and a field the schema never heard of.
+ */
+function satisfies(schema: (typeof TOOLS)[number]['outputSchema'], data: unknown): boolean {
+	if (typeof data !== 'object' || data === null) return false;
+	const answer = data as Record<string, unknown>;
+	const branches = schema.oneOf.filter((branch) =>
+		(branch.properties.verdict.enum as readonly string[]).includes(String(answer.verdict))
+	);
+	if (branches.length !== 1) return false;
+	const known = Object.keys(schema.properties);
+	return (
+		branches[0].required.every((field) => field in answer) &&
+		Object.keys(answer).every((field) => known.includes(field))
+	);
+}
+
 describe('the schema the server advertises', () => {
+	it('admits the refusal every tool can answer with, and still requires the reading of a reading', async () => {
+		// The refusal is { verdict: 'unreadable', reason? } and nothing else. A
+		// schema that required rows of it made a strict client reject the one
+		// answer that says "do not lean on this".
+		const read = TOOLS.find((tool) => tool.name === 'read_table');
+		if (read === undefined) throw new Error('read_table is not advertised');
+		const refused = await call('read_table', { path: '/x.pdf' }, serving(pasted('empty.pdf', '')));
+		expect(refused.structuredContent).toEqual({ verdict: 'unreadable', reason: 'empty' });
+		expect(satisfies(read.outputSchema, refused.structuredContent)).toBe(true);
+
+		const reading = await call(
+			'read_table',
+			{ path: 's.txt' },
+			serving(pasted('s.txt', STATEMENT))
+		);
+		expect(satisfies(read.outputSchema, reading.structuredContent)).toBe(true);
+		expect(satisfies(read.outputSchema, { verdict: 'reliable' })).toBe(false);
+		expect(satisfies(read.outputSchema, { verdict: 'unreadable', rows: [] })).toBe(true);
+		expect(satisfies(read.outputSchema, { verdict: 'unreadable', guess: 1 })).toBe(false);
+	});
+
+	it('declares the same answer or refusal on every tool', () => {
+		for (const tool of TOOLS) {
+			expect(tool.outputSchema.required).toEqual(['verdict']);
+			expect(tool.outputSchema.oneOf[1]).toEqual({
+				properties: { verdict: { type: 'string', enum: ['unreadable'] } },
+				required: ['verdict']
+			});
+			expect(tool.outputSchema.oneOf[0].required).toContain('verdict');
+			expect(tool.outputSchema.properties.reason.type).toBe('string');
+		}
+	});
+
 	it('offers every origin a reading can carry, and no other', () => {
 		// Declared twice - the type and the schema - and the day `docx` was added
 		// to one, the other still said `pdf, text, image`. A client validating

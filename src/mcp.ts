@@ -144,6 +144,38 @@ export type Verdict = 'reliable' | 'doubtful' | 'unreadable';
 
 const VERDICT_FIELD = { type: 'string', enum: ['reliable', 'doubtful', 'unreadable'] } as const;
 
+const REASON_FIELD = {
+	type: 'string',
+	description:
+		'Why the file did not open, when the library could tell: empty, too-big, no-text, too-slow, or the kind of bytes it was. Only on an unreadable verdict.'
+} as const;
+
+/**
+ * What a tool answers: the reading, or the refusal every tool shares.
+ *
+ * A refusal travels as `{ verdict: 'unreadable', reason? }`, with no row, no
+ * file name and no count, and the schema has to say so. A host that validates
+ * `structuredContent` against a schema requiring `rows` rejects the refusal,
+ * and the one answer that says "do not lean on this" is the one that is lost.
+ */
+function answerOrRefusal<Properties extends object, Required extends readonly string[]>(answer: {
+	properties: Properties;
+	required: Required;
+}) {
+	return {
+		type: 'object',
+		properties: { ...answer.properties, reason: REASON_FIELD },
+		required: ['verdict'],
+		oneOf: [
+			{
+				properties: { verdict: { type: 'string', enum: ['reliable', 'doubtful'] } },
+				required: answer.required
+			},
+			{ properties: { verdict: { type: 'string', enum: ['unreadable'] } }, required: ['verdict'] }
+		]
+	} as const;
+}
+
 /**
  * The verdict of a reading that opened: doubtful as soon as one thing looked
  * wrong, or as soon as `maximumPages` left a page unread. A reading cut at the
@@ -236,8 +268,7 @@ export const TOOLS = [
 			required: ['path'],
 			additionalProperties: false
 		},
-		outputSchema: {
-			type: 'object',
+		outputSchema: answerOrRefusal({
 			properties: {
 				file: { type: 'string' },
 				digest: { type: 'string' },
@@ -273,7 +304,7 @@ export const TOOLS = [
 				'pages',
 				'findings'
 			]
-		},
+		}),
 		annotations: READ_ONLY
 	},
 	{
@@ -298,8 +329,7 @@ export const TOOLS = [
 			required: ['path'],
 			additionalProperties: false
 		},
-		outputSchema: {
-			type: 'object',
+		outputSchema: answerOrRefusal({
 			properties: {
 				file: { type: 'string' },
 				verdict: VERDICT_FIELD,
@@ -327,7 +357,7 @@ export const TOOLS = [
 				'more',
 				'findings'
 			]
-		},
+		}),
 		annotations: READ_ONLY
 	},
 	{
@@ -358,8 +388,7 @@ export const TOOLS = [
 			required: ['path'],
 			additionalProperties: false
 		},
-		outputSchema: {
-			type: 'object',
+		outputSchema: answerOrRefusal({
 			properties: {
 				file: { type: 'string' },
 				verdict: VERDICT_FIELD,
@@ -390,7 +419,7 @@ export const TOOLS = [
 				'more',
 				'findings'
 			]
-		},
+		}),
 		annotations: READ_ONLY
 	},
 	{
@@ -437,8 +466,7 @@ export const TOOLS = [
 			required: ['path', 'records'],
 			additionalProperties: false
 		},
-		outputSchema: {
-			type: 'object',
+		outputSchema: answerOrRefusal({
 			properties: {
 				file: { type: 'string' },
 				digest: { type: 'string' },
@@ -466,7 +494,7 @@ export const TOOLS = [
 				}
 			},
 			required: ['file', 'verdict', 'checked', 'carried', 'records']
-		},
+		}),
 		annotations: READ_ONLY
 	}
 ] as const;
@@ -486,11 +514,6 @@ function stringAt(args: Record<string, unknown>, name: string): string | null {
 	return typeof value === 'string' && value.trim() !== '' ? value : null;
 }
 
-function integerAt(args: Record<string, unknown>, name: string): number | null {
-	const value = args[name];
-	return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : null;
-}
-
 /**
  * A whole number within the bounds its schema states: the default when absent,
  * null when what came is neither. Null is ANSWERED, never rounded or dropped:
@@ -498,6 +521,20 @@ function integerAt(args: Record<string, unknown>, name: string): number | null {
  * plausible figures under a `reliable` verdict, which is the one failure this
  * server exists to prevent.
  */
+function boundedAt(
+	args: Record<string, unknown>,
+	name: string,
+	fallback: number,
+	lowest: number,
+	highest: number
+): number | null;
+function boundedAt(
+	args: Record<string, unknown>,
+	name: string,
+	fallback: undefined,
+	lowest: number,
+	highest: number
+): number | undefined | null;
 function boundedAt(
 	args: Record<string, unknown>,
 	name: string,
@@ -529,14 +566,42 @@ function badArgument(tool: string, name: string, expected: string): Outcome {
 	return { text: `${tool}: ${name} must be ${expected}.`, failed: true };
 }
 
+/** The pages a call opens and the rows it looks in, each as its schema states. */
+type Bounds = { maximumPages: number | undefined; from: number; limit: number };
+
+/**
+ * The bounds of a call, or the refusal owed to the first one its schema does
+ * not admit. A `limit` over the maximum used to be cut down to it and a
+ * `from` of 0 read as the start, both in silence: a caller that asked for
+ * rows 0 to 5000 got rows 1 to 2000 under a `reliable` verdict, with
+ * nothing to tell it the window was not the one it asked for.
+ */
+function boundsOf(args: Record<string, unknown>, tool: string): Bounds | Outcome {
+	const whole = Number.MAX_SAFE_INTEGER;
+	const maximumPages = boundedAt(args, 'maximumPages', undefined, 1, whole);
+	if (maximumPages === null)
+		return badArgument(tool, 'maximumPages', 'a whole number of 1 or more');
+	const from = boundedAt(args, 'from', 1, 1, whole);
+	if (from === null) return badArgument(tool, 'from', 'a whole number of 1 or more');
+	const limit = boundedAt(args, 'limit', DEFAULT_ROWS, 1, MAXIMUM_ROWS);
+	if (limit === null) {
+		return badArgument(tool, 'limit', `a whole number from 1 to ${MAXIMUM_ROWS}`);
+	}
+	return { maximumPages, from, limit };
+}
+
+const refused = (bounds: Bounds | Outcome): bounds is Outcome => 'text' in bounds;
+
 /** The reading, once, for whichever tool asked. */
 async function reading(
-	args: Record<string, unknown>,
 	capabilities: McpCapabilities,
-	path: string
+	path: string,
+	maximumPages: number | undefined
 ): Promise<Table> {
-	const maximumPages = integerAt(args, 'maximumPages');
-	return readTable(await capabilities.open(path), maximumPages === null ? {} : { maximumPages });
+	return readTable(
+		await capabilities.open(path),
+		maximumPages === undefined ? {} : { maximumPages }
+	);
 }
 
 /**
@@ -561,9 +626,7 @@ function changedSince(args: Record<string, unknown>, table: Table): Outcome | nu
  * because a listing cut in silence reads as a document that ends there, which
  * is how a missing row becomes a row that is not there.
  */
-function windowOf(table: Table, args: Record<string, unknown>) {
-	const from = integerAt(args, 'from') ?? 1;
-	const limit = Math.min(integerAt(args, 'limit') ?? DEFAULT_ROWS, MAXIMUM_ROWS);
+function windowOf(table: Table, { from, limit }: Bounds) {
 	const rows = table.rows.slice(from - 1, from - 1 + limit);
 	return { from, rows, total: table.rows.length, more: from - 1 + rows.length < table.rows.length };
 }
@@ -590,11 +653,13 @@ async function runReadTable(
 ): Promise<Outcome> {
 	const path = stringAt(args, 'path');
 	if (path === null) return { text: 'read_table needs a path to a file.', failed: true };
+	const bounds = boundsOf(args, 'read_table');
+	if (refused(bounds)) return bounds;
 
-	const table = await reading(args, capabilities, path);
+	const table = await reading(capabilities, path, bounds.maximumPages);
 	const changed = changedSince(args, table);
 	if (changed !== null) return changed;
-	const cut = windowOf(table, args);
+	const cut = windowOf(table, bounds);
 	/*
 	 * The listing explain would print is suppressed here and printed below
 	 * instead, numbered ACROSS the document rather than restarting on each page.
@@ -694,8 +759,10 @@ async function runFindAmounts(
 	if (decimals === null) {
 		return badArgument('find_amounts', 'decimals', 'a whole number from 0 to 6');
 	}
-	const table = await reading(args, capabilities, path);
-	const cut = windowOf(table, args);
+	const bounds = boundsOf(args, 'find_amounts');
+	if (refused(bounds)) return bounds;
+	const table = await reading(capabilities, path, bounds.maximumPages);
+	const cut = windowOf(table, bounds);
 	const amounts: (Placed & { value: number })[] = placedCells(cut).flatMap(
 		({ cell, row, column }) =>
 			findNumbers(cell, decimals === 0 ? undefined : decimals).map((found) => ({
@@ -720,7 +787,11 @@ async function runFindAmounts(
 	};
 }
 
-/** A calendar date as YYYY-MM-DD, from the local date the notation built. */
+/**
+ * A calendar date as YYYY-MM-DD, read in LOCAL time on purpose: `readLeadingDate`
+ * builds its Date with `new Date(year, month, day)`, in local time, so the UTC
+ * getters would shift a date west of Greenwich to the day before.
+ */
 function isoDay(date: Date): string {
 	const two = (part: number) => String(part).padStart(2, '0');
 	return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
@@ -739,8 +810,10 @@ async function runFindDates(
 	}
 	const year = boundedAt(args, 'year', undefined, 1900, 2200);
 	if (year === null) return badArgument('find_dates', 'year', 'a whole year from 1900 to 2200');
-	const table = await reading(args, capabilities, path);
-	const cut = windowOf(table, args);
+	const bounds = boundsOf(args, 'find_dates');
+	if (refused(bounds)) return bounds;
+	const table = await reading(capabilities, path, bounds.maximumPages);
+	const cut = windowOf(table, bounds);
 	const dates: (Placed & { date: string })[] = placedCells(cut).flatMap(({ cell, row, column }) => {
 		const found = readLeadingDate(cell, { dateOrder }, year);
 		return found === null
@@ -867,8 +940,10 @@ async function runCheckCitations(
 			failed: true
 		};
 	}
+	const bounds = boundsOf(args, 'check_citations');
+	if (refused(bounds)) return bounds;
 
-	const table = await reading(args, capabilities, path);
+	const table = await reading(capabilities, path, bounds.maximumPages);
 	const changed = changedSince(args, table);
 	if (changed !== null) return changed;
 	const mark = decimalMarkOf(table.document.text);
