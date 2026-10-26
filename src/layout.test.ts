@@ -11,7 +11,8 @@ import {
 	placeOf,
 	placesOf,
 	rowToCells,
-	rowsFrom
+	rowsFrom,
+	splitLeadingFigures
 } from './layout.js';
 import type { PositionedItem } from './document.js';
 
@@ -20,6 +21,129 @@ const item = (text: string, x: number, y: number, width = text.length * 5): Posi
 	x,
 	y,
 	width
+});
+
+describe('leading figures', () => {
+	const holdings = [
+		['Services financiers', '', ''],
+		['240.000,00 ABC ARBITRAGE', 'EUR', '1.243.200,00'],
+		['1.600.000,00 ABG SUNDAL COLLIER HOLDING', 'NOK', '1.005.524,37'],
+		['115.000,00 ALANTRA PARTNERS SA', 'EUR', '1.167.250,00'],
+		['3 710 818 ALS LTD', 'AUD', '46 392 835'],
+		['', '', '17.780.855,42']
+	];
+
+	it('splits the column where a figure opens the cell one space before a word', () => {
+		expect(splitLeadingFigures(holdings)).toEqual([
+			['', 'Services financiers', '', ''],
+			['240.000,00', 'ABC ARBITRAGE', 'EUR', '1.243.200,00'],
+			['1.600.000,00', 'ABG SUNDAL COLLIER HOLDING', 'NOK', '1.005.524,37'],
+			['115.000,00', 'ALANTRA PARTNERS SA', 'EUR', '1.167.250,00'],
+			['3 710 818', 'ALS LTD', 'AUD', '46 392 835'],
+			['', '', '', '17.780.855,42']
+		]);
+	});
+
+	it('leaves a column alone when the pattern does not recur', () => {
+		const prose = [
+			['12 apples were counted', '1'],
+			['the rest of the text', '2'],
+			['and more of it', '3'],
+			['and the last line', '4'],
+			['and one past that', '5'],
+			['and the end', '6'],
+			['and the end again', '7'],
+			['and still the end', '8'],
+			['and the very end', '9'],
+			['and nothing after', '10'],
+			['and nothing at all', '11'],
+			['and that is it', '12'],
+			['so it ends here', '13'],
+			['the last one', '14']
+		];
+		expect(splitLeadingFigures(prose)).toEqual(prose);
+	});
+
+	it('keeps a ragged row rectangular, and a token that is not a number out of the pattern', () => {
+		const cells = [
+			['240.000,00 ABC', 'a'],
+			['575.000,00 NEKKAR', 'b'],
+			['1..2 NOT A NUMBER'],
+			['36.000,00 TECHNOTRANS SE']
+		];
+		expect(splitLeadingFigures(cells)).toEqual([
+			['240.000,00', 'ABC', 'a'],
+			['575.000,00', 'NEKKAR', 'b'],
+			['', '1..2 NOT A NUMBER', ''],
+			['36.000,00', 'TECHNOTRANS SE', '']
+		]);
+	});
+
+	it('keeps a number in groups whole, and a lone number on the figure side', () => {
+		const cells = [
+			['1 358 522', 'a'],
+			['240.000,00 ABC', 'b'],
+			['575.000,00 NEKKAR', 'c']
+		];
+		expect(splitLeadingFigures(cells)).toEqual([
+			['1 358 522', '', 'a'],
+			['240.000,00', 'ABC', 'b'],
+			['575.000,00', 'NEKKAR', 'c']
+		]);
+	});
+	it('splits on a doubled, no-break or thin space as on a plain one', () => {
+		const cells = [
+			['240 ABC'],
+			['240\u00A0ABC'],
+			['240\u202FABC'],
+			['240  ABC'],
+			['240\u00A0000,00\u00A0ABC']
+		];
+		expect(splitLeadingFigures(cells)).toEqual([
+			['240', 'ABC'],
+			['240', 'ABC'],
+			['240', 'ABC'],
+			['240', 'ABC'],
+			['240\u00A0000,00', 'ABC']
+		]);
+	});
+
+	it('keeps a quantity followed by an all-number reference whole, on the label side', () => {
+		const cells = [['240 ABC'], ['575 NEKKAR'], ['240 1234']];
+		expect(splitLeadingFigures(cells)).toEqual([
+			['240', 'ABC'],
+			['575', 'NEKKAR'],
+			['', '240 1234']
+		]);
+	});
+
+	it('leaves two street numbers in a column of names alone', () => {
+		const names = [
+			['12 rue Victor Hugo'],
+			['14 avenue Pasteur'],
+			...Array.from({ length: 12 }, (_, i) => [`Name number ${String(i)}`])
+		];
+		expect(splitLeadingFigures(names)).toEqual(names);
+	});
+
+	it('reads a signed quantity, a name opening on digits and a name in parentheses', () => {
+		const cells = [
+			['240.000,00 ABC ARBITRAGE'],
+			['-240 ABC'],
+			['+12,00 DEF'],
+			['240 3M'],
+			['240 (ABC)'],
+			['1 358 (522)']
+		];
+		expect(splitLeadingFigures(cells)).toEqual([
+			['240.000,00', 'ABC ARBITRAGE'],
+			['-240', 'ABC'],
+			['+12,00', 'DEF'],
+			['240', '3M'],
+			['240', '(ABC)'],
+			['', '1 358 (522)']
+		]);
+	});
 });
 
 describe('columns', () => {

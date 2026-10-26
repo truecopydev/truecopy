@@ -23,7 +23,7 @@
 
 import type { Document, TextPage } from './document.js';
 import { openDocument, type OpenOptions } from './open.js';
-import { boundariesFromRecurrence, cellsOf, gapFor } from './layout.js';
+import { boundariesFromRecurrence, cellsOf, gapFor, splitLeadingFigures } from './layout.js';
 import { columnCount, profileColumns } from './columns.js';
 import { decimalMarkOf, findNumbers, type DecimalMark } from './notation.js';
 
@@ -108,6 +108,11 @@ export interface Table {
 	 * columns the table does not have. This is the cut that kept only the x that
 	 * come back row after row, and it is here because a caller that wants to
 	 * explain or re-cut the same page needs the same boundaries.
+	 *
+	 * With `numberEdges`, a column split in two has no edge of its own - the
+	 * figure and its label were one run of text - so on a page where a split
+	 * happened the rows of `pages[i]` are wider than `boundaries[i].length + 1`,
+	 * and a column index past the split no longer names a zone of the cut.
 	 */
 	boundaries: number[][];
 	/**
@@ -307,6 +312,20 @@ export interface TableOptions extends OpenOptions {
 	 *  apart. On unless declined. */
 	rightEdges?: boolean;
 	/**
+	 * Cut a figure from the label printed one space after it, in every column
+	 * where that recurs. Off unless asked for.
+	 *
+	 * A portfolio page prints "240.000,00 ABC ARBITRAGE" as one run of text:
+	 * the quantity is flush right, the name follows one space later, and no
+	 * geometry sees a gutter inside a run. With this on, a column where enough
+	 * rows open on a whole number, a space and a word is split in two; a number
+	 * followed by a number is never split, so a figure printed in groups stays
+	 * whole. It moves cells, so it arrives as a knob: a reader that split the
+	 * quantity from the name itself keeps its wider cell until its own bench
+	 * says otherwise.
+	 */
+	numberEdges?: boolean;
+	/**
 	 * Space the items of a cell as the page printed them, instead of one space
 	 * apart. Off unless asked for.
 	 *
@@ -372,12 +391,13 @@ export async function readTable(file: File, options: TableOptions = {}): Promise
 			gapFor(page.unit),
 			options.rightEdges ?? true
 		);
-		const cells = cellsOf(
+		const welded = cellsOf(
 			page,
 			cut,
 			options.measuredSpaces ?? false,
 			options.pairedParentheses ?? false
 		);
+		const cells = options.numberEdges ? splitLeadingFigures(welded) : welded;
 		boundaries.push(cut);
 		pages.push(cells);
 		findings.push(...complainAbout(page, cells, cut, mark));

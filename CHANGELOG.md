@@ -9,6 +9,10 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`readTable` takes `numberEdges: true`**, which cuts a figure from the label printed one space after it, in every column where that recurs. A portfolio page prints `240.000,00 ABC ARBITRAGE` as one run of text, so no geometry sees a gutter inside it; measured on the portfolio pages of two Luxembourg fund reports, 103 and 43 holdings, every quantity came back welded to its name and the reading was vouched for on one of them. With the option, 103 of 103 and 40 of 43 rows read right, and no reading is vouched for wrongly. A number followed by a number is never split, so a figure printed in groups stays whole; a signed quantity (`-240 ABC`) and a name opening on digits or a parenthesis (`240 3M`, `240 (ABC)`) split like the others, and so does a figure set off by a doubled, no-break or thin space. A column splits only where the pattern holds at least half of what it carries, so two street numbers in a column of names stay put. A split column has no edge of its own, so `boundaries` stays the cut it was and the rows of that page are wider than it. Off unless asked for: no reading moves.
+
 ## [2.0.18] - 2026-10-23
 
 ### Added
