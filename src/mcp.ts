@@ -577,20 +577,34 @@ type Bounds = { maximumPages: number | undefined; from: number; limit: number };
  * nothing to tell it the window was not the one it asked for.
  */
 function boundsOf(args: Record<string, unknown>, tool: string): Bounds | Outcome {
-	const whole = Number.MAX_SAFE_INTEGER;
-	const maximumPages = boundedAt(args, 'maximumPages', undefined, 1, whole);
-	if (maximumPages === null)
-		return badArgument(tool, 'maximumPages', 'a whole number of 1 or more');
-	const from = boundedAt(args, 'from', 1, 1, whole);
+	const pages = pagesOf(args, tool);
+	if (refused(pages)) return pages;
+	const from = boundedAt(args, 'from', 1, 1, Number.MAX_SAFE_INTEGER);
 	if (from === null) return badArgument(tool, 'from', 'a whole number of 1 or more');
 	const limit = boundedAt(args, 'limit', DEFAULT_ROWS, 1, MAXIMUM_ROWS);
 	if (limit === null) {
 		return badArgument(tool, 'limit', `a whole number from 1 to ${MAXIMUM_ROWS}`);
 	}
-	return { maximumPages, from, limit };
+	return { ...pages, from, limit };
 }
 
-const refused = (bounds: Bounds | Outcome): bounds is Outcome => 'text' in bounds;
+/**
+ * The pages a call opens, alone: what check_citations declares, which reads
+ * the rows it is given and looks in no window of its own. A stray `from` or
+ * `limit` on it is not refused, because its schema does not name them.
+ */
+function pagesOf(
+	args: Record<string, unknown>,
+	tool: string
+): Pick<Bounds, 'maximumPages'> | Outcome {
+	const maximumPages = boundedAt(args, 'maximumPages', undefined, 1, Number.MAX_SAFE_INTEGER);
+	if (maximumPages === null)
+		return badArgument(tool, 'maximumPages', 'a whole number of 1 or more');
+	return { maximumPages };
+}
+
+const refused = <Admitted extends object>(bounds: Admitted | Outcome): bounds is Outcome =>
+	'text' in bounds;
 
 /** The reading, once, for whichever tool asked. */
 async function reading(
@@ -940,10 +954,10 @@ async function runCheckCitations(
 			failed: true
 		};
 	}
-	const bounds = boundsOf(args, 'check_citations');
-	if (refused(bounds)) return bounds;
+	const pages = pagesOf(args, 'check_citations');
+	if (refused(pages)) return pages;
 
-	const table = await reading(capabilities, path, bounds.maximumPages);
+	const table = await reading(capabilities, path, pages.maximumPages);
 	const changed = changedSince(args, table);
 	if (changed !== null) return changed;
 	const mark = decimalMarkOf(table.document.text);
