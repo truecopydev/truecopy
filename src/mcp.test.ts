@@ -267,6 +267,19 @@ describe('read_table', () => {
 		}
 	});
 
+	it('does not refuse check_citations a window it never declared', async () => {
+		// check_citations reads the rows it is given and looks in no window of
+		// its own: a stray from or limit is not a bound of its schema, so a
+		// refusal naming one would send the caller to a field that is not there.
+		const result = await call(
+			'check_citations',
+			{ path: 's.txt', from: 0, limit: 5000, records: [] },
+			serving(pasted('s.txt', STATEMENT))
+		);
+		expect(result.isError).toBeUndefined();
+		expect(result.structuredContent?.verdict).toBe('reliable');
+	});
+
 	it('says there is no such row rather than pretending there is', async () => {
 		const text = await said(
 			'read_table',
