@@ -91,6 +91,33 @@ describe('leading figures', () => {
 			['575.000,00', 'NEKKAR', 'c']
 		]);
 	});
+	it('leaves two street numbers in a column of names alone', () => {
+		const names = [
+			['12 rue Victor Hugo'],
+			['14 avenue Pasteur'],
+			...Array.from({ length: 12 }, (_, i) => [`Name number ${String(i)}`])
+		];
+		expect(splitLeadingFigures(names)).toEqual(names);
+	});
+
+	it('reads a signed quantity, a name opening on digits and a name in parentheses', () => {
+		const cells = [
+			['240.000,00 ABC ARBITRAGE'],
+			['-240 ABC'],
+			['+12,00 DEF'],
+			['240 3M'],
+			['240 (ABC)'],
+			['1 358 (522)']
+		];
+		expect(splitLeadingFigures(cells)).toEqual([
+			['240.000,00', 'ABC ARBITRAGE'],
+			['-240', 'ABC'],
+			['+12,00', 'DEF'],
+			['240', '3M'],
+			['240', '(ABC)'],
+			['', '1 358 (522)']
+		]);
+	});
 });
 
 describe('columns', () => {

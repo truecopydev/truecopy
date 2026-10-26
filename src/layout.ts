@@ -631,8 +631,10 @@ export function placeOf(items: PositionedItem[], page: number): Place | null {
  * can, because a cell that opens on a whole number, one space, then a word is
  * printed that way on row after row of the same column and nowhere else.
  *
- * The column is split only where enough rows carry the pattern, so a prose
- * cell that happens to open on a figure is left alone. In a split column a
+ * The column is split only where enough rows carry the pattern AND they are
+ * at least half of what the column holds, so a prose cell that happens to open
+ * on a figure is left alone, and so are two street numbers in a column of
+ * fourteen names. In a split column a
  * cell that is only a number keeps the figure side, anything else keeps the
  * label side: a section heading above the holdings reads as a label, not as a
  * quantity. Every row of the page gains the column, so the table stays
@@ -644,8 +646,9 @@ export function splitLeadingFigures(cells: string[][], minimumSupport = 0.15): s
 	const columns = Math.max(0, ...cells.map((row) => row.length));
 	const split = new Set<number>();
 	for (let column = 0; column < columns; column++) {
+		const held = cells.filter((row) => (row[column] ?? '') !== '').length;
 		const recurring = cells.filter((row) => leadingFigure(row[column] ?? '') !== null).length;
-		if (recurring >= needed) split.add(column);
+		if (recurring >= needed && recurring * 2 >= held) split.add(column);
 	}
 	if (split.size === 0) return cells;
 	return cells.map((row) =>
@@ -656,10 +659,15 @@ export function splitLeadingFigures(cells: string[][], minimumSupport = 0.15): s
 }
 
 /** "240.000,00 ABC ARBITRAGE" as its figure and its label, or null. The figure
- *  may be printed in groups ("3 710 818 ALS LTD"); a number followed by a
- *  number is not the pattern, so "1 358 522" alone stays one figure. */
+ *  may be printed in groups ("3 710 818 ALS LTD") and signed ("-240 ABC", a
+ *  short position); a number followed by a number is not the pattern, so
+ *  "1 358 522" alone stays one figure. The label opens on a letter, on digits
+ *  glued to a letter ("3M") or on a parenthesis around a word ("(ABC)") - never
+ *  on "(522)", which is a negative printed in groups. */
 function leadingFigure(text: string): { figure: string; label: string } | null {
-	const match = /^(\d[\d .,'\u00A0]*\d|\d) (\p{L}.*)$/u.exec(text);
+	const match = /^([-+]?(?:\d[\d .,'\u00A0]*\d|\d)) ((?:\p{L}|\d+\p{L}|\((?=\p{L})).*)$/u.exec(
+		text
+	);
 	if (match === null || !isOnlyNumber(match[1])) return null;
 	return { figure: match[1], label: match[2] };
 }

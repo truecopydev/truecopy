@@ -108,6 +108,11 @@ export interface Table {
 	 * columns the table does not have. This is the cut that kept only the x that
 	 * come back row after row, and it is here because a caller that wants to
 	 * explain or re-cut the same page needs the same boundaries.
+	 *
+	 * With `numberEdges`, a column split in two has no edge of its own - the
+	 * figure and its label were one run of text - so on a page where a split
+	 * happened the rows of `pages[i]` are wider than `boundaries[i].length + 1`,
+	 * and a column index past the split no longer names a zone of the cut.
 	 */
 	boundaries: number[][];
 	/**
