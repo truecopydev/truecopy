@@ -329,13 +329,15 @@ export function positionedItems(items: unknown[], frame?: DisplayedFrame): Posit
 		 * use for - measured on one when this was added. A paste, a CSV and a
 		 * .docx carry no glyph box and keep exactly the item they had.
 		 */
-		const height = item.height ?? 0;
-		const [x, y] = frame ? displayedOrigin(item.transform, frame) : originOf(item.transform);
+		const turned = frame && !isUpright(frame) ? frame : undefined;
+		const scale = turned ? scaleOf(turned) : 1;
+		const height = (item.height ?? 0) * scale;
+		const [x, y] = turned ? displayedOrigin(item.transform, turned) : originOf(item.transform);
 		placed.push({
 			text: item.str,
 			x,
 			y,
-			width: item.width ?? 0,
+			width: (item.width ?? 0) * scale,
 			...(height > 0 ? { height } : {})
 		});
 	}
@@ -353,6 +355,17 @@ export interface DisplayedFrame {
 }
 
 const originOf = (transform: number[]): [number, number] => [transform[4], transform[5]];
+
+/**
+ * A frame that turns nothing: the plain flip of an unrotated page. Its offset
+ * is the CropBox origin, which would shift every item of an ordinary page, so
+ * such a page keeps the content stream's own numbers.
+ */
+const isUpright = ({ transform: [a, b, c, d] }: DisplayedFrame): boolean =>
+	a > 0 && b === 0 && c === 0 && d < 0;
+
+/** The frame's scale (a `/UserUnit`, a caller's own), applied to sizes as to positions. */
+const scaleOf = ({ transform: [a, b] }: DisplayedFrame): number => Math.hypot(a, b);
 
 /**
  * Where an item lands once the page is turned the way it is displayed.

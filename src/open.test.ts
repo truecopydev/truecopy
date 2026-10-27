@@ -547,6 +547,22 @@ describe('positionedItems', () => {
 		expect(positionedItems(items, frame)).toEqual([{ text: 'Alpha', x: 100, y: 700, width: 30 }]);
 	});
 
+	it('leaves an unrotated page untouched whatever its CropBox origin', () => {
+		// pdf.js's matrix for a CropBox [30 40 625 882]: the flip carries the origin.
+		const frame = { transform: [1, 0, 0, -1, -30, 882], height: 842 };
+		const items = [{ str: 'Alpha', transform: [1, 0, 0, 1, 100, 700], width: 30 }];
+		expect(positionedItems(items, frame)).toEqual([{ text: 'Alpha', x: 100, y: 700, width: 30 }]);
+	});
+
+	it('sizes an item at the scale of the frame it is turned into', () => {
+		// /Rotate 90 under a /UserUnit of 2: positions and sizes both double.
+		const frame = { transform: [0, 2, 2, 0, 0, 0], height: 1190 };
+		const items = [{ str: 'Alpha', transform: [0, 12, -12, 0, 100, 50], width: 30, height: 12 }];
+		expect(positionedItems(items, frame)).toEqual([
+			{ text: 'Alpha', x: 100, y: 990, width: 60, height: 24 }
+		]);
+	});
+
 	const from = (transform: number[], str: string, width?: number) => ({ str, transform, width });
 
 	it('keeps the x and the baseline off the transform', () => {
