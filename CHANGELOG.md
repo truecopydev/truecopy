@@ -9,6 +9,10 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`openDocument` takes `rotatedPages: true`**, which places every item where the page displays it, the page's own `/Rotate` applied. A landscape table is often printed sideways on a portrait page that carries `/Rotate 90`: every viewer turns it upright, but the text content keeps the content stream's coordinates, so a whole displayed column shares one baseline and comes back as ONE item, and the rows of the page are its columns. Measured on the fee annexes of a life-insurance contract, 199 such pages and 11 283 holdings: not one row held its own figures; the same pages read in the displayed frame, 968 rows of 973 did. On, `x` and `y` are read in the displayed frame, `y` still rising up the page, which `width` and `height` of the page already were; a page that carries no rotation reads to exactly the same numbers; an engine whose viewport reports no `transform` leaves the items where they were. `positionedItems` takes the frame as a second argument, `DisplayedFrame`, for a caller driving the engine itself. Off unless asked for: no reading moves. The kit's `pdfWithPages` takes `{ rotate }` to build such a page.
+
 ### Fixed
 
 - **`truecopy-mcp` refuses a `from`, `limit` or `maximumPages` its schema does not admit, by name.** A `limit` over 2000 was cut down to 2000 and a `from` of 0, a fraction or a string read as the default, all in silence: a caller that asked for rows 0 to 5000 got rows 1 to 2000 under a `reliable` verdict, with nothing to say the window was not the one it asked for. The three now answer as `decimals` and `year` already did, `read_table: limit must be a whole number from 1 to 2000.`, on every tool. A call within its schema reads exactly as before.

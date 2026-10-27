@@ -452,7 +452,101 @@ describe('the reason a document was refused', () => {
 	});
 });
 
+describe('openDocument, on a page displayed sideways', () => {
+	// A landscape table printed on a portrait page that carries /Rotate 90:
+	// every viewer turns it upright. Alpha and Beta share a displayed row,
+	// Gamma sits under Alpha. The content stream writes it the other way.
+	const sideways = () =>
+		new File(
+			[
+				pdfWithPages(
+					[
+						[
+							{ word: 'Alpha', x: 100, y: 50 },
+							{ word: 'Beta', x: 100, y: 150 },
+							{ word: 'Gamma', x: 300, y: 50 }
+						]
+					],
+					{ rotate: 90 }
+				)
+			],
+			'sideways.pdf',
+			{ type: 'application/pdf' }
+		);
+
+	it('reads the content stream as written when not asked otherwise', async () => {
+		const document = await openDocument(sideways());
+		const [page] = document.pages;
+		expect([page.width, page.height]).toEqual([842, 595]);
+		expect(page.rows.map((row) => row.text)).toEqual(['Beta', 'Alpha\tGamma']);
+	});
+
+	it('reads it in the displayed frame with rotatedPages', async () => {
+		const document = await openDocument(sideways(), { rotatedPages: true });
+		const [page] = document.pages;
+		expect([page.width, page.height]).toEqual([842, 595]);
+		const placed = page.items.map(({ text, x, y }) => ({ text, x, y }));
+		expect(placed).toEqual([
+			{ text: 'Alpha', x: 50, y: 495 },
+			{ text: 'Beta', x: 150, y: 495 },
+			{ text: 'Gamma', x: 50, y: 295 }
+		]);
+		expect(page.rows.map((row) => row.text)).toEqual(['Alpha\tBeta', 'Gamma']);
+	});
+
+	it('reads an unrotated page to the same numbers with rotatedPages', async () => {
+		const words = [
+			{ word: 'Alpha', x: 100, y: 700 },
+			{ word: 'Beta', x: 300, y: 700 },
+			{ word: 'Gamma', x: 100, y: 650 }
+		];
+		const file = (name: string) =>
+			new File([pdfWithText(words)], name, { type: 'application/pdf' });
+		const asWritten = await openDocument(file('flat.pdf'));
+		const displayed = await openDocument(file('flat.pdf'), { rotatedPages: true });
+		expect(displayed.pages[0].items).toEqual(asWritten.pages[0].items);
+		expect(displayed.pages[0].rows).toEqual(asWritten.pages[0].rows);
+	});
+
+	it('leaves the items where they were when the engine reports no transform', async () => {
+		const bare = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: async () => ({
+						getViewport: () => ({ width: 600, height: 800 }),
+						getTextContent: async () => ({
+							items: [{ str: 'a', transform: [0, 1, -1, 0, 10, 700], width: 5 }]
+						}),
+						cleanup: () => undefined
+					})
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'bare.pdf', {
+			type: 'application/pdf'
+		});
+		const document = await openDocument(file, { pdfjs: bare, rotatedPages: true });
+		expect(document.pages[0].items[0]).toMatchObject({ x: 10, y: 700 });
+	});
+});
+
 describe('positionedItems', () => {
+	it('turns an item into the displayed frame it is given', () => {
+		// pdf.js's matrix for a page displayed at /Rotate 90: device x is the
+		// stream's y, device y (downwards) is the stream's x.
+		const frame = { transform: [0, 1, 1, 0, 0, 0], height: 595 };
+		const items = [{ str: 'Alpha', transform: [0, 12, -12, 0, 100, 50], width: 30 }];
+		expect(positionedItems(items, frame)).toEqual([{ text: 'Alpha', x: 50, y: 495, width: 30 }]);
+	});
+
+	it('leaves an item untouched under the flat frame of an unrotated page', () => {
+		const frame = { transform: [1, 0, 0, -1, 0, 842], height: 842 };
+		const items = [{ str: 'Alpha', transform: [1, 0, 0, 1, 100, 700], width: 30 }];
+		expect(positionedItems(items, frame)).toEqual([{ text: 'Alpha', x: 100, y: 700, width: 30 }]);
+	});
+
 	const from = (transform: number[], str: string, width?: number) => ({ str, transform, width });
 
 	it('keeps the x and the baseline off the transform', () => {
