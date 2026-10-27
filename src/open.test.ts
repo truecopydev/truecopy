@@ -554,6 +554,15 @@ describe('positionedItems', () => {
 		expect(positionedItems(items, frame)).toEqual([{ text: 'Alpha', x: 100, y: 700, width: 30 }]);
 	});
 
+	it('scales an unrotated page as it scales a turned one, and nothing more', () => {
+		// /UserUnit 2 on an upright page: doubled, the CropBox offset still ignored.
+		const frame = { transform: [2, 0, 0, -2, -60, 1764], height: 1684 };
+		const items = [{ str: 'Alpha', transform: [1, 0, 0, 1, 100, 700], width: 30, height: 12 }];
+		expect(positionedItems(items, frame)).toEqual([
+			{ text: 'Alpha', x: 200, y: 1400, width: 60, height: 24 }
+		]);
+	});
+
 	it('sizes an item at the scale of the frame it is turned into', () => {
 		// /Rotate 90 under a /UserUnit of 2: positions and sizes both double.
 		const frame = { transform: [0, 2, 2, 0, 0, 0], height: 1190 };
