@@ -76,6 +76,27 @@ export interface PlacedWord {
 	y: number;
 }
 
+export interface PageOptions {
+	/**
+	 * The page's `/Rotate`, in degrees clockwise: 0, 90, 180 or 270. The words
+	 * are turned with it, so they read upright once the page is displayed, the
+	 * way a landscape table printed on a portrait page is. `x` and `y` stay the
+	 * content stream's own coordinates.
+	 */
+	rotate?: 0 | 90 | 180 | 270;
+}
+
+/** The text matrix that counters the page's rotation, at the word's origin. */
+function textMatrix(rotate: number, x: number, y: number): string {
+	const turned: Record<number, string> = {
+		0: '1 0 0 1',
+		90: '0 1 -1 0',
+		180: '-1 0 0 -1',
+		270: '0 -1 1 0'
+	};
+	return `${turned[rotate]} ${x} ${y}`;
+}
+
 /**
  * The same, over several pages.
  *
@@ -87,9 +108,11 @@ export interface PlacedWord {
  * Object numbering: 1 catalog, 2 pages, 3 font, then each page takes two - the
  * page itself and its content stream.
  */
-export function pdfWithPages(pages: PlacedWord[][]): string {
+export function pdfWithPages(pages: PlacedWord[][], { rotate = 0 }: PageOptions = {}): string {
 	const streams = pages.map((words) =>
-		words.map(({ word, x, y }) => `BT /F1 10 Tf ${x} ${y} Td (${word}) Tj ET`).join('\n')
+		words
+			.map(({ word, x, y }) => `BT /F1 10 Tf ${textMatrix(rotate, x, y)} Tm (${word}) Tj ET`)
+			.join('\n')
 	);
 	const first = 4;
 	const kids = pages.map((_, index) => `${first + index * 2} 0 R`).join(' ');
@@ -98,7 +121,7 @@ export function pdfWithPages(pages: PlacedWord[][]): string {
 		`<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`,
 		'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
 		...streams.flatMap((content, index) => [
-			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents ${first + index * 2 + 1} 0 R >>`,
+			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Rotate ${rotate} /Resources << /Font << /F1 3 0 R >> >> /Contents ${first + index * 2 + 1} 0 R >>`,
 			`<< /Length ${content.length} >>\nstream\n${content}\nendstream`
 		])
 	];

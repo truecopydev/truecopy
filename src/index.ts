@@ -26,7 +26,7 @@
 
 export type { CoordinateUnit, PositionedItem, Place, Row, TextPage, Document } from './document.js';
 
-export type { Limits, OpenOptions, PdfEngine, Unreadable } from './open.js';
+export type { DisplayedFrame, Limits, OpenOptions, PdfEngine, Unreadable } from './open.js';
 export {
 	DEFAULT_LIMITS,
 	UnreadableDocument,
