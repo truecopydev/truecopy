@@ -15,12 +15,14 @@
  * skill would have gone on teaching a field that no longer exists, confidently,
  * to the one reader least able to notice.
  *
- * So three things are checked, all of them cheap:
+ * So four things are checked, all of them cheap:
  *
  *   1. every function the skill CALLS is still exported (against API.md, which
  *      the type checker generates - not a regular expression over the source);
  *   2. every entry point it names is still in `package.json`;
- *   3. the plugin manifest carries the version of the package it ships with.
+ *   3. the plugin manifest carries the version of the package it ships with;
+ *   4. so does `server.json`, twice, because the MCP registry is the first to
+ *      check it and only does so AFTER npm has published the tag.
  *
  * The version is pinned rather than left to the git SHA on purpose: the skill
  * documents a surface, so it should say WHICH surface. Bumping it belongs to
@@ -38,6 +40,7 @@ const skill = read('skills', 'truecopy', 'SKILL.md');
 const api = read('API.md');
 const pkg = JSON.parse(read('package.json'));
 const plugin = JSON.parse(read('.claude-plugin', 'plugin.json'));
+const server = JSON.parse(read('server.json'));
 
 const problems = [];
 
@@ -107,6 +110,32 @@ if (plugin.version !== pkg.version) {
 	problems.push(
 		`.claude-plugin/plugin.json says ${plugin.version} and the package is ${pkg.version} - ` +
 			`bump both in the release, or the skill claims to document a surface it does not`
+	);
+}
+
+/* 4. The registry entry names the version npm will serve. A release that bumps
+ *    the package and forgets this file publishes to npm, then fails at the
+ *    registry, with the tag already cut: the check belongs before the tag. */
+for (const [where, version] of [
+	['server.json version', server.version],
+	...server.packages.map((entry, index) => [
+		`server.json packages[${index}].version`,
+		entry.version
+	])
+]) {
+	if (version !== pkg.version) {
+		problems.push(
+			`${where} says ${version} and the package is ${pkg.version} - bump both in the release`
+		);
+	}
+}
+
+/* The registry refuses a description over 100 characters, and does so after
+ * npm has published: the limit is checked here, before the tag exists. */
+const DESCRIPTION_LIMIT = 100;
+if (server.description.length > DESCRIPTION_LIMIT) {
+	problems.push(
+		`server.json description is ${server.description.length} characters, the MCP registry takes ${DESCRIPTION_LIMIT}`
 	);
 }
 

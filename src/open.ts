@@ -114,6 +114,29 @@ export interface OpenOptions extends Partial<Limits> {
 	 */
 	superscripts?: boolean;
 	/**
+	 * Place each item where the page DISPLAYS it, with the page's own rotation
+	 * applied, instead of where its content stream wrote it. Off unless asked
+	 * for.
+	 *
+	 * A landscape table is often printed sideways on a portrait page that
+	 * carries `/Rotate 90`: every viewer turns it upright, and a reader sees
+	 * rows. The text content does not: its coordinates are the content stream's,
+	 * so a whole column of the displayed table shares one baseline and comes
+	 * back as ONE item, and the rows of the page are its columns. Measured on
+	 * the fee annexes of a life-insurance contract: 199 such pages, 11 283
+	 * holdings, not one row that held its own figures; the same pages with the
+	 * rotation applied, 968 rows of 973 did.
+	 *
+	 * On, `x` and `y` are read in the displayed frame, `y` still rising up the
+	 * page, and `width` and `height` of the page already were. A page that
+	 * carries no rotation reads exactly as before, to the same numbers. It
+	 * moves every coordinate of a rotated page, so it arrives as a knob: a
+	 * reader whose patterns learned the welded column keeps it until its own
+	 * bench says otherwise. An engine that reports no `transform` on its
+	 * viewport leaves the items where they were.
+	 */
+	rotatedPages?: boolean;
+	/**
 	 * Where the pdf.js worker lives, when the caller wants one.
 	 *
 	 * The caller supplies it and this library never resolves it, because every
@@ -219,26 +242,57 @@ interface PdfFile {
 }
 
 interface PdfPage {
-	getViewport(parameters: { scale: number }): { width: number; height: number };
+	getViewport(parameters: { scale: number }): {
+		width: number;
+		height: number;
+		/** The page-to-device matrix, when the engine has one; pdf.js does. */
+		transform?: number[];
+	};
 	getTextContent(): Promise<{ items: unknown[] }>;
 	cleanup(): void;
 }
+
+/** Anything a cancel may return that settles later. */
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+	typeof (value as { then?: unknown } | null)?.then === 'function';
 
 /**
  * Bound a promise in time. The timer is always cleared, even when the read wins
  * the race: a forgotten timer keeps the process awake and fails tests long
  * after they passed.
+ *
+ * `onExpire` runs when the deadline is reached. Refusing only stops the
+ * WAITING: the work goes on unless something stops it, and a caller that
+ * retries piles up engines that never end. Pass what cancels the work.
+ *
+ * The refusal is settled BEFORE the cancel runs. A cancel that settles the work
+ * at once would otherwise win the race with the work's own error, and the
+ * caller would read "aborted" where the answer is `too-slow`. A cancel that
+ * throws, or that returns a promise which rejects, rides on the refusal as its
+ * `cause` and never escapes: under Node an unhandled rejection ends the process.
  */
 export async function withDeadline<T>(
 	work: Promise<T>,
-	milliseconds = DEFAULT_LIMITS.deadlineMilliseconds
+	milliseconds = DEFAULT_LIMITS.deadlineMilliseconds,
+	onExpire?: () => unknown
 ): Promise<T> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	const tooLong = new Promise<never>((_, reject) => {
-		timer = setTimeout(
-			() => reject(new UnreadableDocument('too-slow', 'This document does not finish opening.')),
-			milliseconds
-		);
+		timer = setTimeout(() => {
+			const refusal = new UnreadableDocument('too-slow', 'This document does not finish opening.');
+			reject(refusal);
+			const blame = (failure: unknown): void => {
+				Object.defineProperty(refusal, 'cause', { value: failure, configurable: true });
+			};
+			try {
+				// Any thenable, not only a native promise: a cancel from another
+				// promise library rejects just as unhandled.
+				const stopping = onExpire?.();
+				if (isThenable(stopping)) Promise.resolve(stopping).catch(blame);
+			} catch (failure) {
+				blame(failure);
+			}
+		}, milliseconds);
 	});
 	try {
 		return await Promise.race([work, tooLong]);
@@ -256,7 +310,7 @@ export async function withDeadline<T>(
  * has an x, and an x it has no business voting with: it would open a column of
  * nothing.
  */
-export function positionedItems(items: unknown[]): PositionedItem[] {
+export function positionedItems(items: unknown[], frame?: DisplayedFrame): PositionedItem[] {
 	const placed: PositionedItem[] = [];
 	for (const raw of items) {
 		if (typeof raw !== 'object' || raw === null || !('str' in raw)) continue;
@@ -275,16 +329,63 @@ export function positionedItems(items: unknown[]): PositionedItem[] {
 		 * use for - measured on one when this was added. A paste, a CSV and a
 		 * .docx carry no glyph box and keep exactly the item they had.
 		 */
-		const height = item.height ?? 0;
+		const scale = frame ? scaleOf(frame) : 1;
+		const height = (item.height ?? 0) * scale;
+		const [x, y] =
+			frame && !isUpright(frame)
+				? displayedOrigin(item.transform, frame)
+				: originOf(item.transform, scale);
 		placed.push({
 			text: item.str,
-			x: item.transform[4],
-			y: item.transform[5],
-			width: item.width ?? 0,
+			x,
+			y,
+			width: (item.width ?? 0) * scale,
 			...(height > 0 ? { height } : {})
 		});
 	}
 	return placed;
+}
+
+/**
+ * The frame a page is displayed in: the engine's page-to-device matrix and the
+ * displayed height, which turns device rows (counted downwards) back into
+ * baselines that rise up the page as every other item's does.
+ */
+export interface DisplayedFrame {
+	transform: number[];
+	height: number;
+}
+
+const originOf = (transform: number[], scale = 1): [number, number] => [
+	transform[4] * scale,
+	transform[5] * scale
+];
+
+/**
+ * A frame that turns nothing: the plain flip of an unrotated page. Its offset
+ * is the CropBox origin, which would shift every item of an ordinary page, so
+ * such a page keeps the content stream's own numbers, at the frame's scale
+ * only (1 unless a `/UserUnit` says otherwise, as on a turned page).
+ */
+const isUpright = ({ transform: [a, b, c, d] }: DisplayedFrame): boolean =>
+	a > 0 && b === 0 && c === 0 && d < 0;
+
+/** The frame's scale (a `/UserUnit`, a caller's own), applied to sizes as to positions. */
+const scaleOf = ({ transform: [a, b] }: DisplayedFrame): number => Math.hypot(a, b);
+
+/**
+ * Where an item lands once the page is turned the way it is displayed.
+ *
+ * The two matrices compose as pdf.js's own `Util.transform` does, and the
+ * device y, counted from the top, is folded back under the displayed height.
+ * On an unrotated page the matrix is a plain flip, `[1, 0, 0, -1, 0, height]`,
+ * and the fold undoes it exactly: the numbers come back untouched.
+ */
+function displayedOrigin(item: number[], frame: DisplayedFrame): [number, number] {
+	const [a, b, c, d, e, f] = frame.transform;
+	const x = a * item[4] + c * item[5] + e;
+	const deviceY = b * item[4] + d * item[5] + f;
+	return [x, frame.height - deviceY];
 }
 
 /** What a `.docx` says it is, when the browser knows. */
@@ -416,10 +517,16 @@ async function openBytes(
 		return documentFromText(new TextDecoder(encoding).decode(bytes), file.name);
 	}
 
+	const run: PdfRun = { expired: false };
 	try {
 		const document = await withDeadline(
-			pagesFromPdf(data, file.name, limits, options),
-			limits.deadlineMilliseconds
+			pagesFromPdf(data, file.name, limits, options, run),
+			limits.deadlineMilliseconds,
+			() => {
+				run.expired = true;
+				// The refusal is already on its way; a destroy that fails on top of it has nobody left to tell.
+				run.stop?.().catch(() => undefined);
+			}
 		);
 		if (document.text.trim() === '') {
 			throw new UnreadableDocument(
@@ -468,11 +575,31 @@ async function loadDefaultEngine(): Promise<PdfEngine> {
 	}
 }
 
+/** How many page numbers a PDF read walks before it lets a timer run. */
+const YIELD_EVERY_PAGES = 4096;
+
+function nextTurn(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** What the deadline needs to stop a PDF read rather than walk away from it. */
+interface PdfRun {
+	expired: boolean;
+	stop?: () => Promise<void>;
+}
+
+/** Destroy the loading task once, whichever of the deadline and the read gets there first. */
+function stopperOf(task: { destroy(): Promise<void> }): () => Promise<void> {
+	let stopping: Promise<void> | undefined;
+	return () => (stopping ??= task.destroy());
+}
+
 async function pagesFromPdf(
 	data: ArrayBuffer,
 	name: string,
 	limits: Limits,
-	options: OpenOptions
+	options: OpenOptions,
+	run: PdfRun
 ): Promise<Document> {
 	/*
 	 * The legacy build by default, and it is a deliberate choice: the modern one
@@ -481,6 +608,10 @@ async function pagesFromPdf(
 	 * OpenOptions, where that trade is weighed.
 	 */
 	const pdfjs = options.pdfjs ?? (await loadDefaultEngine());
+	// The engine may arrive after the deadline: a task created now would have
+	// nobody left to destroy it, and every retry would add one.
+	if (run.expired)
+		throw new UnreadableDocument('too-slow', 'This document does not finish opening.');
 
 	/*
 	 * The worker exists only in a browser, and only when the caller resolved its
@@ -507,27 +638,80 @@ async function pagesFromPdf(
 		...(options.cMapUrl === undefined ? {} : { cMapUrl: options.cMapUrl }),
 		...(options.cMapPacked === undefined ? {} : { cMapPacked: options.cMapPacked })
 	});
-	const pdf = await task.promise;
+	const stop = stopperOf(task);
+	run.stop = stop;
 	try {
-		const pages: TextPage[] = [];
-		const wanted = options.keepPage ?? (() => true);
-		// The cap counts the pages OPENED, so it bounds the work whichever pages
-		// are asked for. Skipping is what costs nothing: a page that is never
-		// opened is never laid out, and that is the whole saving.
-		for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-			if (pages.length >= limits.maximumPages) break;
-			if (!wanted(pageNumber)) continue;
-			const page = await pdf.getPage(pageNumber);
-			const viewport = page.getViewport({ scale: 1 });
-			const content = await page.getTextContent();
-			const items = positionedItems(content.items);
-			pages.push(
-				pageFrom(pageNumber, viewport.width, viewport.height, items, options.superscripts ?? false)
-			);
-			page.cleanup();
-		}
-		return documentFrom(pages, 'pdf', name);
+		const { pages, pagesUnread } = await readPages(await task.promise, limits, options, run);
+		const document = documentFrom(pages, 'pdf', name);
+		return pagesUnread === 0 ? document : { ...document, pagesUnread };
 	} finally {
-		await task.destroy();
+		await stop();
 	}
+}
+
+/**
+ * Open the pages a read wants, up to the cap, and count those the cap left.
+ * The cap counts the pages OPENED, so it bounds the work whichever pages are
+ * asked for. Skipping is what costs nothing: a page that is never opened is
+ * never laid out, and that is the whole saving.
+ */
+async function readPages(
+	pdf: PdfFile,
+	limits: Limits,
+	options: OpenOptions,
+	run: PdfRun
+): Promise<{ pages: TextPage[]; pagesUnread: number }> {
+	const pages: TextPage[] = [];
+	const wanted = options.keepPage ?? (() => true);
+	let pagesUnread = 0;
+	for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+		// A page count is whatever the file declares, so a skipping loop can
+		// run long without awaiting anything: let the deadline in now and then.
+		if (pageNumber % YIELD_EVERY_PAGES === 0) await nextTurn();
+		if (run.expired) break;
+		const full = pages.length >= limits.maximumPages;
+		if (full && options.keepPage === undefined) {
+			return { pages, pagesUnread: pdf.numPages - pageNumber + 1 };
+		}
+		if (!wanted(pageNumber)) continue;
+		if (full) {
+			pagesUnread += 1;
+			continue;
+		}
+		pages.push(await textPageOf(pdf, pageNumber, options, run));
+	}
+	return { pages, pagesUnread };
+}
+
+function abandoned(page: PdfPage): never {
+	page.cleanup();
+	throw new UnreadableDocument('too-slow', 'This document does not finish opening.');
+}
+
+async function textPageOf(
+	pdf: PdfFile,
+	pageNumber: number,
+	options: Pick<OpenOptions, 'superscripts' | 'rotatedPages'>,
+	run: PdfRun
+): Promise<TextPage> {
+	// An engine whose cancel does not reject what is in flight still answers
+	// after the refusal: each answer is checked before more work is asked of it.
+	const page = await pdf.getPage(pageNumber);
+	if (run.expired) return abandoned(page);
+	const viewport = page.getViewport({ scale: 1 });
+	const content = await page.getTextContent();
+	if (run.expired) return abandoned(page);
+	const frame =
+		options.rotatedPages && viewport.transform
+			? { transform: viewport.transform, height: viewport.height }
+			: undefined;
+	const text = pageFrom(
+		pageNumber,
+		viewport.width,
+		viewport.height,
+		positionedItems(content.items, frame),
+		options.superscripts ?? false
+	);
+	page.cleanup();
+	return text;
 }

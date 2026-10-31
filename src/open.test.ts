@@ -9,11 +9,53 @@ import {
 	type OpenOptions,
 	type PdfEngine
 } from './open.js';
+import { explainDocument } from './explain.js';
 import { docxWithBody, docxWithText, odtWithText, pdfWithPages, pdfWithText } from './kit.js';
 
 describe('withDeadline', () => {
 	it('lets a read that finishes through', async () => {
 		await expect(withDeadline(Promise.resolve('read'), 50)).resolves.toBe('read');
+	});
+
+	it('still refuses when the cancel it was given throws', async () => {
+		// A throw inside the timer would escape the promise: the caller would wait
+		// for ever, and under Node the process would end.
+		const broken = new Error('cannot cancel');
+		const refused = withDeadline(new Promise<string>(() => {}), 5, () => {
+			throw broken;
+		});
+		await expect(refused).rejects.toMatchObject({ reason: 'too-slow', cause: broken });
+	});
+
+	it('answers too-slow even when the cancel settles the work at once', async () => {
+		// The cancel rejects the work synchronously. Settled after it, the refusal
+		// would lose the race to the work's own "aborted".
+		const handle: { abort?: (reason: Error) => void } = {};
+		const work = new Promise<string>((_, reject) => {
+			handle.abort = reject;
+		});
+		const refused = withDeadline(work, 5, () => handle.abort?.(new Error('aborted')));
+		await expect(refused).rejects.toMatchObject({ reason: 'too-slow' });
+	});
+
+	it('keeps a cancel that rejects later from escaping, and names it', async () => {
+		const late = new Error('destroy failed');
+		const refusal = await withDeadline(new Promise<never>(() => {}), 5, () =>
+			Promise.reject(late)
+		).catch((error: unknown) => error as UnreadableDocument);
+		expect(refusal.reason).toBe('too-slow');
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(refusal.cause).toBe(late);
+	});
+
+	it('catches a cancel that returns a thenable rather than a native promise', async () => {
+		const late = new Error('destroy failed');
+		const thenable = { then: (_: unknown, reject: (reason: Error) => void) => reject(late) };
+		const refusal = await withDeadline(new Promise<never>(() => {}), 5, () => thenable).catch(
+			(error: unknown) => error as UnreadableDocument
+		);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(refusal.cause).toBe(late);
 	});
 
 	it('gives up on a read that never returns', async () => {
@@ -123,6 +165,17 @@ describe('openDocument', () => {
 			maximumPages: 1
 		});
 		expect(document.pages.map((page) => page.pageNumber)).toEqual([2]);
+		// Page 3 was wanted and never opened: the reading says so.
+		expect(document.pagesUnread).toBe(1);
+	});
+
+	it('says a reading is partial when the cap stopped it, and only then', async () => {
+		const cut = await openDocument(threePages(), { maximumPages: 1 });
+		expect(cut.pagesUnread).toBe(2);
+		expect(explainDocument(cut)).toContain('2 more page(s) left unread past maximumPages');
+		const whole = await openDocument(threePages());
+		expect(whole).not.toHaveProperty('pagesUnread');
+		expect(explainDocument(whole)).not.toContain('left unread');
 	});
 });
 
@@ -228,13 +281,297 @@ describe('the reason a document was refused', () => {
 		expect(missing.message).toContain('pdfjs-dist');
 	});
 
+	it('stops the engine when the deadline refuses the read', async () => {
+		// Refusing only ends the wait. An engine still loading after the refusal
+		// keeps its worker and its memory, and a caller that retries piles them up.
+		let destroyed = 0;
+		const stuck = {
+			getDocument: () => ({
+				promise: new Promise<never>(() => {}),
+				destroy: async () => {
+					destroyed += 1;
+				}
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'stuck.pdf', {
+			type: 'application/pdf'
+		});
+		expect((await refusal(file, { pdfjs: stuck, deadlineMilliseconds: 5 })).reason).toBe(
+			'too-slow'
+		);
+		expect(destroyed).toBe(1);
+
+		// A destroy that fails on top of the refusal does not replace it.
+		const failing = {
+			getDocument: () => ({
+				promise: new Promise<never>(() => {}),
+				destroy: () => Promise.reject(new Error('worker already gone'))
+			})
+		} as unknown as PdfEngine;
+		expect((await refusal(file, { pdfjs: failing, deadlineMilliseconds: 5 })).reason).toBe(
+			'too-slow'
+		);
+	});
+
+	it('stops opening pages once the deadline has passed', async () => {
+		let opened = 0;
+		let destroyed = 0;
+		const slow = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 50,
+					getPage: async () => {
+						opened += 1;
+						await new Promise((resolve) => setTimeout(resolve, 4));
+						return {
+							getViewport: () => ({ width: 600, height: 800 }),
+							getTextContent: async () => ({ items: [] }),
+							cleanup: () => undefined
+						};
+					}
+				}),
+				destroy: async () => {
+					destroyed += 1;
+				}
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'slow.pdf', {
+			type: 'application/pdf'
+		});
+		await refusal(file, { pdfjs: slow, deadlineMilliseconds: 10 });
+		await new Promise((resolve) => setTimeout(resolve, 30));
+		const after = opened;
+		await new Promise((resolve) => setTimeout(resolve, 30));
+		expect(opened).toBe(after);
+		expect(opened).toBeLessThan(50);
+		expect(destroyed).toBe(1);
+	});
+
+	it('asks nothing more of a page that arrives after the deadline', async () => {
+		// An engine whose destroy() leaves the page in flight to resolve anyway.
+		let laidOut = 0;
+		let cleaned = 0;
+		const late = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: async () => {
+						await new Promise((resolve) => setTimeout(resolve, 20));
+						return {
+							getViewport: () => ({ width: 600, height: 800 }),
+							getTextContent: async () => {
+								laidOut += 1;
+								return { items: [] };
+							},
+							cleanup: () => {
+								cleaned += 1;
+							}
+						};
+					}
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'late-page.pdf', {
+			type: 'application/pdf'
+		});
+		expect((await refusal(file, { pdfjs: late, deadlineMilliseconds: 5 })).reason).toBe('too-slow');
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		expect(laidOut).toBe(0);
+		expect(cleaned).toBe(1);
+	});
+
+	it('refuses a page whose text arrives after the deadline', async () => {
+		let viewed = 0;
+		const late = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: async () => ({
+						getViewport: () => {
+							viewed += 1;
+							return { width: 600, height: 800 };
+						},
+						getTextContent: async () => {
+							await new Promise((resolve) => setTimeout(resolve, 20));
+							return { items: [] };
+						},
+						cleanup: () => undefined
+					})
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'late-text.pdf', {
+			type: 'application/pdf'
+		});
+		expect((await refusal(file, { pdfjs: late, deadlineMilliseconds: 5 })).reason).toBe('too-slow');
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		expect(viewed).toBe(1);
+	});
+
+	it('counts the pages left past the cap without walking them', async () => {
+		// The page count is what the file declares. Walking a billion page
+		// numbers past a cap of one would block the thread, deadline included.
+		const declared = 1_000_000_000;
+		const huge = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: declared,
+					getPage: async () => ({
+						getViewport: () => ({ width: 600, height: 800 }),
+						getTextContent: async () => ({
+							items: [{ str: 'a', transform: [1, 0, 0, 1, 10, 700], width: 5 }]
+						}),
+						cleanup: () => undefined
+					})
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'huge.pdf', {
+			type: 'application/pdf'
+		});
+		const document = await openDocument(file, { pdfjs: huge, maximumPages: 1 });
+		expect(document.pagesUnread).toBe(declared - 1);
+
+		// A caller choosing pages still has its choice asked page by page, so
+		// the walk lets the deadline in rather than hold the thread.
+		const refused = await refusal(file, {
+			pdfjs: huge,
+			maximumPages: 1,
+			keepPage: () => false,
+			deadlineMilliseconds: 20
+		});
+		expect(refused.reason).toBe('too-slow');
+	});
+
 	it('names a read that ran out of time', async () => {
 		const forever = new Promise<never>(() => {});
 		await expect(withDeadline(forever, 1)).rejects.toMatchObject({ reason: 'too-slow' });
 	});
 });
 
+describe('openDocument, on a page displayed sideways', () => {
+	// A landscape table printed on a portrait page that carries /Rotate 90:
+	// every viewer turns it upright. Alpha and Beta share a displayed row,
+	// Gamma sits under Alpha. The content stream writes it the other way.
+	const sideways = () =>
+		new File(
+			[
+				pdfWithPages(
+					[
+						[
+							{ word: 'Alpha', x: 100, y: 50 },
+							{ word: 'Beta', x: 100, y: 150 },
+							{ word: 'Gamma', x: 300, y: 50 }
+						]
+					],
+					{ rotate: 90 }
+				)
+			],
+			'sideways.pdf',
+			{ type: 'application/pdf' }
+		);
+
+	it('reads the content stream as written when not asked otherwise', async () => {
+		const document = await openDocument(sideways());
+		const [page] = document.pages;
+		expect([page.width, page.height]).toEqual([842, 595]);
+		expect(page.rows.map((row) => row.text)).toEqual(['Beta', 'Alpha\tGamma']);
+	});
+
+	it('reads it in the displayed frame with rotatedPages', async () => {
+		const document = await openDocument(sideways(), { rotatedPages: true });
+		const [page] = document.pages;
+		expect([page.width, page.height]).toEqual([842, 595]);
+		const placed = page.items.map(({ text, x, y }) => ({ text, x, y }));
+		expect(placed).toEqual([
+			{ text: 'Alpha', x: 50, y: 495 },
+			{ text: 'Beta', x: 150, y: 495 },
+			{ text: 'Gamma', x: 50, y: 295 }
+		]);
+		expect(page.rows.map((row) => row.text)).toEqual(['Alpha\tBeta', 'Gamma']);
+	});
+
+	it('reads an unrotated page to the same numbers with rotatedPages', async () => {
+		const words = [
+			{ word: 'Alpha', x: 100, y: 700 },
+			{ word: 'Beta', x: 300, y: 700 },
+			{ word: 'Gamma', x: 100, y: 650 }
+		];
+		const file = (name: string) =>
+			new File([pdfWithText(words)], name, { type: 'application/pdf' });
+		const asWritten = await openDocument(file('flat.pdf'));
+		const displayed = await openDocument(file('flat.pdf'), { rotatedPages: true });
+		expect(displayed.pages[0].items).toEqual(asWritten.pages[0].items);
+		expect(displayed.pages[0].rows).toEqual(asWritten.pages[0].rows);
+	});
+
+	it('leaves the items where they were when the engine reports no transform', async () => {
+		const bare = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: async () => ({
+						getViewport: () => ({ width: 600, height: 800 }),
+						getTextContent: async () => ({
+							items: [{ str: 'a', transform: [0, 1, -1, 0, 10, 700], width: 5 }]
+						}),
+						cleanup: () => undefined
+					})
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'bare.pdf', {
+			type: 'application/pdf'
+		});
+		const document = await openDocument(file, { pdfjs: bare, rotatedPages: true });
+		expect(document.pages[0].items[0]).toMatchObject({ x: 10, y: 700 });
+	});
+});
+
 describe('positionedItems', () => {
+	it('turns an item into the displayed frame it is given', () => {
+		// pdf.js's matrix for a page displayed at /Rotate 90: device x is the
+		// stream's y, device y (downwards) is the stream's x.
+		const frame = { transform: [0, 1, 1, 0, 0, 0], height: 595 };
+		const items = [{ str: 'Alpha', transform: [0, 12, -12, 0, 100, 50], width: 30 }];
+		expect(positionedItems(items, frame)).toEqual([{ text: 'Alpha', x: 50, y: 495, width: 30 }]);
+	});
+
+	it('leaves an item untouched under the flat frame of an unrotated page', () => {
+		const frame = { transform: [1, 0, 0, -1, 0, 842], height: 842 };
+		const items = [{ str: 'Alpha', transform: [1, 0, 0, 1, 100, 700], width: 30 }];
+		expect(positionedItems(items, frame)).toEqual([{ text: 'Alpha', x: 100, y: 700, width: 30 }]);
+	});
+
+	it('leaves an unrotated page untouched whatever its CropBox origin', () => {
+		// pdf.js's matrix for a CropBox [30 40 625 882]: the flip carries the origin.
+		const frame = { transform: [1, 0, 0, -1, -30, 882], height: 842 };
+		const items = [{ str: 'Alpha', transform: [1, 0, 0, 1, 100, 700], width: 30 }];
+		expect(positionedItems(items, frame)).toEqual([{ text: 'Alpha', x: 100, y: 700, width: 30 }]);
+	});
+
+	it('scales an unrotated page as it scales a turned one, and nothing more', () => {
+		// /UserUnit 2 on an upright page: doubled, the CropBox offset still ignored.
+		const frame = { transform: [2, 0, 0, -2, -60, 1764], height: 1684 };
+		const items = [{ str: 'Alpha', transform: [1, 0, 0, 1, 100, 700], width: 30, height: 12 }];
+		expect(positionedItems(items, frame)).toEqual([
+			{ text: 'Alpha', x: 200, y: 1400, width: 60, height: 24 }
+		]);
+	});
+
+	it('sizes an item at the scale of the frame it is turned into', () => {
+		// /Rotate 90 under a /UserUnit of 2: positions and sizes both double.
+		const frame = { transform: [0, 2, 2, 0, 0, 0], height: 1190 };
+		const items = [{ str: 'Alpha', transform: [0, 12, -12, 0, 100, 50], width: 30, height: 12 }];
+		expect(positionedItems(items, frame)).toEqual([
+			{ text: 'Alpha', x: 100, y: 990, width: 60, height: 24 }
+		]);
+	});
+
 	const from = (transform: number[], str: string, width?: number) => ({ str, transform, width });
 
 	it('keeps the x and the baseline off the transform', () => {

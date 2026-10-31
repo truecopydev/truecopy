@@ -235,6 +235,15 @@ export interface Extraction<Entry> {
 	describe?(record: Entry): string;
 	/** How many decimals the document prints. Left out, two. */
 	decimals?: number;
+	/**
+	 * What a row carrying a figure printed nowhere in the document does to the
+	 * verdict. Left out (`'list'`), it is listed in `rowsToReview` and the
+	 * verdict is decided by the total alone, so `40 + 60` against a document
+	 * printing only `100` comes back `read`. `'review'` turns any such row into
+	 * `needs-review`. A choice and not a new default: it moves the verdict of
+	 * every caller whose rows carry a figure it computed.
+	 */
+	absentFigures?: 'list' | 'review';
 }
 
 /** What a document prints amounts to, when the caller does not say. */
@@ -279,7 +288,7 @@ export function checkExtraction<Entry>(
 		return !written.has(amount) && !written.has(-amount);
 	};
 
-	return readDocument<Entry, void>(document, {
+	const result = readDocument<Entry, void>(document, {
 		read: () => ({ records: [...extraction.records], header: undefined }),
 		selfCheck: (_document, reading) =>
 			extraction.declared.length === 0
@@ -297,4 +306,9 @@ export function checkExtraction<Entry>(
 				fields: { amount: extraction.amountOf(record) }
 			}))
 	});
+	const doubted =
+		extraction.absentFigures === 'review' &&
+		result.verdict === 'read' &&
+		result.rowsToReview.length > 0;
+	return doubted ? { ...result, verdict: 'needs-review' } : result;
 }

@@ -9,6 +9,7 @@
  */
 
 import type { CoordinateUnit, Document, Place, PositionedItem, Row, TextPage } from './document.js';
+import { isOnlyNumber } from './notation.js';
 
 /** Vertical distance under which two items are on the same row. */
 const SAME_ROW_TOLERANCE = 3;
@@ -616,6 +617,68 @@ export function placeOf(items: PositionedItem[], page: number): Place | null {
 	}
 	return { page, x: left, y: items[0].y, width: right - left };
 }
+
+/**
+ * Cut a figure from the label the page printed one space after it, in every
+ * column where that recurs.
+ *
+ * A portfolio page prints "240.000,00 ABC ARBITRAGE" as ONE item: the quantity
+ * is flush right, the name follows one space later, and the space is a glyph
+ * inside the run, so no geometry sees a gutter there. Measured on the
+ * portfolio pages of two Luxembourg fund reports, 43 and 103 holdings: every
+ * holding came back with its quantity welded to its name, and not one row was
+ * right. The cut cannot help, because there is no edge to read; the notation
+ * can, because a cell that opens on a whole number, one space, then a word is
+ * printed that way on row after row of the same column and nowhere else.
+ *
+ * The column is split only where enough rows carry the pattern AND they are
+ * at least half of what the column holds, so a prose cell that happens to open
+ * on a figure is left alone, and so are two street numbers in a column of
+ * fourteen names. In a split column a
+ * cell that is only a number keeps the figure side, anything else keeps the
+ * label side: a section heading above the holdings reads as a label, not as a
+ * quantity. Every row of the page gains the column, so the table stays
+ * rectangular and the cut's own boundaries are untouched.
+ */
+export function splitLeadingFigures(cells: string[][], minimumSupport = 0.15): string[][] {
+	const filled = cells.filter((row) => row.some((cell) => cell !== '')).length;
+	const needed = Math.max(2, Math.round(filled * minimumSupport));
+	const columns = Math.max(0, ...cells.map((row) => row.length));
+	const split = new Set<number>();
+	for (let column = 0; column < columns; column++) {
+		const held = cells.filter((row) => (row[column] ?? '') !== '').length;
+		const recurring = cells.filter((row) => leadingFigure(row[column] ?? '') !== null).length;
+		if (recurring >= needed && recurring * 2 >= held) split.add(column);
+	}
+	if (split.size === 0) return cells;
+	return cells.map((row) =>
+		Array.from({ length: columns }, (_, column) => row[column] ?? '').flatMap((text, column) =>
+			split.has(column) ? figureAndLabel(text) : [text]
+		)
+	);
+}
+
+/** "240.000,00 ABC ARBITRAGE" as its figure and its label, or null. The
+ *  space between them may be doubled, no-break or thin, as a run prints it. The figure
+ *  may be printed in groups ("3 710 818 ALS LTD") and signed ("-240 ABC", a
+ *  short position); a number followed by a number is not the pattern, so
+ *  "1 358 522" alone stays one figure. The label opens on a letter, on digits
+ *  glued to a letter ("3M") or on a parenthesis around a word ("(ABC)") - never
+ *  on "(522)", which is a negative printed in groups. */
+function leadingFigure(text: string): { figure: string; label: string } | null {
+	const match =
+		/^([-+]?(?:\d[\d .,'\u00A0\u202F\u2009]*\d|\d))[ \u00A0\u202F\u2009]+((?:\p{L}|\d+\p{L}|\((?=\p{L})).*)$/u.exec(
+			text
+		);
+	if (match === null || !isOnlyNumber(match[1])) return null;
+	return { figure: match[1], label: match[2] };
+}
+
+const figureAndLabel = (text: string): [string, string] => {
+	const parts = leadingFigure(text);
+	if (parts !== null) return [parts.figure, parts.label];
+	return isOnlyNumber(text) ? [text, ''] : ['', text];
+};
 
 /**
  * A page as a table of places, laid out exactly like `cellsOf`.

@@ -9,6 +9,56 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.20] - 2026-10-27
+
+### Added
+
+- **`openDocument` takes `rotatedPages: true`**, which places every item where the page displays it, the page's own `/Rotate` applied. A landscape table is often printed sideways on a portrait page that carries `/Rotate 90`: every viewer turns it upright, but the text content keeps the content stream's coordinates, so a whole displayed column shares one baseline and comes back as ONE item, and the rows of the page are its columns. Measured on the fee annexes of a life-insurance contract, 199 such pages and 11 283 holdings: not one row held its own figures; the same pages read in the displayed frame, 968 rows of 973 did. On, `x` and `y` are read in the displayed frame, `y` still rising up the page, which `width` and `height` of the page already were; a page that carries no rotation reads to exactly the same numbers; an engine whose viewport reports no `transform` leaves the items where they were. `positionedItems` takes the frame as a second argument, `DisplayedFrame`, for a caller driving the engine itself. Off unless asked for: no reading moves. The kit's `pdfWithPages` takes `{ rotate }` to build such a page.
+
+### Fixed
+
+- **`truecopy-mcp` refuses a `from`, `limit` or `maximumPages` its schema does not admit, by name.** A `limit` over 2000 was cut down to 2000 and a `from` of 0, a fraction or a string read as the default, all in silence: a caller that asked for rows 0 to 5000 got rows 1 to 2000 under a `reliable` verdict, with nothing to say the window was not the one it asked for. The three now answer as `decimals` and `year` already did, `read_table: limit must be a whole number from 1 to 2000.`, on every tool. A call within its schema reads exactly as before.
+- **Every tool's `outputSchema` declares the refusal it can answer with.** A file that will not open answers `{ verdict: 'unreadable', reason? }` and nothing else, and the schema required `rows`, `file` and the counts of it, so a client validating `structuredContent` rejected the one answer that says "do not lean on this". The schema now admits the refusal and still requires the whole reading of a `reliable` or `doubtful` verdict; `reason` is declared. No answer changes.
+
+## [2.0.19] - 2026-10-26
+
+### Added
+
+- **`readTable` takes `numberEdges: true`**, which cuts a figure from the label printed one space after it, in every column where that recurs. A portfolio page prints `240.000,00 ABC ARBITRAGE` as one run of text, so no geometry sees a gutter inside it; measured on the portfolio pages of two Luxembourg fund reports, 103 and 43 holdings, every quantity came back welded to its name and the reading was vouched for on one of them. With the option, 103 of 103 and 40 of 43 rows read right, and no reading is vouched for wrongly. A number followed by a number is never split, so a figure printed in groups stays whole; a signed quantity (`-240 ABC`) and a name opening on digits or a parenthesis (`240 3M`, `240 (ABC)`) split like the others, and so does a figure set off by a doubled, no-break or thin space. A column splits only where the pattern holds at least half of what it carries, so two street numbers in a column of names stay put. A split column has no edge of its own, so `boundaries` stays the cut it was and the rows of that page are wider than it. Off unless asked for: no reading moves.
+
+## [2.0.18] - 2026-10-23
+
+### Added
+
+- **`check_citations` takes `cells: 'apart'`**, the MCP side of `citedText(..., 'apart')`. The server joined the cited cells with a space, so two cells `12` and `345` still carried `12345` for any model checking its records over MCP, with no way to ask otherwise. Left out, the check reads as before; `'apart'` reads no number and no word across two cells. Any other value is refused by name.
+
+### Fixed
+
+- **`truecopy-mcp` no longer reads a file into memory before its size is checked.** The path is handed to the library as a blob backed by the file, so a file over the 20 MB limit is refused from its size alone instead of being read whole first. No reading moves.
+- **`truecopy-mcp` runs two readings at a time and queues the rest.** A burst of tool calls opened every document at once; `ping` and the other requests are still answered as they arrive.
+
+## [2.0.17] - 2026-10-22
+
+### Added
+
+- **`citedText(rows, cited, first, 'apart')` keeps the cells of the cited rows apart**, with `|` between cells and between rows. Joined by a space, the default, two cells `12` and `345` read as `12 345`, and `carriesNumber` then accepted `12345`, a figure neither cell printed. Apart, no number is read across a cell, and a figure the cut split in two is no longer carried, which is why it arrives as a choice and not as a new default. `CellJoin` names the two values.
+- **`checkExtraction(document, { ..., absentFigures: 'review' })` lets a row carrying a figure printed nowhere decide the verdict.** Left out, such a row is listed in `rowsToReview` and the verdict follows the total alone, so `40 + 60` against a page printing only `100` came back `read`. With `'review'` it comes back `needs-review`. Opt in, because it moves the verdict of a caller whose rows carry figures it computed.
+- **`document.pagesUnread` counts the pages `maximumPages` left unopened**, among those `keepPage` wanted, and is absent when the whole PDF was read. A reading cut at the bound looked exactly like a document ending there. `explainDocument` (and so the command and `read_table`) says the reading is partial, and `read_table` returns `pagesUnread` beside `more`, which speaks of rows only. Over MCP such a reading is never `reliable`: its verdict is `doubtful`, and the verdict line names the pages left. No reading moves: pages, rows and cells are untouched.
+- **`read_table` and `check_citations` return the `digest` of the bytes they read, and take it back.** Each call opens the path again, so a second page or a check could land on a file replaced in between, with row numbers that belonged to the first. Given a `digest`, either tool refuses a file that no longer has it. Optional: a caller that sends none is answered as before. No reading moves.
+
+### Fixed
+
+- **An archive entry that does not match its CRC-32 or its declared size is refused (`entry-corrupt`).** A damaged byte inside a stored `.docx` or `.odt` part is still well formed XML, so a changed digit read as a figure the document never printed. `openDocument` now refuses such a file as `not-opened`. A file an editor wrote is untouched: no reading moves.
+- **A PDF read stopped by the deadline now stops the engine too.** `withDeadline` only abandoned the wait: the loading task kept running, and a caller that retried piled engines up. The loading task is destroyed on expiry, and no further page is opened. `withDeadline` takes an optional `onExpire` callback for a caller bounding its own work the same way. An engine that finishes loading after the deadline is never handed the document, a cancel that throws still yields the `too-slow` refusal (the throw rides as its `cause`), and a page count far past `maximumPages` is no longer walked page by page when no `keepPage` is given; with one, the walk lets the deadline in every 4 096 pages. A page the engine hands back after the deadline (an engine whose cancel leaves it in flight) is not asked for its text or laid out. The refusal is settled before the cancel runs, so a cancel that settles the work at once cannot win the race with the work's own error, and a cancel returning a promise that rejects rides on the refusal as its `cause` instead of escaping.
+- **A table wider than any spreadsheet (16 384 columns) is refused as `too-big`** rather than allocated. A span in an `.odt` or a `.docx` is the file's word and sized the grid directly, so a few bytes could take the memory of a tab.
+- **The MCP registry entry of 2.0.16 was refused: its description ran over the registry's 100 characters, and nothing before the tag had checked it.** `npm run skill` now checks the length with the versions, and `mcp-registry.yml` takes a `ref` to replay an entry from a commit that fixed it, the tag staying where it points. The listing check that follows a publish reads the entry by exact name and version, with a few retries: the search index lagged the publish and reported a published entry as missing.
+
+## [2.0.16] - 2026-10-21
+
+### Added
+
+- **The MCP server opens every answer with a verdict, `reliable`, `doubtful` or `unreadable`, and serves two more tools, `find_amounts` and `find_dates`.** An assistant reading a PDF and getting a figure wrong without knowing it is the failure this package exists to prevent, and a tool that only listed rows left the judgement to the model. Now `read_table`, `find_amounts` and `find_dates` carry `verdict` in their data and as their first line of text, with what `reliable` is not; a file that does not open answers `unreadable` with its reason. `find_amounts` lists the figures written with a given number of decimals (two by default), `find_dates` the cells that start with a date in the day-month order stated, each with the row and column a citation names. `check_citations` carries the verdict of the reading it checked against, so a citation confirmed on a doubtful page is confirmed on a doubtful page. `npx truecopy mcp` starts the same server as `truecopy-mcp`, and `server.json` registers it with the MCP registry as `io.github.truecopydev/truecopy` once a version is on npm. An argument the schema does not admit (`decimals: 2.5`, `dateOrder: "mdy"`, a year out of range) is refused by name rather than rounded, defaulted or dropped: a figure found under a guessed argument reads exactly like one found under the stated one.
+
 ## [2.0.15] - 2026-10-14
 
 ### Added
@@ -381,7 +431,6 @@ release PR is what stamps them.
 ### Changed
 
 - **Nine exports now say where they stop.** No behaviour moved; the sentence above the declaration did. Two of the nine are worth reading before the next upgrade, because both bounds were measured against a real corpus of 125 annual reports rather than reasoned out:
-
   - **`columnOfHeader` reads ONE table, not a whole document.** Handed the flattened rows of a 43-page report it answers `null` far more often than it should: the heading is reprinted on pages the cut does not align, the same logical column lands at several indices, and several matching columns is exactly what it refuses. Of 125 reports, 24 carried a heading a caller could find and this refused 12 of them. Cut the document with `Table.pages` and ask once per page.
   - **`recordsFrom` groups a table, never a document located by what it says.** The spine is a WIDTH. Against a reader that walks the same 125 files by their addresses instead: 2 309 records here, 2 900 there. When the entries are found by an address, a heading or a date rather than by how wide the row is, this is not the mechanism - and it does not raise a doubt about it, it just returns fewer.
 

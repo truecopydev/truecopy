@@ -104,12 +104,17 @@ describe('the protocol', () => {
 		});
 	});
 
-	it('lists both tools, with how long the list may be held', async () => {
+	it('lists the four tools, with how long the list may be held', async () => {
 		const result = (await ask('tools/list'))?.result as {
 			tools: { name: string }[];
 			ttlMs: number;
 		};
-		expect(result.tools.map((tool) => tool.name)).toEqual(['read_table', 'check_citations']);
+		expect(result.tools.map((tool) => tool.name)).toEqual([
+			'read_table',
+			'find_amounts',
+			'find_dates',
+			'check_citations'
+		]);
 		expect(result.ttlMs).toBeGreaterThan(0);
 	});
 
@@ -154,8 +159,10 @@ describe('every tool description', () => {
 	it('says what the tool does not prove, and not only what it does', () => {
 		// The description is the prompt a host puts in front of a model. One that
 		// says "reads tables" and stops has taught the opposite of this library.
-		const [read, check] = TOOLS;
+		const [read, amounts, dates, check] = TOOLS;
 		expect(read.description).toContain('NOT a promise that the reading is right');
+		expect(amounts.description).toContain('reliable only means nothing looked wrong');
+		expect(dates.description).toContain('STATED, never guessed');
 		expect(check.description).toContain('NOWHERE else');
 	});
 
@@ -194,6 +201,7 @@ describe('read_table', () => {
 			firstRowNumber: number;
 			totalRows: number;
 			more: boolean;
+			pagesUnread: number;
 			pages: { number: number; boundaries: number[] }[];
 			findings: unknown[];
 		};
@@ -203,6 +211,7 @@ describe('read_table', () => {
 		expect(data.firstRowNumber).toBe(1);
 		expect(data.totalRows).toBe(3);
 		expect(data.more).toBe(false);
+		expect(data.pagesUnread).toBe(0);
 		expect(data.pages[0].number).toBe(1);
 		expect(Array.isArray(data.findings)).toBe(true);
 		expect(result.isError).toBeUndefined();
@@ -225,11 +234,50 @@ describe('read_table', () => {
 	it('keeps the numbers of the window it was asked for', async () => {
 		const result = await call(
 			'read_table',
-			{ path: 's.txt', from: 3, limit: 5000 },
+			{ path: 's.txt', from: 3, limit: 2000 },
 			serving(pasted('s.txt', STATEMENT))
 		);
 		expect((result.structuredContent as { firstRowNumber: number }).firstRowNumber).toBe(3);
 		expect(result.content[0].text).toContain('3 | 05/05/2026');
+	});
+
+	it('refuses a window its schema does not admit, by name, rather than cutting it in silence', async () => {
+		// limit: 5000 used to come back as 2000 rows under a reliable verdict, and
+		// from: 0 as the start: a window that was not the one asked for, unsaid.
+		const serve = serving(pasted('s.txt', STATEMENT));
+		const refusals: [Record<string, unknown>, string][] = [
+			[{ limit: 5000 }, 'read_table: limit must be a whole number from 1 to 2000.'],
+			[{ limit: 0 }, 'read_table: limit must be a whole number from 1 to 2000.'],
+			[{ limit: '2' }, 'read_table: limit must be a whole number from 1 to 2000.'],
+			[{ from: 0 }, 'read_table: from must be a whole number of 1 or more.'],
+			[{ from: 2.5 }, 'read_table: from must be a whole number of 1 or more.'],
+			[{ maximumPages: 0 }, 'read_table: maximumPages must be a whole number of 1 or more.']
+		];
+		for (const [bound, text] of refusals) {
+			const result = await call('read_table', { path: 's.txt', ...bound }, serve);
+			expect(result.isError).toBe(true);
+			expect(result.content[0].text).toBe(text);
+			expect(result.structuredContent).toBeUndefined();
+		}
+		for (const tool of ['find_amounts', 'find_dates', 'check_citations']) {
+			const result = await call(tool, { path: 's.txt', maximumPages: -1, records: [] }, serve);
+			expect(result.content[0].text).toBe(
+				`${tool}: maximumPages must be a whole number of 1 or more.`
+			);
+		}
+	});
+
+	it('does not refuse check_citations a window it never declared', async () => {
+		// check_citations reads the rows it is given and looks in no window of
+		// its own: a stray from or limit is not a bound of its schema, so a
+		// refusal naming one would send the caller to a field that is not there.
+		const result = await call(
+			'check_citations',
+			{ path: 's.txt', from: 0, limit: 5000, records: [] },
+			serving(pasted('s.txt', STATEMENT))
+		);
+		expect(result.isError).toBeUndefined();
+		expect(result.structuredContent?.verdict).toBe('reliable');
 	});
 
 	it('says there is no such row rather than pretending there is', async () => {
@@ -249,6 +297,10 @@ describe('read_table', () => {
 		const file = new File([two], 'two.pdf', { type: 'application/pdf' });
 		const result = await call('read_table', { path: '/x.pdf', maximumPages: 1 }, serving(file));
 		expect((result.structuredContent as { pages: unknown[] }).pages).toHaveLength(1);
+		// The rows end with page one, the document does not: `more` speaks of rows only.
+		expect((result.structuredContent as { pagesUnread: number }).pagesUnread).toBe(1);
+		expect(result.content[0].text).toContain('1 more page(s) left unread past maximumPages');
+		expect(result.content[0].text).toContain('1 page(s) left unread past maximumPages.');
 	});
 
 	it('refuses a call with no path, in the result so the model can retry', async () => {
@@ -284,8 +336,10 @@ describe('read_table', () => {
 			throw new Error('ENOENT: no such file');
 		});
 		const result = await call('read_table', { path: '/nowhere.pdf' }, missing);
-		expect(result.content[0].text).toBe('could not read that file: ENOENT: no such file');
-		expect(result.structuredContent).toBeUndefined();
+		expect(result.content[0].text).toBe(
+			'verdict: unreadable - could not read that file: ENOENT: no such file'
+		);
+		expect(result.structuredContent).toEqual({ verdict: 'unreadable' });
 	});
 
 	it('reports a rejection that is not an Error rather than crashing on it', async () => {
@@ -293,7 +347,7 @@ describe('read_table', () => {
 			throw 'denied';
 		});
 		expect((await call('read_table', { path: '/x' }, odd)).content[0].text).toBe(
-			'could not read that file: denied'
+			'verdict: unreadable - could not read that file: denied'
 		);
 	});
 });
@@ -374,6 +428,34 @@ describe('check_citations', () => {
 		}
 	});
 
+	it('reads no figure across two cells when asked to keep them apart', async () => {
+		// Joined, the cells 12 and 345 print `12 345`, a thousands group carrying a
+		// figure neither cell holds. Apart is the caller's choice, not the default:
+		// it also loses a figure the cut split across two cells.
+		const split = serving(pasted('split.txt', 'REF A;12;345\nREF B;7;8'));
+		const claim = { path: '/split.txt', records: [{ rows: [1], values: { total: 12345 } }] };
+		const joined = await call('check_citations', claim, split);
+		expect(joined.structuredContent).toMatchObject({ carried: 1 });
+		const apart = await call('check_citations', { ...claim, cells: 'apart' }, split);
+		expect(apart.structuredContent).toMatchObject({ carried: 0 });
+		const kept = await call(
+			'check_citations',
+			{ ...claim, cells: 'apart', records: [{ rows: [1], values: { first: 12, second: 345 } }] },
+			split
+		);
+		expect(kept.structuredContent).toMatchObject({ checked: 2, carried: 2 });
+	});
+
+	it('refuses a way of joining cells it does not know', async () => {
+		const result = await call(
+			'check_citations',
+			{ path: '/s.txt', records: [], cells: 'glued' },
+			serving(pasted('s.txt', STATEMENT))
+		);
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toBe('check_citations: cells must be joined or apart.');
+	});
+
 	it('refuses a call with no path or no records', async () => {
 		const capabilities = serving(pasted('s.txt', STATEMENT));
 		expect((await call('check_citations', { records: [] }, capabilities)).isError).toBe(true);
@@ -399,7 +481,104 @@ describe('check_citations', () => {
 	});
 });
 
+describe('a reading named by its digest', () => {
+	/** The same path, answering a different file from the second call on. */
+	function replacedAfterFirstOpen(first: string, then: string): McpCapabilities {
+		let opened = 0;
+		return serving(async () => pasted('s.txt', opened++ === 0 ? first : then));
+	}
+
+	it('names the bytes it read, on both tools', async () => {
+		const capabilities = serving(pasted('s.txt', STATEMENT));
+		const read = await call('read_table', { path: 's.txt' }, capabilities);
+		const digest = (read.structuredContent as { digest: string }).digest;
+		expect(digest).toMatch(/^[0-9a-f]{64}$/);
+		const check = await call(
+			'check_citations',
+			{ path: 's.txt', digest, records: [{ rows: [1], values: { amount: 12.4 } }] },
+			capabilities
+		);
+		expect(check.isError).toBeUndefined();
+		expect(check.structuredContent).toMatchObject({ digest, carried: 1 });
+	});
+
+	it('refuses a second page of a file replaced since the first', async () => {
+		const capabilities = replacedAfterFirstOpen(STATEMENT, STATEMENT.replace('12,40', '99,99'));
+		const first = await call('read_table', { path: 's.txt', limit: 1 }, capabilities);
+		const digest = (first.structuredContent as { digest: string }).digest;
+		const next = await call('read_table', { path: 's.txt', from: 2, digest }, capabilities);
+		expect(next.isError).toBe(true);
+		expect(next.content[0].text).toContain('has changed since the reading');
+	});
+
+	it('refuses to check citations against rows the file no longer has', async () => {
+		const capabilities = replacedAfterFirstOpen(STATEMENT, STATEMENT.replace('12,40', '99,99'));
+		const first = await call('read_table', { path: 's.txt' }, capabilities);
+		const digest = (first.structuredContent as { digest: string }).digest;
+		const check = await call(
+			'check_citations',
+			{ path: 's.txt', digest, records: [{ rows: [1], values: { amount: 99.99 } }] },
+			capabilities
+		);
+		expect(check.isError).toBe(true);
+		expect(check.structuredContent).toBeUndefined();
+	});
+});
+
+/**
+ * Whether a structured answer satisfies the advertised schema: every required
+ * field of the one `oneOf` branch whose verdict admits it, and no field the
+ * schema does not name. Enough of JSON Schema to catch the two drifts seen
+ * here, a refusal with no `rows` and a field the schema never heard of.
+ */
+function satisfies(schema: (typeof TOOLS)[number]['outputSchema'], data: unknown): boolean {
+	if (typeof data !== 'object' || data === null) return false;
+	const answer = data as Record<string, unknown>;
+	const branches = schema.oneOf.filter((branch) =>
+		(branch.properties.verdict.enum as readonly string[]).includes(String(answer.verdict))
+	);
+	if (branches.length !== 1) return false;
+	const known = Object.keys(schema.properties);
+	return (
+		branches[0].required.every((field) => field in answer) &&
+		Object.keys(answer).every((field) => known.includes(field))
+	);
+}
+
 describe('the schema the server advertises', () => {
+	it('admits the refusal every tool can answer with, and still requires the reading of a reading', async () => {
+		// The refusal is { verdict: 'unreadable', reason? } and nothing else. A
+		// schema that required rows of it made a strict client reject the one
+		// answer that says "do not lean on this".
+		const read = TOOLS.find((tool) => tool.name === 'read_table');
+		if (read === undefined) throw new Error('read_table is not advertised');
+		const refused = await call('read_table', { path: '/x.pdf' }, serving(pasted('empty.pdf', '')));
+		expect(refused.structuredContent).toEqual({ verdict: 'unreadable', reason: 'empty' });
+		expect(satisfies(read.outputSchema, refused.structuredContent)).toBe(true);
+
+		const reading = await call(
+			'read_table',
+			{ path: 's.txt' },
+			serving(pasted('s.txt', STATEMENT))
+		);
+		expect(satisfies(read.outputSchema, reading.structuredContent)).toBe(true);
+		expect(satisfies(read.outputSchema, { verdict: 'reliable' })).toBe(false);
+		expect(satisfies(read.outputSchema, { verdict: 'unreadable', rows: [] })).toBe(true);
+		expect(satisfies(read.outputSchema, { verdict: 'unreadable', guess: 1 })).toBe(false);
+	});
+
+	it('declares the same answer or refusal on every tool', () => {
+		for (const tool of TOOLS) {
+			expect(tool.outputSchema.required).toEqual(['verdict']);
+			expect(tool.outputSchema.oneOf[1]).toEqual({
+				properties: { verdict: { type: 'string', enum: ['unreadable'] } },
+				required: ['verdict']
+			});
+			expect(tool.outputSchema.oneOf[0].required).toContain('verdict');
+			expect(tool.outputSchema.properties.reason.type).toBe('string');
+		}
+	});
+
 	it('offers every origin a reading can carry, and no other', () => {
 		// Declared twice - the type and the schema - and the day `docx` was added
 		// to one, the other still said `pdf, text, image`. A client validating
@@ -407,5 +586,216 @@ describe('the schema the server advertises', () => {
 		const read = TOOLS.find((tool) => tool.name === 'read_table');
 		const origin = read?.outputSchema.properties.origin;
 		expect(origin).toEqual({ type: 'string', enum: [...ORIGINS] });
+	});
+});
+
+describe('the verdict', () => {
+	it('opens a clean reading on reliable, and says what reliable is not', async () => {
+		const result = await call(
+			'read_table',
+			{ path: 'statement.txt' },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.verdict).toBe('reliable');
+		expect(result.content[0].text).toContain('verdict: reliable');
+		expect(result.content[0].text).toContain('not the same as "this reading is right"');
+	});
+
+	it('is doubtful as soon as one thing looked wrong', async () => {
+		const result = await call(
+			'read_table',
+			{ path: 'prose.txt' },
+			serving(pasted('prose.txt', 'one line of prose\nand another one'))
+		);
+		expect(result.structuredContent?.verdict).toBe('doubtful');
+		expect(result.content[0].text).toContain('verdict: doubtful');
+	});
+
+	it('is doubtful when maximumPages left a page unread, clean as the page read may be', async () => {
+		const row = (y: number, date: string, label: string, amount: string) => [
+			{ word: date, x: 50, y },
+			{ word: label, x: 150, y },
+			{ word: amount, x: 400, y }
+		];
+		const clean = [
+			...row(700, '02/05/2026', 'AMAZON', '12,40'),
+			...row(680, '03/05/2026', 'LOYER', '750,00'),
+			...row(660, '05/05/2026', 'SNCF', '68,00')
+		];
+		const file = new File([pdfWithPages([clean, clean])], 'two.pdf', { type: 'application/pdf' });
+		const whole = await call('read_table', { path: '/x.pdf' }, serving(file));
+		expect(whole.structuredContent?.verdict).toBe('reliable');
+		const cut = await call('read_table', { path: '/x.pdf', maximumPages: 1 }, serving(file));
+		expect(cut.structuredContent?.verdict).toBe('doubtful');
+		expect(cut.content[0].text).toContain(
+			'verdict: doubtful - 1 page(s) left unread past maximumPages.'
+		);
+	});
+
+	it('is unreadable when the file did not open, with the reason', async () => {
+		const result = await call(
+			'find_amounts',
+			{ path: 'broken.pdf' },
+			serving(new File(['this is not a PDF at all'], 'broken.pdf', { type: 'application/pdf' }))
+		);
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toMatch(/^verdict: unreadable - /);
+		expect(result.structuredContent?.verdict).toBe('unreadable');
+	});
+
+	it('travels with every tool that reads', async () => {
+		const serve = serving(pasted('statement.txt', STATEMENT));
+		for (const name of ['read_table', 'find_amounts', 'find_dates']) {
+			const result = await call(name, { path: 'statement.txt' }, serve);
+			expect(result.structuredContent?.verdict).toBe('reliable');
+		}
+		const checked = await call('check_citations', { path: 'statement.txt', records: [] }, serve);
+		expect(checked.structuredContent?.verdict).toBe('reliable');
+		expect(checked.content[0].text.split('\n')[1]).toMatch(/^verdict: reliable - /);
+	});
+});
+
+describe('find_amounts', () => {
+	it('finds the sums of money, where the page printed them', async () => {
+		const result = await call(
+			'find_amounts',
+			{ path: 'statement.txt' },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.amounts).toEqual([
+			{ row: 1, column: 3, written: '12,40', value: 12.4 },
+			{ row: 2, column: 3, written: '750,00', value: 750 },
+			{ row: 3, column: 3, written: '68,00', value: 68 }
+		]);
+		expect(result.structuredContent?.decimals).toBe(2);
+		expect(result.content[0].text).toContain('row 2, column 3: 750,00 -> 750');
+		expect(result.content[0].text).toContain('What it means');
+	});
+
+	it('takes every number when asked for no decimals at all', async () => {
+		const result = await call(
+			'find_amounts',
+			{ path: 'statement.txt', decimals: 0 },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		const amounts = result.structuredContent?.amounts as { row: number; written: string }[];
+		expect(amounts.length).toBeGreaterThan(3);
+		expect(amounts.some((found) => found.written === '750,00')).toBe(true);
+		expect(result.structuredContent?.decimals).toBe(0);
+	});
+
+	it('finds nothing when the page writes its figures with other decimals', async () => {
+		const result = await call(
+			'find_amounts',
+			{ path: 'statement.txt', decimals: 1 },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.amounts).toEqual([]);
+		expect(result.structuredContent?.decimals).toBe(1);
+		expect(result.content[0].text).toContain('0 figure(s) written with 1 decimal(s)');
+	});
+
+	it('refuses a number of decimals the schema does not admit, by name', async () => {
+		// A host that validates against the schema never sends this; one that
+		// does not is exactly the one whose mistakes have to be answered - and
+		// answered, not rounded: 1.5 read as 2 is a guess under a reliable verdict.
+		const serve = serving(pasted('statement.txt', STATEMENT));
+		for (const decimals of [1.5, -1, 7, '2']) {
+			const result = await call('find_amounts', { path: 'statement.txt', decimals }, serve);
+			expect(result.isError).toBe(true);
+			expect(result.content[0].text).toBe(
+				'find_amounts: decimals must be a whole number from 0 to 6.'
+			);
+		}
+	});
+
+	it('names the rows it did not look in', async () => {
+		const result = await call(
+			'find_amounts',
+			{ path: 'statement.txt', limit: 2 },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.more).toBe(true);
+		expect(result.content[0].text).toContain(
+			'1 more row(s) not looked in. Call find_amounts again with from: 3'
+		);
+	});
+
+	it('needs a path', async () => {
+		const result = await call('find_amounts', {}, serving(pasted('x.txt', 'a')));
+		expect(result.isError).toBe(true);
+	});
+});
+
+describe('find_dates', () => {
+	it('finds the dates in the order given, where the page printed them', async () => {
+		const result = await call(
+			'find_dates',
+			{ path: 'statement.txt' },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.dates).toEqual([
+			{ row: 1, column: 1, written: '02/05/2026', date: '2026-05-02' },
+			{ row: 2, column: 1, written: '03/05/2026', date: '2026-05-03' },
+			{ row: 3, column: 1, written: '05/05/2026', date: '2026-05-05' }
+		]);
+		expect(result.content[0].text).toContain('read as DMY');
+	});
+
+	it('reads the same digits the other way round when told to', async () => {
+		const result = await call(
+			'find_dates',
+			{ path: 'statement.txt', dateOrder: 'MDY' },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		const dates = result.structuredContent?.dates as { date: string }[];
+		expect(dates[0].date).toBe('2026-02-05');
+	});
+
+	it('dates a row that prints no year only when the year is given', async () => {
+		const serve = serving(pasted('short.txt', '02/05;CARTE AMAZON;12,40'));
+		const without = await call('find_dates', { path: 'short.txt' }, serve);
+		expect(without.structuredContent?.dates).toEqual([]);
+		const withYear = await call('find_dates', { path: 'short.txt', year: 2026 }, serve);
+		expect(withYear.structuredContent?.dates).toEqual([
+			{ row: 1, column: 1, written: '02/05', date: '2026-05-02' }
+		]);
+	});
+
+	it('says when the window starts past the last row', async () => {
+		const result = await call(
+			'find_dates',
+			{ path: 'statement.txt', from: 9 },
+			serving(pasted('statement.txt', STATEMENT))
+		);
+		expect(result.structuredContent?.dates).toEqual([]);
+		expect(result.content[0].text).toContain('no row at 9: this reading has 3 row(s)');
+	});
+
+	it('needs a path', async () => {
+		const result = await call('find_dates', {}, serving(pasted('x.txt', 'a')));
+		expect(result.isError).toBe(true);
+	});
+
+	it('refuses an order of day and month it does not know rather than guessing one', async () => {
+		const serve = serving(pasted('statement.txt', STATEMENT));
+		for (const dateOrder of ['mdy', 'YMD', 3]) {
+			const result = await call('find_dates', { path: 'statement.txt', dateOrder }, serve);
+			expect(result.isError).toBe(true);
+			expect(result.content[0].text).toBe(
+				'find_dates: dateOrder must be DMY or MDY: the order is stated, never guessed.'
+			);
+		}
+	});
+
+	it('refuses a year outside the schema rather than dropping it', async () => {
+		const serve = serving(pasted('short.txt', '02/05;CARTE AMAZON;12,40'));
+		for (const year of [1850, 2026.5, '2026']) {
+			const result = await call('find_dates', { path: 'short.txt', year }, serve);
+			expect(result.isError).toBe(true);
+			expect(result.content[0].text).toBe(
+				'find_dates: year must be a whole year from 1900 to 2200.'
+			);
+		}
 	});
 });

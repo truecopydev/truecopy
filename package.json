@@ -1,6 +1,6 @@
 {
 	"name": "truecopy",
-	"version": "2.0.15",
+	"version": "2.0.20",
 	"type": "module",
 	"description": "Extract tables from a PDF, a Word document, a paste or a CSV in TypeScript, and know when the extraction cannot be trusted. Learns each document's own shape, so a new issuer needs no new configuration.",
 	"keywords": [
@@ -17,11 +17,17 @@
 		"schema",
 		"validation",
 		"typescript",
-		"browser"
+		"browser",
+		"mcp",
+		"mcp-server",
+		"model-context-protocol",
+		"ai-agent",
+		"llm-tools"
 	],
 	"license": "MIT",
 	"author": "Florian Mousseau <florian.mousseau@gmail.com>",
 	"homepage": "https://truecopy.dev",
+	"mcpName": "io.github.truecopydev/truecopy",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/truecopydev/truecopy.git"
