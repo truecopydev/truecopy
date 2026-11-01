@@ -62,10 +62,14 @@ function confinement(directory) {
 	}
 }
 
+// Returns the RESOLVED path, the one the check was made on: handing back the
+// path as given reopened it later through its links, and a link swapped in
+// between led outside the root after the check had passed.
 function within(path) {
 	if (root === null) return path;
-	const step = relative(root, realpathSync(path));
-	if (step === '' || (!step.startsWith('..') && !isAbsolute(step))) return path;
+	const real = realpathSync(path);
+	const step = relative(root, real);
+	if (step === '' || (!step.startsWith('..') && !isAbsolute(step))) return real;
 	throw new Error(`outside TRUECOPY_MCP_ROOT: ${basename(path)}`);
 }
 
@@ -77,10 +81,10 @@ function within(path) {
  * stat rather than three gigabytes of this process.
  */
 async function open(path) {
-	const full = within(resolve(path));
-	const bytes = await openAsBlob(full);
-	return new File([bytes], basename(full), {
-		type: full.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'text/plain'
+	const asked = resolve(path);
+	const bytes = await openAsBlob(within(asked));
+	return new File([bytes], basename(asked), {
+		type: asked.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'text/plain'
 	});
 }
 
