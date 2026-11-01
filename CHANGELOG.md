@@ -9,6 +9,10 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`truecopy-mcp` opens the path it checked against `TRUECOPY_MCP_ROOT`.** The confinement was judged on the resolved path but the file was reopened by the path as given, through its links: a link swapped between the two led outside the root. The resolved path is what is opened now; the file keeps the name it was asked by. No reading moves.
+
 ## [2.0.20] - 2026-10-27
 
 ### Added
