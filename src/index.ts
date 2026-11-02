@@ -62,6 +62,7 @@ export {
 	isOnlyNumber,
 	numberToken,
 	readDate,
+	readDecimal,
 	readLeadingDate,
 	readNumber,
 	wellGrouped

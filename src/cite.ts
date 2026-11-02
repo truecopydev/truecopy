@@ -28,7 +28,7 @@
  * it. This module says CARRIED or NOT, per value; the policy is yours.
  */
 
-import { findNumbers, readNumber, type Brackets, type DecimalMark } from './notation.js';
+import { findNumbers, readDecimal, type Brackets, type DecimalMark } from './notation.js';
 
 /**
  * The rows as a model should receive them: one line per row, its number first,
@@ -180,6 +180,12 @@ export function carriesText(source: string, value: string, brackets: Brackets = 
  * `'punctuation'` for a document that prints asides in brackets; a sign
  * dropped from a real accounting negative is then no longer caught, which is
  * why it is never the default.
+ *
+ * Compared as decimals written out, not as `number`s: a `number` holds
+ * fifteen significant digits, and `9007199254740993` cited against a page
+ * printing `9007199254740992` was carried - the one check that exists to
+ * catch a retyped figure, passing a figure retyped by one. Below sixteen
+ * digits the two equalities agree, so no verdict moves there.
  */
 export function carriesNumber(
 	source: string,
@@ -187,7 +193,7 @@ export function carriesNumber(
 	decimal?: DecimalMark | null,
 	brackets?: Brackets
 ): boolean {
-	const sought = readNumber(value, decimal, brackets);
+	const sought = readDecimal(value, decimal, brackets);
 	if (sought === null) return false;
-	return findNumbers(source).some((found) => readNumber(found.raw, decimal, brackets) === sought);
+	return findNumbers(source).some((found) => readDecimal(found.raw, decimal, brackets) === sought);
 }

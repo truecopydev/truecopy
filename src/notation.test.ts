@@ -6,6 +6,7 @@ import {
 	isOnlyNumber,
 	numberToken,
 	readDate,
+	readDecimal,
 	readLeadingDate,
 	readNumber,
 	wellGrouped,
@@ -151,6 +152,39 @@ describe('readNumber', () => {
 	});
 });
 
+describe('readDecimal', () => {
+	it('writes the number out exactly, whatever the notation', () => {
+		expect(readDecimal('1 234,50')).toBe('1234.5');
+		expect(readDecimal('1,234.50')).toBe('1234.5');
+		expect(readDecimal('(123,45)')).toBe('-123.45');
+		expect(readDecimal('123,45-')).toBe('-123.45');
+		expect(readDecimal('0,280')).toBe('0.28');
+		expect(readDecimal('007')).toBe('7');
+		expect(readDecimal('12,00 €')).toBe('12');
+		expect(readDecimal('1,234', ',')).toBe('1.234');
+		expect(readDecimal('1,234', '.')).toBe('1234');
+		expect(readDecimal('(75016)', null, 'punctuation')).toBe('75016');
+	});
+
+	it('keeps the digits a number loses', () => {
+		expect(readDecimal('9007199254740993')).toBe('9007199254740993');
+		expect(readDecimal('9007199254740992')).toBe('9007199254740992');
+		expect(readNumber('9007199254740993')).toBe(readNumber('9007199254740992'));
+		expect(readDecimal('123456789012345678,90')).toBe('123456789012345678.9');
+	});
+
+	it('refuses what readNumber refuses, and reads what it reads', () => {
+		expect(readDecimal('')).toBeNull();
+		expect(readDecimal('abc')).toBeNull();
+		expect(readDecimal('abc12')).toBeNull();
+		expect(readDecimal('-')).toBeNull();
+		expect(readDecimal('.5')).toBe('0.5');
+		expect(readDecimal('-0,00')).toBe('0');
+		expect(readDecimal('12abc')).toBe('12');
+		expect(readDecimal('1.4.1')).toBe('14.1');
+	});
+});
+
 describe('findNumbers', () => {
 	it('never starts a match inside another number', () => {
 		// A date glued to a figure on a flattened line: without the lookarounds
@@ -284,6 +318,54 @@ describe('readDate', () => {
 		expect(readDate('32/01/2026', FRENCH)).toBeNull();
 		expect(readDate('01/13/2026', FRENCH)).toBeNull();
 		expect(readDate('no date here', FRENCH)).toBeNull();
+	});
+});
+
+describe('readDate under strictDates', () => {
+	const STRICT: Notation = { ...FRENCH, strictDates: true };
+
+	it('reads a date closed on both sides exactly as before', () => {
+		expect(readDate('le 12/05/2026 VIREMENT', STRICT)?.getDate()).toBe(12);
+		expect(readDate('12/05/202 6', STRICT)?.getFullYear()).toBe(2026);
+		expect(readDate('25/01/26 1 234,56', STRICT)?.getFullYear()).toBe(2026);
+	});
+
+	it('refuses a date glued to a digit on either side', () => {
+		// A loose match picks `12/05/2026` out of `112/05/2026` and reads 12 May
+		// out of a run nobody wrote as a date.
+		expect(readDate('112/05/2026', FRENCH)?.getDate()).toBe(12);
+		expect(readDate('112/05/2026', STRICT)).toBeNull();
+		expect(readDate('12/05/20261', STRICT)).toBeNull();
+	});
+});
+
+describe('readLeadingDate under strictDates', () => {
+	const STRICT: Notation = { ...FRENCH, strictDates: true };
+
+	it('refuses a date whose written year makes no day, instead of re-reading it without the year', () => {
+		// Loose: the delimited shape yields no day, the day-month shape then
+		// reads `29/02` alone against the fallback year and builds a date the
+		// page never wrote, ten characters short of the year it printed.
+		const loose = readLeadingDate('29/02/2025 PRIME', FRENCH, 2024);
+		expect(loose?.date.getFullYear()).toBe(2024);
+		expect(loose?.length).toBe(5);
+		expect(readLeadingDate('29/02/2025 PRIME', STRICT, 2024)).toBeNull();
+		expect(readLeadingDate('2025-02-29 PRIME', STRICT, 2024)).toBeNull();
+	});
+
+	it('refuses a digit glued to the end of a date', () => {
+		expect(readLeadingDate('2026-01-250 PRIME', FRENCH)?.date.getDate()).toBe(25);
+		expect(readLeadingDate('2026-01-250 PRIME', STRICT)).toBeNull();
+		expect(readLeadingDate('2026-01-250 PRIME', STRICT, 2024)).toBeNull();
+		expect(readLeadingDate('12/05/20261 PRIME', STRICT, 2024)).toBeNull();
+	});
+
+	it('reads every whole date as before, year written or not', () => {
+		expect(readLeadingDate('29/02/2024 PRIME', STRICT)?.length).toBe(10);
+		expect(readLeadingDate('2026-01-25 GROCERIES', STRICT)).toMatchObject({ length: 10 });
+		expect(readLeadingDate('25/01 GROCERIES', STRICT, 2026)?.date.getMonth()).toBe(0);
+		expect(readLeadingDate('1er janv. 2026 GROCERIES', STRICT)?.length).toBe(14);
+		expect(readLeadingDate('32/01 GROCERIES', STRICT, 2026)).toBeNull();
 	});
 });
 

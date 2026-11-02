@@ -47,6 +47,18 @@ describe('citedText', () => {
 		expect(carriesText(apart, '12 345')).toBe(true);
 	});
 
+	it('tells apart two figures a number could not', () => {
+		// Sixteen digits: a card number, a transaction reference. `Number` reads
+		// both as 9007199254740992, and the check that exists to catch a model
+		// retyping a figure let the retyped one through.
+		expect(carriesNumber('ref 9007199254740992', '9007199254740993')).toBe(false);
+		expect(carriesNumber('ref 9007199254740993', '9007199254740993')).toBe(true);
+		expect(carriesNumber('ref 9 007 199 254 740 993', '9007199254740993')).toBe(true);
+		// And below that, nothing moves: the same figure in two notations.
+		expect(carriesNumber('total 1 655,00', '1655')).toBe(true);
+		expect(carriesNumber('total 2 415 065,40', '2 415 065')).toBe(false);
+	});
+
 	it('reads citations against the numbering the model saw', () => {
 		expect(citedText([['a'], ['b']], [41], 40)).toBe('b');
 	});

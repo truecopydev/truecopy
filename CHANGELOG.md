@@ -9,7 +9,14 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`readDecimal` reads a number out exactly, as text.** A `number` holds fifteen significant digits, so `readNumber('9007199254740993')` and `readNumber('9007199254740992')` are equal, and a check built on that equality certifies a figure the page does not print - sixteen digits is a card number, a reference, a transaction identifier. `readDecimal` reads the same token the same way and stops before the conversion: `readDecimal('1 234,50')` is `'1234.5'`, `readDecimal('(123,45)')` is `'-123.45'`, two tokens naming the same quantity give the same text in whatever notation. `readNumber` reads exactly as before.
+- **`Notation.strictDates`** reads a date only where the page writes one whole. On: a date written with its year that makes no calendar day is refused rather than re-read without its year against `yearWhenMissing` (`29/02/2025` against 2024 read as 29 February 2024, with a `length` that stopped before the year), and a digit glued to either end keeps a run from being a date (`2026-01-250` read as 25 January, `readDate('112/05/2026')` found 12 May). Off unless asked for: no reading moves.
+
 ### Fixed
+
+- **`carriesNumber` compares the figures as written, not as `number`s.** `9007199254740993` cited against a page printing `9007199254740992` was carried: the one check that exists to catch a retyped figure let a figure retyped by one digit through. Below sixteen significant digits the two equalities agree, so no verdict moves there.
 
 - **A `.docx` no longer prints a paragraph written inside an XML comment.** The Word reader looked for its tags everywhere in `document.xml`, comments included, so `<!-- <w:p><w:r><w:t>999,00</w:t></w:r></w:p> -->` came back as a line no editor shows. Word never writes a comment there, so no file it saved reads differently; the OpenDocument reader already stepped over them.
 - **`truecopy-mcp` opens the path it checked against `TRUECOPY_MCP_ROOT`.** The confinement was judged on the resolved path but the file was reopened by the path as given, through its links: a link swapped between the two led outside the root. The resolved path is what is opened now; the file keeps the name it was asked by. No reading moves.
