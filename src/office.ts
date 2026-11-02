@@ -256,7 +256,24 @@ interface Tag {
  *  a word the document never showed. */
 const CARRIES_TEXT: Record<string, boolean> = { t: true, instrText: false };
 
-function linesOf(xml: string): string[][] {
+/** The part with its comments taken out. Word never writes one, so a comment in
+ *  `document.xml` was put there by hand, and the markup inside it is a paragraph
+ *  no editor shows: read as structure, it printed a figure the page does not.
+ *  Walked with `indexOf` like the OpenDocument lexer, so each character is seen
+ *  once. */
+function withoutComments(xml: string): string {
+	const kept: string[] = [];
+	let at = 0;
+	for (let open = xml.indexOf('<!--'); open !== -1; open = xml.indexOf('<!--', at)) {
+		kept.push(xml.slice(at, open));
+		at = jumpPast(xml, '-->', open + 4);
+	}
+	kept.push(xml.slice(at));
+	return kept.join('');
+}
+
+function linesOf(part: string): string[][] {
+	const xml = withoutComments(part);
 	const body = new Body();
 	ELEMENT.lastIndex = 0;
 	for (let match = ELEMENT.exec(xml); match !== null; match = ELEMENT.exec(xml)) {

@@ -11,6 +11,7 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **A `.docx` no longer prints a paragraph written inside an XML comment.** The Word reader looked for its tags everywhere in `document.xml`, comments included, so `<!-- <w:p><w:r><w:t>999,00</w:t></w:r></w:p> -->` came back as a line no editor shows. Word never writes a comment there, so no file it saved reads differently; the OpenDocument reader already stepped over them.
 - **`truecopy-mcp` opens the path it checked against `TRUECOPY_MCP_ROOT`.** The confinement was judged on the resolved path but the file was reopened by the path as given, through its links: a link swapped between the two led outside the root. The resolved path is what is opened now; the file keeps the name it was asked by. No reading moves.
 
 ## [2.0.20] - 2026-10-27
