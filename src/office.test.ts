@@ -195,6 +195,19 @@ describe('documentFromDocx', () => {
 		expect(document.text.trim()).toBe('A'.repeat(23));
 	});
 
+	it('does not read a paragraph written inside a comment', async () => {
+		const body =
+			'<w:p><w:r><w:t>Article 1</w:t></w:r></w:p>' +
+			'<!-- <w:p><w:r><w:t>999,00</w:t></w:r></w:p> -->' +
+			'<w:p><w:r><w:t>Article 2</w:t></w:r></w:p>';
+		expect((await read(await docxWithBody(body))).text).toBe('Article 1\nArticle 2');
+	});
+
+	it('reads nothing past a comment that never closes', async () => {
+		const body = '<w:p><w:r><w:t>Article 1</w:t></w:r></w:p><!-- <w:p><w:r><w:t>999,00</w:t>';
+		expect((await read(await docxWithBody(body))).text).toBe('Article 1');
+	});
+
 	it('names the part it went looking for', async () => {
 		expect(WORD_BODY).toBe('word/document.xml');
 	});
