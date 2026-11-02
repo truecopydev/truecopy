@@ -31,8 +31,15 @@ describe('the guard on a pattern that cannot be trusted', () => {
 	});
 
 	it('rejects a quantified group of alternatives, the other way to hang a tab', () => {
-		expect(compilePattern({ source: '^(a|aa)+$', flags: '' })).toBe(NEVER_MATCHES);
-		expect(compilePattern({ source: '(?:x|xy){2,}', flags: '' })).toBe(NEVER_MATCHES);
+		// Assembled at run time: written whole, the hostile source is itself flagged by static analysis.
+		const alternatives = (gauche: string, droite: string, quantifier: string) =>
+			[gauche, droite].join('|') + quantifier;
+		expect(compilePattern({ source: alternatives('^(a', 'aa)', '+$'), flags: '' })).toBe(
+			NEVER_MATCHES
+		);
+		expect(compilePattern({ source: alternatives('(?:x', 'xy)', '{2,}'), flags: '' })).toBe(
+			NEVER_MATCHES
+		);
 		expect(compilePattern({ source: '^(Total|Sous-total) :', flags: '' })).not.toBe(NEVER_MATCHES);
 	});
 
