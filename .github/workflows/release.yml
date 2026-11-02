@@ -60,7 +60,10 @@ jobs:
       - name: the version is declared and described
         run: |
           version="${{ steps.target.outputs.version }}"
-          declared=$(node -p "require('./package.json').version")
+          sha="${{ steps.target.outputs.sha }}"
+          # Read at the commit that will be tagged, not in the checkout: a sha
+          # other than the dispatched ref must carry its own version and notes.
+          declared=$(git show "$sha:package.json" | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
           if [ "$version" != "$declared" ]; then
             echo "::error::asked for $version, package.json says $declared - the release PR has not landed on this commit."
             exit 1
@@ -69,7 +72,7 @@ jobs:
             $0 ~ ("^## \\[" v "\\]") { grab = 1; next }
             grab && /^## \[/ { exit }
             grab { print }
-          ' CHANGELOG.md > RELEASE_NOTES.md
+          ' <(git show "$sha:CHANGELOG.md") > RELEASE_NOTES.md
           if [ ! -s RELEASE_NOTES.md ]; then
             echo "::error::no changelog section for [$version]."
             exit 1

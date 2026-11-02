@@ -44,6 +44,14 @@ const LONGEST_REASONABLE_SOURCE = 1000;
  */
 const NESTED_QUANTIFIER = /\([^()+*]*[+*][^()]*\)\s*[+*]/;
 
+/**
+ * The other catastrophic shape: a quantified group of alternatives, as in
+ * `^(a|aa)+$`, where the alternatives overlap and every split of the input is
+ * tried before the match fails. 35 letters and a `!` already cost 1.7 s on one
+ * call. The first class excludes `|`, so the guard stays linear per start.
+ */
+const QUANTIFIED_ALTERNATION = /\([^()|]*\|[^()]*\)\s*[+*{]/;
+
 export interface CompileOptions {
 	/** Add `i` when the profile did not. A noise line is noise in any case. */
 	caseInsensitive?: boolean;
@@ -56,6 +64,7 @@ export interface CompileOptions {
 export function compilePattern(raw: RawPattern, options: CompileOptions = {}): RegExp {
 	if (raw.source.length > LONGEST_REASONABLE_SOURCE) return NEVER_MATCHES;
 	if (NESTED_QUANTIFIER.test(raw.source)) return NEVER_MATCHES;
+	if (QUANTIFIED_ALTERNATION.test(raw.source)) return NEVER_MATCHES;
 	const flags =
 		options.caseInsensitive === true && !raw.flags.includes('i') ? raw.flags + 'i' : raw.flags;
 	try {

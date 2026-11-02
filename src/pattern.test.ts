@@ -30,6 +30,12 @@ describe('the guard on a pattern that cannot be trusted', () => {
 		expect(compilePattern({ source: '(\\d*)*', flags: '' })).toBe(NEVER_MATCHES);
 	});
 
+	it('rejects a quantified group of alternatives, the other way to hang a tab', () => {
+		expect(compilePattern({ source: '^(a|aa)+$', flags: '' })).toBe(NEVER_MATCHES);
+		expect(compilePattern({ source: '(?:x|xy){2,}', flags: '' })).toBe(NEVER_MATCHES);
+		expect(compilePattern({ source: '^(Total|Sous-total) :', flags: '' })).not.toBe(NEVER_MATCHES);
+	});
+
 	it('rejects a source too long to be a rule someone wrote', () => {
 		expect(compilePattern({ source: 'a'.repeat(1001), flags: '' })).toBe(NEVER_MATCHES);
 	});
