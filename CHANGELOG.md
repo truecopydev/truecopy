@@ -9,6 +9,10 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A profile pattern that quantifies a group of alternatives is refused.** `^(a|aa)+$` slipped past the nested-quantifier guard and backtracks exponentially: 35 letters and a `!` cost 1.7 s on one call, a few more hang the thread. Such a pattern now compiles to `NEVER_MATCHES`, like the nested quantifier; no built-in profile carries one.
+
 ## [2.0.21] - 2026-11-02
 
 ### Added
