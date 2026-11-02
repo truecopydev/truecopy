@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.21] - 2026-11-02
+
 ### Added
 
 - **`readDecimal` reads a number out exactly, as text.** A `number` holds fifteen significant digits, so `readNumber('9007199254740993')` and `readNumber('9007199254740992')` are equal, and a check built on that equality certifies a figure the page does not print - sixteen digits is a card number, a reference, a transaction identifier. `readDecimal` reads the same token the same way and stops before the conversion: `readDecimal('1 234,50')` is `'1234.5'`, `readDecimal('(123,45)')` is `'-123.45'`, two tokens naming the same quantity give the same text in whatever notation. `readNumber` reads exactly as before.
