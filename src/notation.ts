@@ -36,6 +36,21 @@ export interface Notation {
 	 * `pattern.ts`. A profile served by a backend can carry these.
 	 */
 	months?: Record<string, number>;
+	/**
+	 * Read a date only where the page writes one whole. On: a date written with
+	 * its year that makes no calendar day is refused, never re-read without its
+	 * year against `yearWhenMissing`; and a digit glued to either end of a date
+	 * keeps it from being one.
+	 *
+	 * Off, which is the default, the reading is the one it has always been:
+	 * `29/02/2025` on a statement read against 2024 comes back as 29 February
+	 * 2024, `2026-01-250` as 25 January 2026, and `112/05/2026` as 12 May. Each
+	 * is a date the page does not state, in a period the page does not name,
+	 * and each is well formed, so nothing downstream can see it. An option and
+	 * not a new default because it moves a reading, and a shared reading layer
+	 * never does that on its own (AGENTS.md, "Changing a reading").
+	 */
+	strictDates?: boolean;
 }
 
 /**
@@ -286,14 +301,70 @@ export function readNumber(
 	decimal?: DecimalMark | null,
 	brackets?: Brackets
 ): number | null {
+	const read = normalisedBody(raw, decimal, brackets);
+	if (read === null) return null;
+	const value = Number.parseFloat(read.normalised);
+	if (!Number.isFinite(value)) return null;
+	return read.negative ? -value : value;
+}
+
+/** The sign peeled off and the separators rewritten, or null when the token
+ *  carries no digit: what `readNumber` and `readDecimal` share before one of
+ *  them converts and the other does not. */
+function normalisedBody(
+	raw: string,
+	decimal?: DecimalMark | null,
+	brackets?: Brackets
+): { negative: boolean; normalised: string } | null {
 	if (!raw) return null;
 	const { negative, body } = stripSign(raw.trim(), brackets);
 	const digits = body.replace(NOT_IN_NUMBER, '');
 	if (!/\d/.test(digits)) return null;
 	const normalised = decimal ? normaliseAgainst(digits, decimal) : normaliseSeparators(digits);
-	const value = Number.parseFloat(normalised);
-	if (!Number.isFinite(value)) return null;
-	return negative ? -value : value;
+	return { negative, normalised };
+}
+
+/** What `parseFloat` reads of a string: the digits it starts with, and the
+ *  fraction behind one dot. Letters after them are left where they are. */
+const LEADING_DECIMAL = /^(\d*)(?:\.(\d*))?/;
+
+/** A walk and not `/0+$/`: that pattern backtracks quadratically on a long
+ *  run of zeros, and the linter is right to refuse it. */
+const withoutTrailingZeros = (digits: string): string => {
+	let end = digits.length;
+	while (end > 0 && digits[end - 1] === '0') end -= 1;
+	return digits.slice(0, end);
+};
+
+/**
+ * The number a token holds, written out exactly, or `null` when it holds none.
+ *
+ * `readNumber` gives a `number`, and a `number` holds fifteen significant
+ * digits: `9007199254740993` and `9007199254740992` both come back as the
+ * second, and a check built on that equality certifies a figure the page does
+ * not print. Sixteen digits is a card number, a reference, a transaction
+ * identifier - exactly the figures a model is most tempted to retype.
+ *
+ * This reads the same token the same way and stops before the conversion: the
+ * sign, the integer without its leading zeros, the fraction without its
+ * trailing ones. `readDecimal('1 234,50') === '1234.5'`, and two tokens that
+ * name the same quantity give the same text whatever their notation, which is
+ * all an equality needs. What is not a number to `readNumber` is not one here
+ * either.
+ */
+export function readDecimal(
+	raw: string,
+	decimal?: DecimalMark | null,
+	brackets?: Brackets
+): string | null {
+	const read = normalisedBody(raw, decimal, brackets);
+	if (read === null) return null;
+	const match = LEADING_DECIMAL.exec(read.normalised) as RegExpExecArray;
+	if (match[1] === '' && !match[2]) return null;
+	const integer = match[1].replace(/^0+/, '');
+	const fraction = withoutTrailingZeros(match[2] ?? '');
+	const magnitude = fraction === '' ? integer || '0' : `${integer || '0'}.${fraction}`;
+	return read.negative && magnitude !== '0' ? `-${magnitude}` : magnitude;
 }
 
 /** A run of digits and the marks inside it. Not `numberToken`: that one reads
@@ -491,14 +562,30 @@ const dayMonth = (first: number, second: number, notation: Notation): [number, n
  * them - it delimits columns, and welding a year to the next column is the
  * defect `GROUPS_THOUSANDS` exists to refuse.
  */
-const DELIMITED_YEAR = `(\\d{2}(?!\\d)|\\d(?:[${GROUPS_THOUSANDS}]?\\d){3})`;
+const delimitedYear = (bounded: boolean): string =>
+	`(\\d{2}(?!\\d)|\\d(?:[${GROUPS_THOUSANDS}]?\\d){3}${bounded ? '(?!\\d)' : ''})`;
+const DELIMITED_YEAR = delimitedYear(false);
 
-const DELIMITED = new RegExp(`(\\d{1,2})[/\\-.](\\d{1,2})[/\\-.]${DELIMITED_YEAR}`);
+const delimitedShape = (bounded: boolean): string =>
+	`(\\d{1,2})[/\\-.](\\d{1,2})[/\\-.]${bounded ? delimitedYear(true) : DELIMITED_YEAR}`;
+const DELIMITED = new RegExp(delimitedShape(false));
+/**
+ * The same shape, closed on both sides. `112/05/2026` carries no date: the
+ * run starts three digits before the one a loose match would pick, and reading
+ * 12 May out of it is a date nobody wrote. The lookbehind is not a boundary on
+ * the first digit alone - a date glued to a figure on a flattened line is the
+ * defect `numberToken` describes, seen from the other side.
+ */
+const DELIMITED_BOUNDED = new RegExp(`(?<!\\d)${delimitedShape(true)}`);
 
 /** A delimited date anywhere in the text, read in the notation's order. */
 export function readDate(text: string, notation: Notation): Date | null {
-	const match = DELIMITED.exec(text);
-	if (!match) return null;
+	const match = (notation.strictDates ? DELIMITED_BOUNDED : DELIMITED).exec(text);
+	return match ? delimitedDate(match, notation) : null;
+}
+
+/** The day a delimited match names, or null when its numbers make none. */
+function delimitedDate(match: RegExpExecArray, notation: Notation): Date | null {
 	const [day, month] = dayMonth(Number(match[1]), Number(match[2]), notation);
 	const year = yearOf(match[3]);
 	if (year === null) return null;
@@ -513,7 +600,9 @@ export interface LeadingDate {
 }
 
 const ISO = /^(\d{4})-(\d{2})-(\d{2})/;
-const LEADING_DELIMITED = new RegExp(`^(\\d{1,2})[/\\-.](\\d{1,2})[/\\-.]${DELIMITED_YEAR}`);
+const ISO_BOUNDED = /^(\d{4})-(\d{2})-(\d{2})(?!\d)/;
+const LEADING_DELIMITED = new RegExp(`^${delimitedShape(false)}`);
+const LEADING_DELIMITED_BOUNDED = new RegExp(`^${delimitedShape(true)}`);
 const LEADING_DAY_MONTH = /^(\d{1,2})[/\-.](\d{1,2})(?!\d)/;
 /**
  * `\p{L}` and not a range of Latin letters: a month name is a word, in
@@ -564,8 +653,8 @@ const yearOf = (written: string): number | null => {
 const dateOfLength = (date: Date | null, length: number): LeadingDate | null =>
 	date === null ? null : { date, length };
 
-function fromIso(text: string): LeadingDate | null {
-	const match = ISO.exec(text);
+function fromIso(text: string, notation: Notation): LeadingDate | null {
+	const match = (notation.strictDates ? ISO_BOUNDED : ISO).exec(text);
 	if (!match) return null;
 	return dateOfLength(
 		makeDate(Number(match[1]), Number(match[2]) - 1, Number(match[3])),
@@ -574,12 +663,9 @@ function fromIso(text: string): LeadingDate | null {
 }
 
 function fromDelimited(text: string, notation: Notation): LeadingDate | null {
-	const match = LEADING_DELIMITED.exec(text);
+	const match = (notation.strictDates ? LEADING_DELIMITED_BOUNDED : LEADING_DELIMITED).exec(text);
 	if (!match) return null;
-	const [day, month] = dayMonth(Number(match[1]), Number(match[2]), notation);
-	const year = yearOf(match[3]);
-	if (year === null) return null;
-	return dateOfLength(makeDate(year, month - 1, day), match[0].length);
+	return dateOfLength(delimitedDate(match, notation), match[0].length);
 }
 
 function fromDayMonth(text: string, notation: Notation, year: number): LeadingDate | null {
@@ -618,13 +704,29 @@ export function readLeadingDate(
 	return found ? { date: found.date, length: skipped + found.length } : null;
 }
 
-/** The four shapes a line may start with, tried in order. A shape that matches
- *  but yields no calendar date lets the next one try. */
+/**
+ * The four shapes a line may start with, tried in order. A shape that matches
+ * but yields no calendar date lets the next one try - except, under
+ * `strictDates`, when the line opens on a year the page wrote.
+ *
+ * `29/02/2025` read against `yearWhenMissing` 2024 took that path: the
+ * delimited shape matched, the 29th of February 2025 is no day, and the
+ * day-month shape then matched `29/02` alone and built the 29th of February
+ * 2024 - a date the page does not state, in a year it names otherwise, with
+ * `length` stopping short of the year it never read. The page STATED its year;
+ * refusing is the only honest reading left.
+ */
 function leadingIn(text: string, notation: Notation, year?: number): LeadingDate | null {
+	const withYear = fromIso(text, notation) ?? fromDelimited(text, notation);
+	if (withYear) return withYear;
+	if (notation.strictDates && statesAYear(text)) return null;
 	return (
-		fromIso(text) ??
-		fromDelimited(text, notation) ??
 		(year === undefined ? null : fromDayMonth(text, notation, year)) ??
 		fromNamedMonth(text, notation)
 	);
 }
+
+/** Whether the line opens on a date written with its year, well formed or not.
+ *  The loose shapes on purpose: `2026-01-250` and `12/05/20261` name a year
+ *  too, and a line that does is not one to read a day and a month off. */
+const statesAYear = (text: string): boolean => ISO.test(text) || LEADING_DELIMITED.test(text);
