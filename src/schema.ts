@@ -152,6 +152,11 @@ export interface StandardSchema {
 
 type StandardOutcome = { readonly issues?: readonly { readonly message: string }[] };
 
+/** A promise by its shape: one from another realm (a worker, a vm context) is
+ *  no `instanceof Promise` here, and would read as a result with no issue. */
+const isThenable = (value: unknown): value is PromiseLike<unknown> =>
+	typeof (value as { then?: unknown } | null)?.then === 'function';
+
 /**
  * The counting rule of this library, over a validator from another one.
  *
@@ -172,7 +177,9 @@ export function validateWith<Entry extends object>(
 	const kept: Entry[] = [];
 	for (const record of records) {
 		const outcome = schema['~standard'].validate(record);
-		if (outcome instanceof Promise) {
+		if (isThenable(outcome)) {
+			// Refused, not awaited: its rejection is ours to absorb, never the host's.
+			outcome.then(undefined, () => undefined);
 			throw new TypeError(
 				'truecopy: validateWith cannot use a schema that validates asynchronously'
 			);

@@ -11,6 +11,7 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **`validateWith` knows a promise by its shape.** A schema whose validator answers a promise from another realm (a worker, a vm context) is no `instanceof Promise` here, so its result read as one with no issue and an unchecked record was counted as conforming. Any thenable is now refused with the same `TypeError`, and its rejection is absorbed.
 - **A profile pattern that quantifies a group of alternatives is refused.** `^(a|aa)+$` slipped past the nested-quantifier guard and backtracks exponentially: 35 letters and a `!` cost 1.7 s on one call, a few more hang the thread. Such a pattern now compiles to `NEVER_MATCHES`, like the nested quantifier; no built-in profile carries one.
 
 ## [2.0.21] - 2026-11-02
