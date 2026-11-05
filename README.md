@@ -443,6 +443,8 @@ A batch script raises the limits, and is meant to: `DEFAULT_LIMITS` (20 MB, 40 p
 
 An agent holding a terminal already has the command above, and one that can import a module has the library. Neither is what most assistants are: a host that speaks MCP reaches a tool call and nothing else. So the same pipeline is an MCP server, over stdio, on the machine the document is already on.
 
+The file is read there and truecopy makes no network call. What a tool RETURNS is another matter: the rows, figures and dates of the document go to the MCP client, and from there to whatever model the host runs, local or remote. The confidentiality of a payslip read this way is the host's, not truecopy's.
+
 ```json
 {
 	"mcpServers": {

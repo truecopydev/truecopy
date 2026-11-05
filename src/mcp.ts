@@ -1059,7 +1059,7 @@ async function callTool(params: Record<string, unknown>, capabilities: McpCapabi
  * the two are FOR together.
  */
 const INSTRUCTIONS =
-	'truecopy reads documents on this machine and says when a reading cannot be trusted. Every answer opens with a verdict - reliable, doubtful or unreadable - and reliable only means nothing looked wrong: read it before leaning on a figure. Read with read_table, pick out figures with find_amounts and dates with find_dates, then check every value you claim with check_citations before anything acts on it. No file leaves this machine.';
+	'truecopy reads documents on this machine and says when a reading cannot be trusted. Every answer opens with a verdict - reliable, doubtful or unreadable - and reliable only means nothing looked wrong: read it before leaning on a figure. Read with read_table, pick out figures with find_amounts and dates with find_dates, then check every value you claim with check_citations before anything acts on it. The file is read on this machine and truecopy makes no network call, but what a tool returns - rows, figures, dates - goes to this client, and the host decides where it goes next.';
 
 const CAPABILITIES = { tools: { listChanged: false } };
 
