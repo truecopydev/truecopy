@@ -229,3 +229,26 @@ describe('truecopy-mcp', () => {
 		expect(result.content[0].text).toContain('outside TRUECOPY_MCP_ROOT');
 	});
 });
+
+describe('a client that sends too much', () => {
+	it('refuses a message over a mebibyte and goes on answering the next one', async () => {
+		const child = spawn(process.execPath, [SERVER], { stdio: ['pipe', 'pipe', 'pipe'] });
+		let out = '';
+		child.stdout.setEncoding('utf8').on('data', (chunk: string) => (out += chunk));
+		const closed = new Promise((done) => child.on('close', done));
+		const huge = 'x'.repeat(600 * 1024);
+		child.stdin.write(huge);
+		await new Promise((go) => setTimeout(go, 20));
+		child.stdin.write(huge);
+		await new Promise((go) => setTimeout(go, 20));
+		child.stdin.end(`${huge}\n${JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'ping' })}\n`);
+		await closed;
+		const answers = out
+			.split('\n')
+			.filter((line) => line.trim() !== '')
+			.map((line) => JSON.parse(line) as Answer);
+		expect(answers[0]?.error?.code).toBe(-32600);
+		expect(answers.filter((a) => a.error?.code === -32600)).toHaveLength(1);
+		expect(answers.find((a) => a.id === 7)?.result).toBeDefined();
+	});
+});

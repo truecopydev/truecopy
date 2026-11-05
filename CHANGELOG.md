@@ -11,6 +11,15 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **`truecopy-mcp` refuses a message over 1 MiB and a queue over 32 waiting
+  readings.** A line that never ended grew in memory for ever, and calls sent
+  faster than they were read piled up with their arguments, without a single
+  document opened. Both are now refused with a JSON-RPC error, and the server
+  goes on answering.
+- **The MCP instructions no longer promise that nothing leaves the machine.**
+  The file is read locally and truecopy makes no network call, but the rows a
+  tool returns go to the client and, from there, wherever the host sends them.
+  The instructions and the README now say where that boundary is.
 - **`check_citations` refuses a figure JSON wrote with an exponent.** `1e-7`
   was read from its first digit, so any cited row printing `1` carried it. A
   document writes no exponent, so such a value is now never carried.

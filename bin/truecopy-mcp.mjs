@@ -24,6 +24,7 @@
  * stdout are moved to stderr before anything is loaded.
  */
 
+import { Buffer } from 'node:buffer';
 import { openAsBlob, readFileSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -101,6 +102,17 @@ function send(message) {
 let pending = '';
 
 /*
+ * Two bounds a defective client could otherwise walk through without opening
+ * a single document, and so without meeting any of its limits: a line that
+ * never ends grows `pending` for ever, and calls sent faster than they are read
+ * pile up in `waiting` with their arguments. Both are refused out loud. A JSON
+ * request naming a path and a few options is a few hundred bytes.
+ */
+const MAX_MESSAGE_BYTES = 1024 * 1024;
+const MAX_WAITING = 32;
+let skippingTooLong = false;
+
+/*
  * Two readings at a time, and the rest wait their turn. A reading holds a whole
  * document in memory and parts of it are synchronous, so ten calls at once
  * would take the memory of ten documents and keep `ping` waiting behind all of
@@ -139,6 +151,18 @@ async function take(line) {
 	 * while one runs concludes the server is dead. Each answer is written by a
 	 * single call, so two of them cannot interleave on the stream.
 	 */
+	if (
+		message?.method === 'tools/call' &&
+		running >= READINGS_AT_ONCE &&
+		waiting.length >= MAX_WAITING
+	) {
+		send({
+			jsonrpc: '2.0',
+			id: message.id ?? null,
+			error: { code: -32000, message: `busy: ${MAX_WAITING} readings already waiting, try again` }
+		});
+		return;
+	}
 	const answer =
 		message?.method === 'tools/call'
 			? await inTurn(() => respond(message, { open, version }))
@@ -150,7 +174,30 @@ process.stdin.setEncoding('utf8');
 process.stdin.on('data', (chunk) => {
 	const lines = (pending + chunk).split('\n');
 	pending = lines.pop() ?? '';
+	if (skippingTooLong && lines.length > 0) {
+		// The end of the line refused earlier: it is dropped, not parsed.
+		lines.shift();
+		skippingTooLong = false;
+	}
+	if (!skippingTooLong && Buffer.byteLength(pending) > MAX_MESSAGE_BYTES) {
+		pending = '';
+		skippingTooLong = true;
+		send({
+			jsonrpc: '2.0',
+			id: null,
+			error: { code: -32600, message: `message over ${MAX_MESSAGE_BYTES} bytes, refused` }
+		});
+	}
+	if (skippingTooLong) pending = '';
 	for (const line of lines) {
+		if (Buffer.byteLength(line) > MAX_MESSAGE_BYTES) {
+			send({
+				jsonrpc: '2.0',
+				id: null,
+				error: { code: -32600, message: `message over ${MAX_MESSAGE_BYTES} bytes, refused` }
+			});
+			continue;
+		}
 		void take(line).catch((error) => process.stderr.write(`truecopy-mcp: ${error.message}\n`));
 	}
 });
