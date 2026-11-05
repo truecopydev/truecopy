@@ -264,6 +264,13 @@ export interface SpanOptions {
 const scanning = (pattern: RegExp): RegExp =>
 	new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
 
+/** The index after the character at `index`. A unicode pattern sent back into
+ *  the middle of a surrogate pair restarts at its start, so it must step the
+ *  whole code point or match the same empty span for ever. */
+function stepPast(text: string, index: number, unicode: boolean): number {
+	return unicode && (text.codePointAt(index) ?? 0) > 0xffff ? index + 2 : index + 1;
+}
+
 /** Every match of `pattern`, as spans. Zero-length matches are stepped over
  *  rather than looped on. */
 function spansOf(text: string, pattern: RegExp): Span[] {
@@ -272,7 +279,7 @@ function spansOf(text: string, pattern: RegExp): Span[] {
 	let match: RegExpExecArray | null;
 	while ((match = scan.exec(text)) !== null) {
 		if (match[0].length === 0) {
-			scan.lastIndex += 1;
+			scan.lastIndex = stepPast(text, scan.lastIndex, scan.unicode || scan.flags.includes('v'));
 			continue;
 		}
 		found.push({ index: match.index, raw: match[0] });

@@ -98,6 +98,7 @@ describe('npx truecopy', () => {
 		expect(read.pages[0].rows).toEqual(read.rows);
 		expect(read.pages[0].boundaries).toHaveLength(2);
 		expect(read.findings).toEqual([]);
+		expect(read).toMatchObject({ complete: true, pagesUnread: 0 });
 	});
 
 	it('names each doubt in the data, and never only in a sentence', () => {

@@ -855,7 +855,11 @@ function carried(source: string, value: string | number, mark: DecimalMark | nul
 	 * to a page that separates its thousands with a dot reads as 425, and the
 	 * check would then refuse a figure the document does carry.
 	 */
-	const written = mark === ',' ? String(value).replace('.', ',') : String(value);
+	const plain = String(value);
+	// 1e-7 is how JSON writes 0.0000001, and read from its first digit it would
+	// be carried by any row printing 1. A document writes no exponent: refused.
+	if (!Number.isFinite(value) || /e/i.test(plain)) return false;
+	const written = mark === ',' ? plain.replace('.', ',') : plain;
 	return carriesNumber(source, written, mark);
 }
 
