@@ -9,6 +9,19 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`check_citations` refuses a figure JSON wrote with an exponent.** `1e-7`
+  was read from its first digit, so any cited row printing `1` carried it. A
+  document writes no exponent, so such a value is now never carried.
+- **An empty label match on an astral character ends.** `labelledSpans` with a
+  unicode pattern that can match nothing stepped one UTF-16 unit, landed inside
+  the surrogate pair, and the engine went back to its start for ever. It now
+  steps the whole code point.
+- **`npx truecopy --json` says when the reading is partial.** Past
+  `maximumPages` the CLI dropped the unread count and exited 0; the JSON now
+  carries `complete` and `pagesUnread`.
+
 ## [2.0.22] - 2026-11-05
 
 ### Fixed

@@ -54,6 +54,9 @@ function asJson(table) {
 		{
 			file: document.name,
 			origin: document.origin,
+			// Past maximumPages the reading stops: a program must see that it is partial.
+			complete: (document.pagesUnread ?? 0) === 0,
+			pagesUnread: document.pagesUnread ?? 0,
 			rows,
 			pages: document.pages.map((page, index) => ({
 				number: page.pageNumber,

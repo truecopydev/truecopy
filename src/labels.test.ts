@@ -208,3 +208,11 @@ describe('labelledSpans', () => {
 		expect(read.map((one) => one.values[0]?.raw)).toEqual(['12,00', '13,00']);
 	});
 });
+
+describe('an empty label match on an astral character', () => {
+	it('steps the whole code point, so the scan ends', () => {
+		// One unit into an emoji lands mid-pair, where a /u pattern restarts at
+		// the pair's start: the empty match there looped for ever.
+		expect(labelledSpans('\u{1F600} 12', /x*/u, /\d+/)).toEqual([]);
+	});
+});

@@ -398,6 +398,17 @@ describe('check_citations', () => {
 		expect(result.structuredContent).toMatchObject({ checked: 1, carried: 1 });
 	});
 
+	it('refuses a figure JSON wrote with an exponent', async () => {
+		// 1e-7 read from its first digit would be carried by any row printing 1.
+		const ones = pasted('ones.txt', 'ITEM A;1\nITEM B;2');
+		const result = await call(
+			'check_citations',
+			{ path: '/ones.txt', records: [{ rows: [1], values: { qty: 1e-7 } }] },
+			serving(ones)
+		);
+		expect(result.structuredContent).toMatchObject({ checked: 1, carried: 0 });
+	});
+
 	it('still refuses a figure the document rounded away', async () => {
 		expect(
 			(await cited([{ rows: [2], values: { amount: 750.5 } }])).structuredContent
