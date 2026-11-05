@@ -175,4 +175,22 @@ describe('a schema written somewhere else', () => {
 			/validates asynchronously/
 		);
 	});
+
+	it('knows a promise from another realm by its shape, and absorbs its rejection', () => {
+		let absorbed = false;
+		const foreign = {
+			then: (_: unknown, onRejected?: (reason: unknown) => unknown) => {
+				absorbed =
+					typeof onRejected === 'function' &&
+					onRejected(new Error('refused elsewhere')) === undefined;
+			}
+		};
+		const elsewhere = {
+			'~standard': { version: 1, vendor: 'elsewhere', validate: () => foreign }
+		} as unknown as StandardSchema;
+		expect(() => validateWith(elsewhere, [{ year: 2018 }], { minimumRecords: 1 })).toThrow(
+			/validates asynchronously/
+		);
+		expect(absorbed).toBe(true);
+	});
 });
