@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.22] - 2026-11-05
+
 ### Fixed
 
 - **`validateWith` knows a promise by its shape.** A schema whose validator answers a promise from another realm (a worker, a vm context) is no `instanceof Promise` here, so its result read as one with no issue and an unchecked record was counted as conforming. Any thenable is now refused with the same `TypeError`, and its rejection is absorbed.
