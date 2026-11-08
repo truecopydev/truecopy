@@ -100,6 +100,13 @@ describe('documentFromDocx', () => {
 		expect(document.text).toBe('Total 1 800\nNet 1 500');
 	});
 
+	it('reads a vanish switched off in any quoting, and ignores one a tracked change replaced', async () => {
+		const body = `<w:p><w:r><w:rPr><w:vanish w:val = '0'/></w:rPr><w:t>Net 1 500</w:t></w:r></w:p>
+			<w:p><w:r><w:rPr><w:rPrChange w:id="1"><w:rPr><w:vanish/></w:rPr></w:rPrChange></w:rPr><w:t>Brut 2 400</w:t></w:r></w:p>`;
+		const document = await read(await docxWithBody(body));
+		expect(document.text).toBe('Net 1 500\nBrut 2 400');
+	});
+
 	it('folds a nested table into the cell that carries it', async () => {
 		// Emitting its rows on their own would break the outer row into pieces
 		// that no longer line up with its header.

@@ -17,7 +17,8 @@ release PR is what stamps them.
   column left. Covered places are now counted.
 - **A `.docx` run Word hides (`w:vanish`) is left out of the text.** It was
   read like any other, so a figure the page does not show could be quoted. A
-  `vanish` switched off (`w:val="0"`) is still read. Hiding inherited from a
+  `vanish` switched off (`w:val="0"`, in any quoting) is still read, and so is
+  a `vanish` a tracked change replaced (`w:rPrChange`). Hiding inherited from a
   style is not read here.
 - **`truecopy-mcp` refuses a message over 1 MiB and a queue over 32 waiting
   readings.** A line that never ended grew in memory for ever, and calls sent

@@ -295,25 +295,42 @@ function withoutComments(xml: string): string {
 }
 
 /** A run property switched on: `<w:vanish/>`, or with a value other than off. */
-const switchedOn = (attributes: string): boolean => !/w:val="(?:0|false|off)"/.test(attributes);
+const switchedOn = (attributes: string): boolean =>
+	!/w:val\s*=\s*["'](?:0|false|off)["']/.test(attributes);
+
+/**
+ * Whether the run being read is shown. `w:vanish` on a run is text Word does
+ * not show: quoted, it is a figure the reader cannot find on the page. It holds
+ * until the run closes. `w:rPrChange` holds the properties a tracked change
+ * REPLACED: a `vanish` in there is history, not what the run shows now.
+ */
+class RunVisibility {
+	hidden = false;
+	private replaced = false;
+
+	see(name: string, tag: Tag): void {
+		if (name === 'r') this.hidden = false;
+		else if (name === 'rPrChange' && !tag.empty) this.replaced = !tag.closing;
+		else if (name === 'vanish' && !tag.closing && !this.replaced) {
+			this.hidden = switchedOn(tag.attributes);
+		}
+	}
+}
 
 function linesOf(part: string): string[][] {
 	const xml = withoutComments(part);
 	const body = new Body();
-	// `w:vanish` on a run is text Word does not show: quoted, it is a figure the
-	// reader cannot find on the page. It holds until the run closes.
-	let hidden = false;
+	const visibility = new RunVisibility();
 	ELEMENT.lastIndex = 0;
 	for (let match = ELEMENT.exec(xml); match !== null; match = ELEMENT.exec(xml)) {
 		const [whole, closing, name, attributes] = match;
 		const tag: Tag = { closing: closing === '/', empty: attributes.endsWith('/'), attributes };
 		const opens = !tag.closing && !tag.empty;
 
-		if (name === 'r') hidden = false;
-		else if (name === 'vanish' && !tag.closing) hidden = switchedOn(attributes);
+		visibility.see(name, tag);
 		if (name in CARRIES_TEXT && opens) {
 			const run = textOf(xml, match.index + whole.length, name);
-			if (CARRIES_TEXT[name] && !hidden) body.write(decodeEntities(run.text));
+			if (CARRIES_TEXT[name] && !visibility.hidden) body.write(decodeEntities(run.text));
 			// Past the run, so nothing inside it is read as structure.
 			ELEMENT.lastIndex = run.next;
 		} else {
