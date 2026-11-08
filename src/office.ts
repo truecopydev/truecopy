@@ -72,6 +72,8 @@ interface Cell {
 interface Table {
 	rows: Cell[][];
 	current: Cell[] | null;
+	/** The grid place the next OpenDocument cell takes in the current row. */
+	place: number;
 }
 
 /** Any element of the Word namespace, opening, closing or empty. One shape for
@@ -139,7 +141,7 @@ class Body {
 	}
 
 	openTable(): void {
-		this.tables.push({ rows: [], current: null });
+		this.tables.push({ rows: [], current: null, place: 0 });
 	}
 
 	closeTable(): void {
@@ -156,7 +158,7 @@ class Body {
 
 	openRow(): void {
 		const table = this.tables[this.tables.length - 1];
-		if (table !== undefined) table.current = [];
+		if (table !== undefined) Object.assign(table, { current: [], place: 0 });
 	}
 
 	closeRow(): void {
@@ -171,6 +173,26 @@ class Body {
 		if (row === undefined || row === null) return;
 		const last = row[row.length - 1];
 		row.push({ text: '', column: last === undefined ? 0 : last.column + last.span, span: 1 });
+	}
+
+	/** An OpenDocument cell, on the grid place its row has reached: there every
+	 *  place is written, covered or not, so the places are counted - and a span
+	 *  whose covered places are missing still pushes the next cell past it. */
+	openPlacedCell(): void {
+		const table = this.tables[this.tables.length - 1];
+		if (table?.current === undefined || table.current === null) return;
+		const last = table.current[table.current.length - 1];
+		const column = Math.max(table.place, last === undefined ? 0 : last.column + last.span);
+		table.current.push({ text: '', column, span: 1 });
+		table.place = column + 1;
+	}
+
+	/** Places a merge already took. Spanned across, they follow their cell; spanned
+	 *  DOWN, they sit on the rows below, and only counting them keeps the cells
+	 *  after them under their own column. */
+	coverPlaces(count: number): void {
+		const table = this.tables[this.tables.length - 1];
+		if (table?.current !== undefined && table.current !== null) table.place += count;
 	}
 
 	/** How many columns the cell being filled holds. A number and not the markup
@@ -272,18 +294,26 @@ function withoutComments(xml: string): string {
 	return kept.join('');
 }
 
+/** A run property switched on: `<w:vanish/>`, or with a value other than off. */
+const switchedOn = (attributes: string): boolean => !/w:val="(?:0|false|off)"/.test(attributes);
+
 function linesOf(part: string): string[][] {
 	const xml = withoutComments(part);
 	const body = new Body();
+	// `w:vanish` on a run is text Word does not show: quoted, it is a figure the
+	// reader cannot find on the page. It holds until the run closes.
+	let hidden = false;
 	ELEMENT.lastIndex = 0;
 	for (let match = ELEMENT.exec(xml); match !== null; match = ELEMENT.exec(xml)) {
 		const [whole, closing, name, attributes] = match;
 		const tag: Tag = { closing: closing === '/', empty: attributes.endsWith('/'), attributes };
 		const opens = !tag.closing && !tag.empty;
 
+		if (name === 'r') hidden = false;
+		else if (name === 'vanish' && !tag.closing) hidden = switchedOn(attributes);
 		if (name in CARRIES_TEXT && opens) {
 			const run = textOf(xml, match.index + whole.length, name);
-			if (CARRIES_TEXT[name]) body.write(decodeEntities(run.text));
+			if (CARRIES_TEXT[name] && !hidden) body.write(decodeEntities(run.text));
 			// Past the run, so nothing inside it is read as structure.
 			ELEMENT.lastIndex = run.next;
 		} else {
@@ -529,10 +559,12 @@ function odfElement(body: Body, name: string, tag: Tag): void {
 	else if (name === 'line-break') body.write(' ');
 	else if (name === 's') body.write(' '.repeat(spaceCount(tag.attributes)));
 	else if (name === 'table-cell') openCells(body, tag.attributes);
-	else if (tag.empty) {
-		// An empty `p` is a blank line, and `covered-table-cell` is a place a span
-		// already took: it holds no text and must NOT open a column, or every
-		// later value moves one column right.
+	else if (name === 'covered-table-cell') {
+		// A place a merge already took: it holds no text and opens no column, but
+		// it counts, or a cell after a merge DOWN slides into the merged column.
+		body.coverPlaces(cellShape(tag.attributes).repeat);
+	} else if (tag.empty) {
+		// An empty `p` is a blank line.
 		if (name === 'p' || name === 'h') body.endParagraph();
 	} else if (name === 'table') body.openTable();
 	else if (name === 'table-row') body.openRow();
@@ -557,7 +589,7 @@ function jumpPast(source: string, closing: string, from: number): number {
 function openCells(body: Body, attributes: string): void {
 	const { span, repeat } = cellShape(attributes);
 	for (let copy = 0; copy < repeat; copy++) {
-		body.openCell();
+		body.openPlacedCell();
 		body.spanColumns(span);
 	}
 }

@@ -93,6 +93,13 @@ describe('documentFromDocx', () => {
 		expect(document.pages[0].rows[0].items.map((item) => item.x)).toEqual(columns);
 	});
 
+	it('leaves out a run Word hides, and keeps one whose vanish is switched off', async () => {
+		const body = `<w:p><w:r><w:t>Total 1 800</w:t></w:r><w:r><w:rPr><w:vanish/></w:rPr><w:t> brut 2 400</w:t></w:r></w:p>
+			<w:p><w:r><w:rPr><w:vanish w:val="0"/></w:rPr><w:t>Net 1 500</w:t></w:r></w:p>`;
+		const document = await read(await docxWithBody(body));
+		expect(document.text).toBe('Total 1 800\nNet 1 500');
+	});
+
 	it('folds a nested table into the cell that carries it', async () => {
 		// Emitting its rows on their own would break the outer row into pieces
 		// that no longer line up with its header.
@@ -288,6 +295,41 @@ describe('documentFromOdt', () => {
 			[0, 'Total'],
 			[2, '1 800']
 		]);
+	});
+
+	it('keeps the cells after a merge DOWN under their own column', async () => {
+		// The row below a vertical merge writes the merged place as a covered cell.
+		const document = await readOdt(
+			await odtWithBody(
+				'<table:table><table:table-row>' +
+					'<table:table-cell table:number-rows-spanned="2"><text:p>Charges</text:p></table:table-cell>' +
+					'<table:table-cell><text:p>100</text:p></table:table-cell>' +
+					'</table:table-row><table:table-row>' +
+					'<table:covered-table-cell/>' +
+					'<table:table-cell><text:p>200</text:p></table:table-cell>' +
+					'</table:table-row></table:table>'
+			)
+		);
+		expect(
+			document.pages[0].rows.map((row) => row.items.map((item) => [item.x, item.text]))
+		).toEqual([
+			[
+				[0, 'Charges'],
+				[1, '100']
+			],
+			[[1, '200']]
+		]);
+	});
+
+	it('reads a cell outside any row as plain text, covered places included', async () => {
+		const document = await readOdt(
+			await odtWithBody(
+				'<table:covered-table-cell/><table:table-cell><text:p>Seul</text:p></table:table-cell>' +
+					'<table:table><table:covered-table-cell/>' +
+					'<table:table-cell><text:p>Hors rang</text:p></table:table-cell></table:table>'
+			)
+		);
+		expect(document.text).toBe('Seul\nHors rang');
 	});
 
 	it('refuses a span wider than any sheet rather than allocating it', async () => {

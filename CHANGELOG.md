@@ -11,6 +11,14 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **An OpenDocument cell after a merge DOWN stays in its own column.** The
+  covered place a vertical merge leaves on the rows below opened no column, so
+  the next value slid under the merged heading: `200` below `100` came out one
+  column left. Covered places are now counted.
+- **A `.docx` run Word hides (`w:vanish`) is left out of the text.** It was
+  read like any other, so a figure the page does not show could be quoted. A
+  `vanish` switched off (`w:val="0"`) is still read. Hiding inherited from a
+  style is not read here.
 - **`truecopy-mcp` refuses a message over 1 MiB and a queue over 32 waiting
   readings.** A line that never ended grew in memory for ever, and calls sent
   faster than they were read piled up with their arguments, without a single
