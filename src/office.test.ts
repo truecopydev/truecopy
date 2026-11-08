@@ -107,6 +107,12 @@ describe('documentFromDocx', () => {
 		expect(document.text).toBe('Net 1 500\nBrut 2 400');
 	});
 
+	it('drops the tab and the break of a hidden run with its text', async () => {
+		const body = `<w:p><w:r><w:t>Net</w:t></w:r><w:r><w:rPr><w:vanish/></w:rPr><w:tab/><w:t>brut</w:t><w:br/></w:r><w:r><w:t>1 500</w:t></w:r></w:p>`;
+		const document = await read(await docxWithBody(body));
+		expect(document.text).toBe('Net1 500');
+	});
+
 	it('folds a nested table into the cell that carries it', async () => {
 		// Emitting its rows on their own would break the outer row into pieces
 		// that no longer line up with its header.

@@ -278,6 +278,9 @@ interface Tag {
  *  a word the document never showed. */
 const CARRIES_TEXT: Record<string, boolean> = { t: true, instrText: false };
 
+/** What a hidden run writes besides its text: hidden, it writes nothing. */
+const HIDDEN_WITH_THE_RUN: Record<string, true> = { tab: true, br: true };
+
 /** The part with its comments taken out. Word never writes one, so a comment in
  *  `document.xml` was put there by hand, and the markup inside it is a paragraph
  *  no editor shows: read as structure, it printed a figure the page does not.
@@ -333,7 +336,7 @@ function linesOf(part: string): string[][] {
 			if (CARRIES_TEXT[name] && !visibility.hidden) body.write(decodeEntities(run.text));
 			// Past the run, so nothing inside it is read as structure.
 			ELEMENT.lastIndex = run.next;
-		} else {
+		} else if (!(visibility.hidden && name in HIDDEN_WITH_THE_RUN)) {
 			STRUCTURE[name]?.(body, tag);
 		}
 	}
