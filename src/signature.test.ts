@@ -136,4 +136,11 @@ describe('thresholdsFor', () => {
 	it('names nothing when given nothing', () => {
 		expect(thresholdsFor([], 0.6)).toEqual({});
 	});
+
+	it('passes over a column that first appears after the learning sample', () => {
+		const rows = [...Array.from({ length: 200 }, () => ['100,00']), ['200,00', '300,00']];
+		const anomalies = findRowAnomalies(rows, OPTIONS)!;
+		expect(anomalies).toHaveLength(201);
+		expect(anomalies[200]).toBeUndefined();
+	});
 });

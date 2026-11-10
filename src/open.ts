@@ -541,7 +541,8 @@ async function openBytes(
 		if (error instanceof UnreadableDocument) throw error;
 		throw new UnreadableDocument(
 			'not-opened',
-			'I could not open this PDF. If it is password-protected, save an unprotected copy.'
+			'I could not open this PDF. If it is password-protected, save an unprotected copy.',
+			{ cause: error }
 		);
 	}
 }

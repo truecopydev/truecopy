@@ -381,6 +381,31 @@ describe('the reason a document was refused', () => {
 		expect(cleaned).toBe(1);
 	});
 
+	it('keeps the engine failure underneath a PDF it could not open', async () => {
+		const sentinel = new Error('engine resources missing');
+		const broken = {
+			getDocument: () => ({
+				promise: Promise.resolve({
+					numPages: 1,
+					getPage: async () => ({
+						getViewport: () => ({ width: 600, height: 800 }),
+						getTextContent: async () => {
+							throw sentinel;
+						},
+						cleanup: () => undefined
+					})
+				}),
+				destroy: async () => undefined
+			})
+		} as unknown as PdfEngine;
+		const file = new File([pdfWithText([{ word: 'a', x: 10, y: 700 }])], 'broken.pdf', {
+			type: 'application/pdf'
+		});
+		const refused = await refusal(file, { pdfjs: broken });
+		expect(refused.reason).toBe('not-opened');
+		expect(refused.cause).toBe(sentinel);
+	});
+
 	it('refuses a page whose text arrives after the deadline', async () => {
 		let viewed = 0;
 		const late = {
