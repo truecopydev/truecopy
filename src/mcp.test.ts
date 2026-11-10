@@ -144,6 +144,16 @@ describe('the protocol', () => {
 		});
 	});
 
+	it('refuses a tool named like an object property, rather than calling it', async () => {
+		for (const name of ['constructor', 'toString', '__proto__']) {
+			const answer = await respond(
+				{ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name } },
+				serving(pasted('x.txt', 'a'))
+			);
+			expect(answer?.error).toEqual({ code: -32602, message: `unknown tool: ${name}` });
+		}
+	});
+
 	it('refuses a tool it does not have, which is a protocol error and not a result', async () => {
 		// The one class of failure the specification keeps out of the result: a
 		// model cannot self-correct its way to a tool that is not there.

@@ -24,6 +24,9 @@ release PR is what stamps them.
   sample** instead of throwing on its missing profile, and **a PDF refused as
   `not-opened` keeps the engine failure in `cause`**, so a broken engine can be
   told apart from a broken file.
+- **`truecopy-mcp` refuses a tool named `constructor` or `toString`** as an
+  unknown tool. The name was looked up on a plain object, so it reached a
+  function of `Object` and the request got no answer at all.
 - **`truecopy-mcp` refuses a message over 1 MiB and a queue over 32 waiting
   readings.** A line that never ended grew in memory for ever, and calls sent
   faster than they were read piled up with their arguments, without a single
