@@ -16,7 +16,7 @@
  * library runs in a browser, and a browser has no files.
  */
 
-import { readFile } from 'node:fs/promises';
+import { openAsBlob, statSync } from 'node:fs';
 import { basename } from 'node:path';
 import { describeDoubts, explainReading } from '../dist/explain.js';
 import { readTable } from '../dist/table.js';
@@ -87,7 +87,14 @@ async function run(argv) {
 		return path === null ? 1 : 0;
 	}
 
-	const bytes = await readFile(path);
+	/*
+	 * Handed over as a blob backed by the file, as the server does: the library
+	 * refuses a file over its size limit from `size` alone, where reading it
+	 * first cost the whole file in memory before that refusal. A pipe or a
+	 * device has no size to refuse and could hold the command for ever.
+	 */
+	if (!statSync(path).isFile()) throw new Error(`not a regular file: ${basename(path)}`);
+	const bytes = await openAsBlob(path);
 	const file = new File([bytes], basename(path), {
 		type: path.toLowerCase().endsWith('.pdf') ? 'application/pdf' : ''
 	});

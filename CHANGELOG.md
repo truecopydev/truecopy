@@ -11,6 +11,12 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **`npx truecopy` refuses a file over the size limit without reading it.**
+  The command read the whole file into memory before the library could refuse
+  it from its size, so a file of several gigabytes cost that memory first, or
+  failed with a Node error instead of the `too-big` refusal. It now hands the
+  library a blob backed by the file, as `truecopy-mcp` does, and refuses a
+  pipe or a device, which has no size to check and could hold it for ever.
 - **`truecopy-mcp` refuses a message over 1 MiB and a queue over 32 waiting
   readings.** A line that never ended grew in memory for ever, and calls sent
   faster than they were read piled up with their arguments, without a single
