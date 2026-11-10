@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -46,6 +46,20 @@ const STATEMENT = onDisk(
 );
 
 describe('npx truecopy', () => {
+	it('refuses a file over the size limit without reading it first', () => {
+		const huge = onDisk('huge.pdf', '');
+		truncateSync(huge, 3 * 1024 ** 3);
+		const { out, code } = run(huge);
+		expect(code).toBe(1);
+		expect(out).toContain('(too-big)');
+	});
+
+	it('refuses what is not a regular file', () => {
+		const { out, code } = run(mkdtempSync(join(tmpdir(), 'truecopy-')));
+		expect(code).toBe(1);
+		expect(out).toContain('not a regular file');
+	});
+
 	it('shows the cut and the columns of a document', () => {
 		const { out, code } = run(STATEMENT);
 		expect(code).toBe(0);
