@@ -131,9 +131,12 @@ export function findRowAnomalies(
 	return rows.map((row) => {
 		for (let column = 0; column < columns; column++) {
 			if (judgedColumns && !judgedColumns(column)) continue;
+			// A column first seen past the sample has no profile: nothing was learned to judge it by.
+			const profile = profiles[column];
+			if (!profile) continue;
 			const anomaly = anomalyInCell(
 				cellAt(row, column),
-				profiles[column],
+				profile,
 				kinds[column],
 				column,
 				options,
