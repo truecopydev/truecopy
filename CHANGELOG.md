@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.23] - 2026-11-10
+
 ### Fixed
 
 - **An OpenDocument cell after a merge DOWN stays in its own column.** The
