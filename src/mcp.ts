@@ -1041,7 +1041,8 @@ function resultOf(payload: object, version: string): object {
 
 async function callTool(params: Record<string, unknown>, capabilities: McpCapabilities) {
 	const name = typeof params.name === 'string' ? params.name : '';
-	const run = RUNNERS[name];
+	// Own names only: `constructor` or `toString` would reach a function of Object.
+	const run = Object.hasOwn(RUNNERS, name) ? RUNNERS[name] : undefined;
 	if (run === undefined) return { unknownTool: name };
 
 	const args = (params.arguments ?? {}) as Record<string, unknown>;

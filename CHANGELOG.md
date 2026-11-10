@@ -11,6 +11,22 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **An OpenDocument cell after a merge DOWN stays in its own column.** The
+  covered place a vertical merge leaves on the rows below opened no column, so
+  the next value slid under the merged heading: `200` below `100` came out one
+  column left. Covered places are now counted.
+- **A `.docx` run Word hides (`w:vanish`) is left out of the text.** It was
+  read like any other, so a figure the page does not show could be quoted. A
+  `vanish` switched off (`w:val="0"`, in any quoting) is still read, and so is
+  a `vanish` a tracked change replaced (`w:rPrChange`). Hiding inherited from a
+  style is not read here.
+- **`findRowAnomalies` passes over a column first seen after the learning
+  sample** instead of throwing on its missing profile, and **a PDF refused as
+  `not-opened` keeps the engine failure in `cause`**, so a broken engine can be
+  told apart from a broken file.
+- **`truecopy-mcp` refuses a tool named `constructor` or `toString`** as an
+  unknown tool. The name was looked up on a plain object, so it reached a
+  function of `Object` and the request got no answer at all.
 - **`npx truecopy` refuses a file over the size limit without reading it.**
   The command read the whole file into memory before the library could refuse
   it from its size, so a file of several gigabytes cost that memory first, or
