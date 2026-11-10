@@ -11,6 +11,10 @@ release PR is what stamps them.
 
 ### Fixed
 
+- **`findRowAnomalies` passes over a column first seen after the learning
+  sample** instead of throwing on its missing profile, and **a PDF refused as
+  `not-opened` keeps the engine failure in `cause`**, so a broken engine can be
+  told apart from a broken file.
 - **`truecopy-mcp` refuses a message over 1 MiB and a queue over 32 waiting
   readings.** A line that never ended grew in memory for ever, and calls sent
   faster than they were read piled up with their arguments, without a single
