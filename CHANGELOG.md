@@ -9,6 +9,16 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.24] - 2026-11-14
+
+### Fixed
+
+- **The typographic minus sign U+2212 is read as a minus.** A statement typeset
+  with it lost its sign: a debit of 123,45 printed that way read as a credit
+  of 123,45, and `carriesNumber` could then certify it. The number token takes U+2212
+  wherever it takes the hyphen, leading or trailing. A reading that relied on
+  the old, wrong sign changes, which is the point of the fix.
+
 ## [2.0.23] - 2026-11-10
 
 ### Fixed
