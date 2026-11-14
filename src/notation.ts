@@ -112,9 +112,13 @@ export function numberToken(decimals?: number): RegExp {
 	const fraction = decimals === undefined ? `(?:[.,]\\d+)?` : `[.,]\\d{${decimals}}(?!\\d)`;
 	const grouped = `\\d{1,3}(?:[${GROUPS_THOUSANDS}.,]\\d{3})+(?!\\d)`;
 	return new RegExp(
-		`(?<![\\d.,/])[-+]?\\(?[${AROUND_NUMBER}]{0,12}(?:${grouped}|\\d+)${fraction}\\)?-?`
+		`(?<![\\d.,/])[-+\u2212]?\\(?[${AROUND_NUMBER}]{0,12}(?:${grouped}|\\d+)${fraction}\\)?[-\u2212]?`
 	);
 }
+
+/** U+2212, the typographic minus that typeset statements print in place of the
+ *  hyphen. Ignored, `\u2212123,45` read as a credit of 123,45. */
+const MINUS_SIGN = '\u2212';
 
 /**
  * Peel the sign off a token.
@@ -150,11 +154,11 @@ function stripSign(text: string, brackets: Brackets = 'sign'): { negative: boole
 	} else if (body.startsWith('(')) {
 		body = body.slice(1);
 	}
-	if (body.endsWith('-')) {
+	if (body.endsWith('-') || body.endsWith(MINUS_SIGN)) {
 		negative = true;
 		body = body.slice(0, -1);
 	}
-	if (body.startsWith('-')) {
+	if (body.startsWith('-') || body.startsWith(MINUS_SIGN)) {
 		negative = true;
 		body = body.slice(1);
 	}
