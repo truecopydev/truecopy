@@ -201,6 +201,16 @@ describe('findNumbers', () => {
 		expect(findNumbers('Solde \u22121 234,56', 2)[0].raw).toBe('\u22121 234,56');
 	});
 
+	// Free-voice review of #138: a bracketed figure followed by a minus kept its
+	// closing bracket and read a hundred times too large.
+	it('reads a bracketed figure followed by a minus at its own size', () => {
+		expect(readNumber('(123,45)-')).toBe(-123.45);
+		expect(readNumber('(123,45)\u2212')).toBe(-123.45);
+		expect(readNumber('(12)-', undefined, 'punctuation')).toBe(-12);
+		expect(readNumber('(12-)')).toBe(-12);
+		expect(findNumbers('x (123,45)- y', 2).map((one) => one.value)).toEqual([-123.45]);
+	});
+
 	it('leaves a rate alone rather than reading a bogus figure out of it', () => {
 		expect(findNumbers('0,000000 %', 2)).toEqual([]);
 	});
