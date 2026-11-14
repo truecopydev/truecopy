@@ -9,6 +9,13 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A bracketed figure followed by a minus reads at its own size.** The closing
+  bracket stayed in the number, so `(123,45)-` read -12345 instead of -123,45,
+  with the hyphen as with the minus sign U+2212. The minus outside the brackets
+  now comes off first.
+
 ## [2.0.24] - 2026-11-14
 
 ### Fixed

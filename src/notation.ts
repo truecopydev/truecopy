@@ -145,16 +145,21 @@ const MINUS_SIGN = '\u2212';
  * below - and never around a unit. What sits between the digits and the closing
  * parenthesis is prose, and prose does not carry a sign.
  */
+const endsWithMinus = (text: string): boolean => text.endsWith('-') || text.endsWith(MINUS_SIGN);
+
 function stripSign(text: string, brackets: Brackets = 'sign'): { negative: boolean; body: string } {
-	let body = text;
-	let negative = false;
+	// A trailing minus OUTSIDE the brackets comes off first: left on, `(123,45)-`
+	// kept its closing bracket in the body and read -12345.
+	const outside = endsWithMinus(text);
+	let body = outside ? text.slice(0, -1) : text;
+	let negative = outside;
 	if (/^\(.*\)$/.test(body)) {
-		negative = brackets === 'sign';
+		negative ||= brackets === 'sign';
 		body = body.slice(1, -1);
 	} else if (body.startsWith('(')) {
 		body = body.slice(1);
 	}
-	if (body.endsWith('-') || body.endsWith(MINUS_SIGN)) {
+	if (endsWithMinus(body)) {
 		negative = true;
 		body = body.slice(0, -1);
 	}
