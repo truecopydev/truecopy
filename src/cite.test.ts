@@ -203,3 +203,11 @@ describe('carriesNumber', () => {
 		expect(carriesNumber('total 12,40', '12,40')).toBe(true);
 	});
 });
+
+describe('carriesNumber and the typographic minus', () => {
+	// Codex audit of 2026-11-11 (angle 1): a cited debit no longer certifies a credit.
+	it('keeps the sign of a figure printed with U+2212', () => {
+		expect(carriesNumber('Solde \u2212123,45', '-123,45')).toBe(true);
+		expect(carriesNumber('Solde \u2212123,45', '123,45')).toBe(false);
+	});
+});

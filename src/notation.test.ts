@@ -193,6 +193,14 @@ describe('findNumbers', () => {
 		expect(found.map((one) => one.value)).toEqual([300]);
 	});
 
+	// Codex audit of 2026-11-11 (angle 1): U+2212 was dropped, a debit read as a credit.
+	it('reads the typographic minus sign as a minus, leading or trailing', () => {
+		expect(readNumber('\u2212123,45')).toBe(-123.45);
+		expect(readNumber('123,45\u2212')).toBe(-123.45);
+		expect(findNumbers('Solde \u2212123,45 EUR', 2).map((one) => one.value)).toEqual([-123.45]);
+		expect(findNumbers('Solde \u22121 234,56', 2)[0].raw).toBe('\u22121 234,56');
+	});
+
 	it('leaves a rate alone rather than reading a bogus figure out of it', () => {
 		expect(findNumbers('0,000000 %', 2)).toEqual([]);
 	});
