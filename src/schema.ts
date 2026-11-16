@@ -105,9 +105,10 @@ function outOfFormat(value: number, field: Field): boolean {
 }
 
 /** What counts towards the minimum: the conforming records, or the distinct
- *  values they carry for the key field. */
+ *  values they carry for the key field - as they are, so that a foreign schema
+ *  keyed by text (`A`, `B`) counts two keys and not one `null`. */
 const conformingCount = (kept: object[], key?: string): number =>
-	key ? new Set(kept.map((record) => valueIn(record, key))).size : kept.length;
+	key ? new Set(kept.map((record) => (record as Record<string, unknown>)[key])).size : kept.length;
 
 /**
  * Does the record carry every required field, each within its format?

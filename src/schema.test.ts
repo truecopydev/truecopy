@@ -165,6 +165,15 @@ describe('a schema written somewhere else', () => {
 		).toMatchObject({ conforming: 1 });
 	});
 
+	it('counts text keys as the distinct values they are', () => {
+		const accepting: StandardSchema = {
+			'~standard': { version: 1, vendor: 'any', validate: () => ({}) }
+		};
+		expect(
+			validateWith(accepting, [{ id: 'A' }, { id: 'B' }], { minimumRecords: 2, key: 'id' })
+		).toBeNull();
+	});
+
 	it('says so rather than quietly awaiting an asynchronous schema', () => {
 		// A reading runs inside a render path. Turning it async would spread
 		// through every caller for the sake of validators nobody writes that way.
