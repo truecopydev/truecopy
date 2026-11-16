@@ -9,7 +9,22 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`findNumbers` takes the decimal mark of the document.** A third, optional
+  argument, read as `readNumber` reads it: `findNumbers(line, 2, decimalMarkOf(text))`.
+
 ### Fixed
+
+- **`find_amounts` reads each figure with the mark the document settled.** In a
+  file that writes `1,25`, the MCP tool returned `1,234` as 1234 under a
+  reliable verdict; it is now 1.234.
+- **`find_dates` reads strictly.** With `year: 2024`, a cell writing
+  `29/02/2025` came back as 2024-02-29; a cell that writes its own year is now
+  never dated in the one given.
+- **`validateWith` counts text keys.** With `key: 'id'`, two records keyed `A`
+  and `B` counted as one key, because only numbers were read; a foreign schema
+  with usual identifiers refused valid documents.
 
 - **A bracketed figure followed by a minus reads at its own size.** The closing
   bracket stayed in the number, so `(123,45)-` read -12345 instead of -123,45,

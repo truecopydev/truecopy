@@ -748,7 +748,24 @@ describe('find_amounts', () => {
 	});
 });
 
+describe('find_amounts and the decimal mark of the document', () => {
+	it('reads each figure with the mark the document settled', async () => {
+		const serve = serving(pasted('mix.tsv', 'a\t1,25\nb\t1,234\nc\t2,234'));
+		const result = await call('find_amounts', { path: 'mix.tsv', decimals: 0 }, serve);
+		const values = (result.structuredContent?.amounts as { value: number }[]).map((a) => a.value);
+		expect(values).toEqual([1.25, 1.234, 2.234]);
+	});
+});
+
 describe('find_dates', () => {
+	it('never dates a cell in the given year when the cell writes its own', async () => {
+		const serve = serving(pasted('leap.txt', '29/02/2025;CARTE;12,40\n02/05;CARTE;3,00'));
+		const result = await call('find_dates', { path: 'leap.txt', year: 2024 }, serve);
+		expect(result.structuredContent?.dates).toEqual([
+			{ row: 2, column: 1, written: '02/05', date: '2024-05-02' }
+		]);
+	});
+
 	it('finds the dates in the order given, where the page printed them', async () => {
 		const result = await call(
 			'find_dates',

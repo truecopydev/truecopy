@@ -493,12 +493,17 @@ export interface FoundNumber {
 
 /** Every number on a line, in order. `decimals` narrows the search to figures
  *  written with exactly that many - which is how a page tells a sum of money
- *  from a reference number without knowing what money is. */
-export function findNumbers(text: string, decimals?: number): FoundNumber[] {
+ *  from a reference number without knowing what money is. `decimal` is the mark
+ *  the document settled (`decimalMarkOf`), read as `readNumber` reads it. */
+export function findNumbers(
+	text: string,
+	decimals?: number,
+	decimal?: DecimalMark | null
+): FoundNumber[] {
 	const token = new RegExp(numberToken(decimals).source, 'g');
 	const found: FoundNumber[] = [];
 	for (const match of text.matchAll(token)) {
-		const value = readNumber(match[0]);
+		const value = readNumber(match[0], decimal);
 		if (value !== null) found.push({ value, raw: match[0], index: match.index });
 	}
 	return found;
