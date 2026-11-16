@@ -777,9 +777,12 @@ async function runFindAmounts(
 	if (refused(bounds)) return bounds;
 	const table = await reading(capabilities, path, bounds.maximumPages);
 	const cut = windowOf(table, bounds);
+	// The document settles its own decimal mark: `1,234` beside `1,25` is one
+	// and a quarter-thousandth, not twelve hundred, and a token read alone guesses.
+	const mark = decimalMarkOf(table.document.text);
 	const amounts: (Placed & { value: number })[] = placedCells(cut).flatMap(
 		({ cell, row, column }) =>
-			findNumbers(cell, decimals === 0 ? undefined : decimals).map((found) => ({
+			findNumbers(cell, decimals === 0 ? undefined : decimals, mark).map((found) => ({
 				row,
 				column,
 				written: found.raw.trim(),
@@ -829,7 +832,9 @@ async function runFindDates(
 	const table = await reading(capabilities, path, bounds.maximumPages);
 	const cut = windowOf(table, bounds);
 	const dates: (Placed & { date: string })[] = placedCells(cut).flatMap(({ cell, row, column }) => {
-		const found = readLeadingDate(cell, { dateOrder }, year);
+		// Strict: a cell that writes its own year is never dated in the one given
+		// (`29/02/2025` with year 2024 is no date, not the 29th of February 2024).
+		const found = readLeadingDate(cell, { dateOrder, strictDates: true }, year);
 		return found === null
 			? []
 			: [{ row, column, written: cell.slice(0, found.length).trim(), date: isoDay(found.date) }];
