@@ -85,6 +85,15 @@ Three fields decide how you write the rest, and each has a wrong first instinct:
   finding raised. `readTable(file, { pairedParentheses: true })` puts such a `)`
   back when it touches the figure and closes a parenthesis that cell opened.
   Off by default; turn it on once your own readings are checked with it.
+- **`confidence: true`, when a single figure has to be trusted.** The findings
+  speak for a page or a column; `readTable(file, { confidence: true })` adds
+  `confidence`, laid out like `pages`, with a number from 0 to 1 for each cell
+  that carries a digit. Serve a figure at or above `CONFIDENT_ABOVE` and send
+  the others to a second look. `null` is no confidence at all, never a low
+  one: the cell has no digit, or nothing was measured there (a paste, a CSV, a
+  page with no column, a merged column). It was measured on annual-report
+  tables rendered to PDF with the default cut, and with `numberEdges` it is
+  not computed.
 
 ## When a row is not a record
 
