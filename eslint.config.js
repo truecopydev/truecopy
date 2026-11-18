@@ -25,7 +25,7 @@ export default ts.config(
 		// three names are not worth a dependency in a library that ships three.
 		files: ['example/**/*.mjs', 'bin/**/*.mjs', 'scripts/**/*.mjs'],
 		languageOptions: {
-			globals: { console: 'readonly', File: 'readonly', process: 'readonly' }
+			globals: { console: 'readonly', fetch: 'readonly', File: 'readonly', process: 'readonly' }
 		}
 	},
 	{

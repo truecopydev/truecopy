@@ -56,10 +56,12 @@ npm run verifier
 checks that lived only inside `gate.yml` - so nobody could run them, and a red
 one was discovered after the push.
 
-- `audit` = `npm audit --omit=dev --audit-level=high`. Only what a consumer
-  installs: an advisory on a linter cannot reach anybody who installed the
-  package, and a gate that reddens for something nobody can be hurt by gets
-  ignored, then removed.
+- `audit` = `node scripts/audit.mjs`: every high or critical advisory of the
+  whole tree, development tools included. An advisory published with no fixed
+  version would keep the gate red with nothing to install, so an exception can
+  be written in that script, and it holds only while its review date has not
+  passed, the advisory still has no fixed version and the package is absent
+  from what a consumer installs. Each of the three is checked on every run.
 - `secrets` = `gitleaks` over the whole history. The binary is installed
   outside npm, which is why `knip.json` lists it under `ignoreBinaries`.
 - `paquet` packs the tarball, installs it into a throwaway project and imports

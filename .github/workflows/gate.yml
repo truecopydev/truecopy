@@ -58,14 +58,13 @@ jobs:
       # format, lint, typecheck, build, knip, jscpd, tests, coverage ratchet.
       - run: npm run gate
 
-      # Only what a consumer actually installs. The package ships no runtime
-      # dependency, so this passes on an empty set today - which is the point:
-      # the day one is added, this is already watching it. `--omit=dev` because
-      # an advisory on a linter cannot reach anybody who ran `npm i truecopy`,
-      # and a gate that goes red for something nobody can be hurt by gets
-      # ignored, then removed.
-      - name: audit what a consumer installs
+      # The whole tree, development tools included. An exception is a line of
+      # scripts/audit.mjs and falls on its own: past its review date, once a
+      # fixed version exists, or if the package reaches what a consumer installs.
+      - name: audit the whole tree
         run: npm run audit
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       # What would actually be published, installed and imported for real. A
       # green suite proves the source works; only this proves the PACKAGE does -
