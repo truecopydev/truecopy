@@ -9,6 +9,24 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`readTable(file, { confidence: true })` scores every figure, cell by cell.**
+  The doubts speak for a page or a column, and a reading that raises none can
+  still carry a wrong figure. `confidence[i][j][k]` is about `pages[i][j][k]`:
+  a number from 0 to 1 for a cell that carries a digit, read off the geometry
+  the cell was built from by a model learned once on cells whose true value was
+  known, then frozen. `CONFIDENT_ABOVE` is the threshold a figure is served as
+  sure at, fixed before the tables it was judged on were collected. On those
+  tables, 179 from 41 annual reports published outside France, this release
+  serves 9,717 of 10,850 figures as sure and 13 of them are wrong (99.87 %
+  right, 99.76 to 99.95 across issuers), where 463 of the 10,850 are wrong.
+  Off by default, and it moves no cell and no finding. It claims nothing past what was measured: annual-report
+  tables rendered to PDF, cut with the default options. A page that is not a
+  PDF page, a page with no column and a column the cut merged get `null`, which
+  is no confidence at all and not a low one; with `numberEdges` none is
+  computed.
+
 ### Fixed
 
 - **A bracketed figure followed by a minus reads at its own size.** The closing

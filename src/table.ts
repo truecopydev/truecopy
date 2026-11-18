@@ -26,6 +26,7 @@ import { openDocument, type OpenOptions } from './open.js';
 import { boundariesFromRecurrence, cellsOf, gapFor, splitLeadingFigures } from './layout.js';
 import { columnCount, profileColumns } from './columns.js';
 import { decimalMarkOf, findNumbers, type DecimalMark } from './notation.js';
+import { cellConfidence } from './confidence.js';
 
 /**
  * What a reading could not vouch for, named rather than only worded.
@@ -132,6 +133,17 @@ export interface Table {
 	findings: Finding[];
 	/** The document itself, for a reader that needs more than the cells. */
 	document: Document;
+	/**
+	 * How far each figure can be trusted, laid out exactly like `pages`. Only
+	 * there when the `confidence` option asked for it.
+	 *
+	 * `confidence[i][j][k]` is about `pages[i][j][k]`: a number from 0 to 1 for
+	 * a cell that carries a digit, `null` for every other cell and wherever
+	 * nothing was measured. `null` is not a low confidence, it is none: treat
+	 * it as a cell nobody vouched for. A figure at or above `CONFIDENT_ABOVE`
+	 * is the one to act on without a second look.
+	 */
+	confidence?: (number | null)[][][];
 }
 
 /**
@@ -357,6 +369,22 @@ export interface TableOptions extends OpenOptions {
 	 * column boundaries are not touched, only which cell such a `)` joins.
 	 */
 	pairedParentheses?: boolean;
+	/**
+	 * Score every figure, cell by cell, into `Table.confidence`. Off unless
+	 * asked for.
+	 *
+	 * The doubts above speak for a page or a column, and a reading that raises
+	 * none can still carry a wrong figure. This is a learned signal for the
+	 * cell itself, read off the geometry the cell was built from. It moves no
+	 * cell and no doubt: the reading is the same with it on or off.
+	 *
+	 * It was measured on tables of annual reports rendered to PDF and cut with
+	 * the default options, and it claims nothing past that. A page that is not
+	 * a PDF page, a page with no column and a column the cut merged get `null`.
+	 * With `numberEdges` the cells no longer follow the cut the signal reads,
+	 * so no confidence is computed at all.
+	 */
+	confidence?: boolean;
 }
 
 /**
@@ -407,7 +435,7 @@ export async function readTable(file: File, options: TableOptions = {}): Promise
 	findings.push(...pagesOutOfStep(columnsPerPage));
 	// One list, two shapes: the sentences are derived from the findings rather
 	// than written twice, so a message can never say one thing and a code another.
-	return {
+	const table: Table = {
 		rows: pages.flat(),
 		pages,
 		warnings: findings.map((finding) => finding.message),
@@ -415,4 +443,6 @@ export async function readTable(file: File, options: TableOptions = {}): Promise
 		boundaries,
 		document
 	};
+	if (options.confidence && !options.numberEdges) table.confidence = cellConfidence(table);
+	return table;
 }
