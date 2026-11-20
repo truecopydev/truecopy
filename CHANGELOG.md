@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.25] - 2026-11-20
+
 ### Added
 
 - **`readTable(file, { confidence: true })` scores every figure, cell by cell.**
