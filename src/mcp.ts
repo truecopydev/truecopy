@@ -36,6 +36,7 @@ import { describeDoubts, explainReading } from './explain.js';
 import { decimalMarkOf, findNumbers, readLeadingDate, type DecimalMark } from './notation.js';
 import { UnreadableDocument } from './open.js';
 import { readTable, type Finding, type Table } from './table.js';
+import { verifyValues, type CheckedValue, type ClaimedValue } from './verify.js';
 
 /** What this server needs from the world, and nothing else. */
 export interface McpCapabilities {
@@ -496,6 +497,79 @@ export const TOOLS = [
 			required: ['file', 'verdict', 'checked', 'carried', 'records']
 		}),
 		annotations: READ_ONLY
+	},
+	{
+		name: 'verify_values',
+		title: 'Check what another reader says the document prints',
+		description:
+			"Check values that another reader - a model reading the page image, an extraction API - returned from this document, without reading in its place. Each value is claimed under the label of its row and gets one of three answers. confirmed: a row that label names prints the figure. contradicted: the rows that label names print other figures, and every one of them was read with confidence. not-found: neither - this reading cannot vouch for the value and does not say it is wrong, so check it by eye. A contradiction is only pronounced from cells read surely, which is why a doubtful row answers not-found. A value sent without a label can only be found somewhere on the page, a much smaller claim. What this cannot see is the column: a figure confirmed on its row may still be last year's.",
+		inputSchema: {
+			type: 'object',
+			properties: {
+				path: PATH_FIELD,
+				values: {
+					type: 'array',
+					minItems: 1,
+					description: 'The values the other reader returned.',
+					items: {
+						type: 'object',
+						properties: {
+							value: {
+								type: ['string', 'number'],
+								description:
+									'The value. A JSON number is a figure; a string is a figure when it holds a digit and no letter, and words otherwise.'
+							},
+							label: {
+								type: 'string',
+								description: 'The words that name its row, as the other reader read them.'
+							},
+							page: { type: 'integer', minimum: 1, description: 'The page it was read from.' }
+						},
+						required: ['value'],
+						additionalProperties: false
+					}
+				},
+				written: {
+					type: 'string',
+					enum: ['.', ','],
+					description:
+						"The decimal mark the claimed strings are written with, when it is not the document's: a model asked for JSON writes 1234.5 for a page printing 1 234,5."
+				},
+				maximumPages: PAGES_FIELD,
+				digest: DIGEST_FIELD
+			},
+			required: ['path', 'values'],
+			additionalProperties: false
+		},
+		outputSchema: answerOrRefusal({
+			properties: {
+				file: { type: 'string' },
+				digest: { type: 'string' },
+				verdict: VERDICT_FIELD,
+				checked: { type: 'integer' },
+				confirmed: { type: 'integer' },
+				contradicted: { type: 'integer' },
+				notFound: { type: 'integer' },
+				values: {
+					type: 'array',
+					items: {
+						type: 'object',
+						properties: {
+							value: { type: 'string' },
+							label: { type: 'string' },
+							standing: { type: 'string', enum: ['confirmed', 'contradicted', 'not-found'] },
+							labelled: { type: 'boolean' },
+							page: { type: 'integer' },
+							row: { type: 'integer' },
+							printed: { type: 'array', items: { type: 'string' } }
+						},
+						required: ['value', 'standing', 'labelled']
+					}
+				}
+			},
+			required: ['file', 'verdict', 'checked', 'confirmed', 'contradicted', 'notFound', 'values']
+		}),
+		annotations: READ_ONLY
 	}
 ] as const;
 
@@ -610,12 +684,13 @@ const refused = <Admitted extends object>(bounds: Admitted | Outcome): bounds is
 async function reading(
 	capabilities: McpCapabilities,
 	path: string,
-	maximumPages: number | undefined
+	maximumPages: number | undefined,
+	confidence = false
 ): Promise<Table> {
-	return readTable(
-		await capabilities.open(path),
-		maximumPages === undefined ? {} : { maximumPages }
-	);
+	return readTable(await capabilities.open(path), {
+		...(maximumPages === undefined ? {} : { maximumPages }),
+		...(confidence ? { confidence } : {})
+	});
 }
 
 /**
@@ -994,6 +1069,114 @@ async function runCheckCitations(
 	};
 }
 
+/**
+ * One value as claimed, or nothing. Read as strictly as a record of
+ * `check_citations`, and for the same reason: a claim half understood is
+ * answered `not-found`, which reads as a verdict on the document.
+ */
+function claimedAt(value: unknown): ClaimedValue | null {
+	if (typeof value !== 'object' || value === null) return null;
+	const claim = value as { value?: unknown; label?: unknown; page?: unknown };
+	if (typeof claim.value !== 'string' && typeof claim.value !== 'number') return null;
+	if (claim.label !== undefined && typeof claim.label !== 'string') return null;
+	if (claim.page !== undefined && !(Number.isInteger(claim.page) && (claim.page as number) >= 1))
+		return null;
+	return {
+		value: claim.value,
+		...(claim.label === undefined ? {} : { label: claim.label }),
+		...(claim.page === undefined ? {} : { page: claim.page as number })
+	};
+}
+
+const NAMED = (claim: ClaimedValue): string =>
+	claim.label === undefined ? `"${claim.value}"` : `${claim.label}: "${claim.value}"`;
+
+function standingLine(claim: ClaimedValue, checked: CheckedValue): string {
+	const where = checked.row === undefined ? '' : `, row ${checked.row} of page ${checked.page}`;
+	if (checked.printed !== undefined) {
+		return `  contradicted - ${NAMED(claim)}${where} prints ${checked.printed.join(' and ')}`;
+	}
+	return `  ${checked.standing} - ${NAMED(claim)}${where}`;
+}
+
+/**
+ * What the check says, and the two things it does not.
+ *
+ * Every answer carries them, because each is a way to read a clean result as
+ * more than it is: a `confirmed` says nothing of the column, and a `not-found`
+ * is not a `contradicted`.
+ */
+function verifiedText(table: Table, claims: ClaimedValue[], checked: CheckedValue[]): string {
+	const count = (standing: CheckedValue['standing']): number =>
+		checked.filter((value) => value.standing === standing).length;
+	return [
+		`truecopy - ${table.document.name}`,
+		verdictLine(table),
+		'',
+		`${claims.length} value(s) checked: ${count('confirmed')} confirmed, ${count('contradicted')} contradicted, ${count('not-found')} not found.`,
+		...claims.map((claim, index) => standingLine(claim, checked[index])),
+		'',
+		'confirmed means the row prints the figure, not that it sits in the right column.',
+		'not found means this reading cannot vouch for the value: it is not a contradiction.'
+	].join('\n');
+}
+
+async function runVerifyValues(
+	args: Record<string, unknown>,
+	capabilities: McpCapabilities
+): Promise<Outcome> {
+	const path = stringAt(args, 'path');
+	const given = args.values;
+	if (path === null || !Array.isArray(given) || given.length === 0) {
+		return { text: 'verify_values needs a path and a values array.', failed: true };
+	}
+	const claims = given.map(claimedAt).filter((claim): claim is ClaimedValue => claim !== null);
+	if (claims.length !== given.length) {
+		return {
+			text: 'every value must be { "value": "1 234", "label": "Total assets", "page": 1 }, with a value that is a string or a number; label and page are optional.',
+			failed: true
+		};
+	}
+	const written = args.written;
+	if (written !== undefined && written !== '.' && written !== ',') {
+		return badArgument('verify_values', 'written', '"." or ","');
+	}
+	const pages = pagesOf(args, 'verify_values');
+	if (refused(pages)) return pages;
+
+	const table = await reading(capabilities, path, pages.maximumPages, true);
+	const changed = changedSince(args, table);
+	if (changed !== null) return changed;
+	const checked = verifyValues(table, claims, written === undefined ? {} : { written });
+	const count = (standing: CheckedValue['standing']): number =>
+		checked.filter((value) => value.standing === standing).length;
+
+	return {
+		text: verifiedText(table, claims, checked),
+		data: {
+			file: table.document.name,
+			digest: table.document.digest,
+			verdict: tableVerdict(table),
+			checked: claims.length,
+			confirmed: count('confirmed'),
+			contradicted: count('contradicted'),
+			notFound: count('not-found'),
+			values: claims.map((claim, index) => {
+				const { standing, labelled, page, row, printed } = checked[index];
+				return {
+					value: String(claim.value),
+					...(claim.label === undefined ? {} : { label: claim.label }),
+					standing,
+					labelled,
+					...(page === undefined ? {} : { page }),
+					...(row === undefined ? {} : { row }),
+					...(printed === undefined ? {} : { printed })
+				};
+			})
+		}
+	};
+}
+
 const RUNNERS: Record<
 	string,
 	(args: Record<string, unknown>, capabilities: McpCapabilities) => Promise<Outcome>
@@ -1001,7 +1184,8 @@ const RUNNERS: Record<
 	read_table: runReadTable,
 	find_amounts: runFindAmounts,
 	find_dates: runFindDates,
-	check_citations: runCheckCitations
+	check_citations: runCheckCitations,
+	verify_values: runVerifyValues
 };
 
 /**
@@ -1060,7 +1244,7 @@ async function callTool(params: Record<string, unknown>, capabilities: McpCapabi
  * the two are FOR together.
  */
 const INSTRUCTIONS =
-	'truecopy reads documents on this machine and says when a reading cannot be trusted. Every answer opens with a verdict - reliable, doubtful or unreadable - and reliable only means nothing looked wrong: read it before leaning on a figure. Read with read_table, pick out figures with find_amounts and dates with find_dates, then check every value you claim with check_citations before anything acts on it. The file is read on this machine and truecopy makes no network call, but what a tool returns - rows, figures, dates - goes to this client, and the host decides where it goes next.';
+	'truecopy reads documents on this machine and says when a reading cannot be trusted. Every answer opens with a verdict - reliable, doubtful or unreadable - and reliable only means nothing looked wrong: read it before leaning on a figure. Read with read_table, pick out figures with find_amounts and dates with find_dates, then check every value you claim with check_citations before anything acts on it. When another reader already returned values from the document, do not read in its place: check them with verify_values, which confirms, contradicts or says it cannot tell. The file is read on this machine and truecopy makes no network call, but what a tool returns - rows, figures, dates - goes to this client, and the host decides where it goes next.';
 
 const CAPABILITIES = { tools: { listChanged: false } };
 

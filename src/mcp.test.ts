@@ -104,7 +104,7 @@ describe('the protocol', () => {
 		});
 	});
 
-	it('lists the four tools, with how long the list may be held', async () => {
+	it('lists the five tools, with how long the list may be held', async () => {
 		const result = (await ask('tools/list'))?.result as {
 			tools: { name: string }[];
 			ttlMs: number;
@@ -113,7 +113,8 @@ describe('the protocol', () => {
 			'read_table',
 			'find_amounts',
 			'find_dates',
-			'check_citations'
+			'check_citations',
+			'verify_values'
 		]);
 		expect(result.ttlMs).toBeGreaterThan(0);
 	});
@@ -169,7 +170,8 @@ describe('every tool description', () => {
 	it('says what the tool does not prove, and not only what it does', () => {
 		// The description is the prompt a host puts in front of a model. One that
 		// says "reads tables" and stops has taught the opposite of this library.
-		const [read, amounts, dates, check] = TOOLS;
+		const [read, amounts, dates, check, verify] = TOOLS;
+		expect(verify.description).toContain('does not say it is wrong');
 		expect(read.description).toContain('NOT a promise that the reading is right');
 		expect(amounts.description).toContain('reliable only means nothing looked wrong');
 		expect(dates.description).toContain('STATED, never guessed');
@@ -359,6 +361,80 @@ describe('read_table', () => {
 		expect((await call('read_table', { path: '/x' }, odd)).content[0].text).toBe(
 			'verdict: unreadable - could not read that file: denied'
 		);
+	});
+});
+
+describe('verify_values', () => {
+	const ACCOUNTS = ['Label;2024;2023', 'Revenue;1200;1100', 'Costs;183,5;170'].join('\n');
+	const verified = (args: object) =>
+		call('verify_values', { path: '/a.csv', ...args }, serving(pasted('a.csv', ACCOUNTS)));
+
+	it('answers each value one of three ways, and says where', async () => {
+		const result = await verified({
+			values: [
+				{ label: 'Revenue', value: 1100 },
+				{ label: 'Costs', value: 190, page: 1 },
+				{ label: 'Margin', value: 12 },
+				{ value: 'Costs' }
+			]
+		});
+		expect(result.isError).toBeUndefined();
+		expect(result.structuredContent).toMatchObject({
+			verdict: 'reliable',
+			checked: 4,
+			confirmed: 2,
+			contradicted: 1,
+			notFound: 1,
+			values: [
+				{ value: '1100', label: 'Revenue', standing: 'confirmed', labelled: true, page: 1, row: 2 },
+				{ value: '190', standing: 'contradicted', row: 3, printed: ['183,5', '170'] },
+				{ value: '12', label: 'Margin', standing: 'not-found', labelled: false },
+				{ value: 'Costs', standing: 'confirmed', labelled: false }
+			]
+		});
+		const text = result.content[0].text;
+		expect(text).toContain('4 value(s) checked: 2 confirmed, 1 contradicted, 1 not found.');
+		expect(text).toContain('contradicted - Costs: "190", row 3 of page 1 prints 183,5 and 170');
+		expect(text).toContain('not-found - Margin: "12"');
+		expect(text).toContain('confirmed - "Costs", row 3 of page 1');
+	});
+
+	it('says on every answer what a clean result is not', async () => {
+		const text = (await verified({ values: [{ label: 'Revenue', value: 1200 }] })).content[0].text;
+		expect(text).toContain('not that it sits in the right column');
+		expect(text).toContain('it is not a contradiction');
+	});
+
+	it('reads a claimed string in the mark it was written with', async () => {
+		const claim = { values: [{ label: 'Costs', value: '183.5' }] };
+		expect((await verified({ ...claim, written: '.' })).structuredContent).toMatchObject({
+			confirmed: 1
+		});
+		expect((await verified(claim)).structuredContent).toMatchObject({ confirmed: 0 });
+	});
+
+	it('refuses a call it only half understands', async () => {
+		const capabilities = serving(pasted('a.csv', ACCOUNTS));
+		const refusedCall = async (args: object) =>
+			(await call('verify_values', args, capabilities)).isError;
+		expect(await refusedCall({ values: [{ value: 1 }] })).toBe(true);
+		expect(await refusedCall({ path: '/a.csv' })).toBe(true);
+		expect(await refusedCall({ path: '/a.csv', values: [] })).toBe(true);
+		for (const value of [null, { value: true }, { value: 1, label: 2 }, { value: 1, page: 0 }]) {
+			const result = await verified({ values: [value] });
+			expect(result.isError).toBe(true);
+			expect(result.content[0].text).toContain('every value must be');
+		}
+		const mark = await verified({ values: [{ value: 1 }], written: ';' });
+		expect(mark.content[0].text).toBe('verify_values: written must be "." or ",".');
+		const bound = await verified({ values: [{ value: 1 }], maximumPages: 0 });
+		expect(bound.isError).toBe(true);
+	});
+
+	it('refuses a file that changed since the digest it was given', async () => {
+		const result = await verified({ values: [{ value: 1 }], digest: 'a'.repeat(64) });
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toContain('has changed since');
 	});
 });
 

@@ -388,6 +388,7 @@ Each one is also its own entry point, so a project that wants one pays for one.
 | [`signature.ts`](src/signature.ts) | `signature`  | which rows break the table's own type signature                                       |
 | [`schema.ts`](src/schema.ts)       | `schema`     | the fields, formats and count a reading must satisfy                                  |
 | [`cite.ts`](src/cite.ts)           | `cite`       | the rows a model cited, and whether they really carry each value                      |
+| [`verify.ts`](src/verify.ts)       | `verify`     | the values another reader returned: confirmed, contradicted, or neither               |
 | [`anchor.ts`](src/anchor.ts)       | `anchor`     | the passage a stored value came from, found again in the document                     |
 | [`explain.ts`](src/explain.ts)     | `explain`    | what all of the above decided, in words                                               |
 | [`pattern.ts`](src/pattern.ts)     | `pattern`    | domain knowledge as **data**, compiled behind a ReDoS guard                           |
@@ -458,12 +459,13 @@ The file is read there and truecopy makes no network call. What a tool RETURNS i
 }
 ```
 
-Four tools, and every answer opens with a **verdict**: `reliable`, `doubtful` or `unreadable`. `unreadable` is a file that did not open; `doubtful` is a reading where at least one thing looked wrong, and the findings say what and where; `reliable` means nothing looked wrong from the shape of the page, which is **not** "this reading is right", and the answer says so in those words. A model reads the verdict before it leans on a figure.
+Five tools, and every answer opens with a **verdict**: `reliable`, `doubtful` or `unreadable`. `unreadable` is a file that did not open; `doubtful` is a reading where at least one thing looked wrong, and the findings say what and where; `reliable` means nothing looked wrong from the shape of the page, which is **not** "this reading is right", and the answer says so in those words. A model reads the verdict before it leans on a figure.
 
 - **`read_table`** turns a PDF, a CSV, a TSV or a saved paste into rows: the cut, how often each column is filled, the rows numbered, and what the reading **could not vouch for**. Bounded at 200 rows a call, and what it left is counted rather than dropped.
 - **`find_amounts`** lists the figures written with a given number of decimals (two by default, which is how a page tells money from a reference number), each with the characters as printed and the row and column to cite.
 - **`find_dates`** lists the cells that start with a date, read in the day-month order you **state**, never one it guesses; a row without a year is a date only when the year is given.
 - **`check_citations`** takes the records a model claims to have read, each citing the rows it came from, and says which values the cited rows do not print. A JSON number is checked as a figure with the document's own decimal mark, a JSON string as its words in order. It answers "was this read or invented", never "is this complete", and it says so. `read_table` and `check_citations` return the `digest` of the bytes read; passed back, it makes a later call refuse a file changed in between.
+- **`verify_values`** takes the values another reader returned from the document (a model reading the page image, an extraction API), each under the label of its row, and answers `confirmed`, `contradicted` or `not-found` for each one. It does not read in the other reader's place, and it contradicts only from cells it read surely: everything else is `not-found`, which is not a verdict on the value. It cannot see the column, so a figure confirmed on its row may still be last year's.
 
 **Nothing is uploaded, because there is nowhere to upload it to.** The server runs where the file already is, makes no network call, and opens no file it was not handed. A statement, a payslip and a career record are the worst documents there are to send anywhere, and a server has nothing to compute on them that this does not compute in place. Set `TRUECOPY_MCP_ROOT` and it opens nothing outside that directory, symbolic links resolved before the check.
 

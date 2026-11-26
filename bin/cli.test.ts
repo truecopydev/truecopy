@@ -143,7 +143,8 @@ describe('npx truecopy mcp', () => {
 			'read_table',
 			'find_amounts',
 			'find_dates',
-			'check_citations'
+			'check_citations',
+			'verify_values'
 		]);
 	});
 });
