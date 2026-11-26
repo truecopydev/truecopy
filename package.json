@@ -107,6 +107,10 @@
 			"types": "./dist/cite.d.ts",
 			"import": "./dist/cite.js"
 		},
+		"./verify": {
+			"types": "./dist/verify.d.ts",
+			"import": "./dist/verify.js"
+		},
 		"./anchor": {
 			"types": "./dist/anchor.d.ts",
 			"import": "./dist/anchor.js"

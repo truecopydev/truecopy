@@ -9,6 +9,40 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`verify(file, claims)` checks the values another reader returned, without
+  reading in its place.** A model reading the page image, an extraction API:
+  each value is handed over under the label of its row and gets a `standing`.
+  `confirmed`: a row the label names prints the figure. `contradicted`: the
+  rows that open on the label print other figures, every one read at or above
+  `CONFIDENT_ABOVE`. `not-found`: neither, which is not a verdict on the
+  value. `verifyValues(table, claims)` does the same on a reading you already
+  hold, both are exported from `truecopy/verify`, and the MCP server carries
+  the check as `verify_values`. A label is read letter by letter, because a
+  text layer prints `Inventor ies`; a label of one or two characters names
+  nothing; a torn bracket, a figure grouped two ways at once and a figure
+  printed on a row without a label contradict nothing. It cannot see the
+  column: a figure confirmed on its row may be last year's.
+
+  Measured on 150 tables from 129 annual reports that no tuning had seen,
+  each transcribed from its page image by two models, every value judged
+  against the tagged figures of the published report. On the 9,829 values of
+  the first model: 7,618 confirmed, 7,615 of them right (99.96 %), and 1 of
+  its 4 wrong values not confirmed. On the 9,797 values of the second: 7,599
+  confirmed, all right, and its 3 wrong values not confirmed. Under a label,
+  none of the 14,922 confirmations of the two models was wrong; the 3 wrong
+  confirmations were values handed over with no label. A wrong value from a
+  good reader is rare, so right values were also deformed three known ways
+  (one digit, the row above, the sign): of 27,765 and 27,673 such values,
+  97.40 % were not confirmed for either model. What the check costs: it
+  confirms 77.5 % and 77.6 % of the right values and answers `not-found` for
+  most of the rest, and it contradicted 9 of 9,825 right values for the first
+  model and 11 of 9,794 for the second (0.09 % and 0.11 %), all in the same
+  two tables, where the cut glued columns of figures grouped by spaces into
+  one cell that was scored as sure. Nothing past that is claimed: annual-report tables rendered
+  to PDF, the default cut, labels as a model reads them.
+
 ## [2.0.25] - 2026-11-20
 
 ### Added
