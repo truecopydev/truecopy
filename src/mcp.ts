@@ -1088,15 +1088,31 @@ function claimedAt(value: unknown): ClaimedValue | null {
 	};
 }
 
-const NAMED = (claim: ClaimedValue): string =>
+const claimWorded = (claim: ClaimedValue): string =>
 	claim.label === undefined ? `"${claim.value}"` : `${claim.label}: "${claim.value}"`;
 
 function standingLine(claim: ClaimedValue, checked: CheckedValue): string {
 	const where = checked.row === undefined ? '' : `, row ${checked.row} of page ${checked.page}`;
 	if (checked.printed !== undefined) {
-		return `  contradicted - ${NAMED(claim)}${where} prints ${checked.printed.join(' and ')}`;
+		return `  contradicted - ${claimWorded(claim)}${where} prints ${checked.printed.join(' and ')}`;
 	}
-	return `  ${checked.standing} - ${NAMED(claim)}${where}`;
+	return `  ${checked.standing} - ${claimWorded(claim)}${where}`;
+}
+
+interface Standings {
+	confirmed: number;
+	contradicted: number;
+	notFound: number;
+}
+
+function standingsOf(checked: CheckedValue[]): Standings {
+	const count = (standing: CheckedValue['standing']): number =>
+		checked.filter((value) => value.standing === standing).length;
+	return {
+		confirmed: count('confirmed'),
+		contradicted: count('contradicted'),
+		notFound: count('not-found')
+	};
 }
 
 /**
@@ -1106,14 +1122,17 @@ function standingLine(claim: ClaimedValue, checked: CheckedValue): string {
  * more than it is: a `confirmed` says nothing of the column, and a `not-found`
  * is not a `contradicted`.
  */
-function verifiedText(table: Table, claims: ClaimedValue[], checked: CheckedValue[]): string {
-	const count = (standing: CheckedValue['standing']): number =>
-		checked.filter((value) => value.standing === standing).length;
+function verifiedText(
+	table: Table,
+	claims: ClaimedValue[],
+	checked: CheckedValue[],
+	counts: Standings
+): string {
 	return [
 		`truecopy - ${table.document.name}`,
 		verdictLine(table),
 		'',
-		`${claims.length} value(s) checked: ${count('confirmed')} confirmed, ${count('contradicted')} contradicted, ${count('not-found')} not found.`,
+		`${claims.length} value(s) checked: ${counts.confirmed} confirmed, ${counts.contradicted} contradicted, ${counts.notFound} not found.`,
 		...claims.map((claim, index) => standingLine(claim, checked[index])),
 		'',
 		'confirmed means the row prints the figure, not that it sits in the right column.',
@@ -1148,19 +1167,16 @@ async function runVerifyValues(
 	const changed = changedSince(args, table);
 	if (changed !== null) return changed;
 	const checked = verifyValues(table, claims, written === undefined ? {} : { written });
-	const count = (standing: CheckedValue['standing']): number =>
-		checked.filter((value) => value.standing === standing).length;
+	const counts = standingsOf(checked);
 
 	return {
-		text: verifiedText(table, claims, checked),
+		text: verifiedText(table, claims, checked, counts),
 		data: {
 			file: table.document.name,
 			digest: table.document.digest,
 			verdict: tableVerdict(table),
 			checked: claims.length,
-			confirmed: count('confirmed'),
-			contradicted: count('contradicted'),
-			notFound: count('not-found'),
+			...counts,
 			values: claims.map((claim, index) => {
 				const { standing, labelled, page, row, printed } = checked[index];
 				return {
