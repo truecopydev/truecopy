@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.26] - 2026-11-27
+
 ### Added
 
 - **`verify(file, claims)` checks the values another reader returned, without
