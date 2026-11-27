@@ -94,6 +94,15 @@ Three fields decide how you write the rest, and each has a wrong first instinct:
   page with no column, a merged column). It was measured on annual-report
   tables rendered to PDF with the default cut, and with `numberEdges` it is
   not computed.
+- **`sums: true`, on accounts tables.** A total printed under its terms, or to
+  their right, checks the cells it adds up: misread one and the equality
+  breaks. `readTable(file, { sums: true })` adds `sums`, the sums that hold
+  exactly, and `proven`, laid out like `pages`, true for a term or a total of
+  one of them. A proven figure was read right whatever its confidence says;
+  `false` is not a doubt, only a cell no sum vouches for. A sum does not
+  answer for a sign that only a detached dash carries (`- 4,913`), for a
+  figure whose leading group could be a glued note reference, or for a total
+  under three digits.
 
 ## When a row is not a record
 

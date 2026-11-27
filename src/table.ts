@@ -27,6 +27,7 @@ import { boundariesFromRecurrence, cellsOf, gapFor, splitLeadingFigures } from '
 import { columnCount, profileColumns } from './columns.js';
 import { decimalMarkOf, findNumbers, type DecimalMark } from './notation.js';
 import { cellConfidence } from './confidence.js';
+import { provenCells, provenSums, type Sum } from './sums.js';
 
 /**
  * What a reading could not vouch for, named rather than only worded.
@@ -144,6 +145,20 @@ export interface Table {
 	 * is the one to act on without a second look.
 	 */
 	confidence?: (number | null)[][][];
+	/**
+	 * The sums printed on the pages that hold exactly: a total under its terms,
+	 * or right of them. Only there when the `sums` option asked for it.
+	 */
+	sums?: Sum[];
+	/**
+	 * Which figures those sums hold, laid out exactly like `pages`. Only there
+	 * when the `sums` option asked for it.
+	 *
+	 * `proven[i][j][k]` is true when `pages[i][j][k]` is a term or the total of
+	 * a sum that adds up: misread, it would have broken the sum. `false` is not
+	 * a doubt, it only says no sum on the page vouches for the cell.
+	 */
+	proven?: boolean[][][];
 }
 
 /**
@@ -385,6 +400,21 @@ export interface TableOptions extends OpenOptions {
 	 * so no confidence is computed at all.
 	 */
 	confidence?: boolean;
+	/**
+	 * Look for the sums the page prints, into `Table.sums` and `Table.proven`.
+	 * Off unless asked for.
+	 *
+	 * A table of accounts checks itself: a total is printed under its terms, or
+	 * to their right, and a misread cell breaks the equality. A cell of a sum
+	 * that holds exactly was therefore read right, whatever the confidence
+	 * above says of it. It reads the cells and nothing else, and it moves none:
+	 * the reading is the same with it on or off.
+	 *
+	 * What a sum cannot see, it does not prove: a sign that only a detached
+	 * dash carries, a figure whose leading group could be a glued reference,
+	 * and a total under three digits, which adds up by chance too often.
+	 */
+	sums?: boolean;
 }
 
 /**
@@ -444,5 +474,9 @@ export async function readTable(file: File, options: TableOptions = {}): Promise
 		document
 	};
 	if (options.confidence && !options.numberEdges) table.confidence = cellConfidence(table);
+	if (options.sums) {
+		table.sums = provenSums(pages);
+		table.proven = provenCells(pages, table.sums);
+	}
 	return table;
 }
