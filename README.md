@@ -60,6 +60,8 @@ The second field is why this is not just another extractor. **An empty `warnings
 
 Those doubts speak for a page or a column. For the figure itself, `readTable(file, { confidence: true })` adds `confidence`, laid out like `pages`: a number from 0 to 1 for each cell that carries a digit, and a figure at or above `CONFIDENT_ABOVE` is the one to act on without a second look. On 179 tables from 41 annual reports the model had never seen, that threshold serves 9,717 of 10,850 figures and 13 of them are wrong, where 463 of the 10,850 are. It was measured on annual-report tables rendered to PDF with the default cut and claims nothing past that: `null` means nothing was measured there, not a low confidence.
 
+A table of accounts also checks itself: a total is printed under its terms, or to their right, and a misread cell breaks the equality. `readTable(file, { sums: true })` adds `sums`, the sums that hold exactly, and `proven`, laid out like `pages`: true for a term or a total of one of them. On 386 tables from 87 annual reports that no tuning had seen, a sum holds 7,827 of the 21,818 figures and none of them is wrong; among the 2,050 figures the confidence does not serve, it proves 304, none wrong either. A sum does not answer for what it cannot see: a sign that only a detached dash carries, a figure whose leading group could be a glued note reference, a total under three digits. `false` is not a doubt, only a cell no sum vouches for.
+
 `findings` is that same list with a `code` on it, plus the page and the column it is about. A person reads the sentence; a program branches on the code, and never on English that could be reworded tomorrow.
 
 When the rows have to be **trusted** (when something downstream acts on them), the rest of this page is how.

@@ -9,6 +9,36 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`readTable(file, { sums: true })` says which figures a sum printed on the
+  page holds.** A table of accounts checks itself: a total is printed under
+  its terms, or to their right, and a misread cell breaks the equality. The
+  option adds `sums`, each sum that holds exactly with its page, its line, its
+  terms and its total, and `proven`, laid out like `pages`: true for a term or
+  a total of one of them. It reads the cells and nothing else, so it works on
+  a PDF, a paste or a CSV alike, and it moves no cell: the reading is the same
+  with it on or off. A proven subtotal stands for its terms, so a grand total
+  is proven over its subtotals.
+
+  What a sum cannot see, it does not prove. It still holds when all its cells
+  change sign together, so it does not answer for a sign that only a detached
+  dash carries. It still holds when the same note reference is glued in front
+  of its total and of a term, so a sum that adds up with and without that
+  leading group proves nothing. A charge printed without its sign makes a sum
+  that holds only once a term is subtracted: that one is believed when a
+  second column holds the same sum on the same rows, a third row for a sum
+  along a row. A total under three digits proves nothing.
+
+  The rule was set on 1,992 tables and then measured once on 386 tables from
+  87 annual reports gleaned afterwards. There, a sum holds 7,827 of the 21,818
+  figures and none of them is wrong. Among the 2,050 figures the confidence
+  does not serve, 304 are proven and none is wrong, which takes the figures
+  served or proven from 90.6 % to 92.0 %. On the tuning tables, 43,180 figures
+  proven and 5 marked wrong, all five read right and absent from the tagged
+  truth. Like the confidence, this was measured on annual-report tables
+  rendered to PDF with the default cut.
+
 ## [2.0.26] - 2026-11-27
 
 ### Added
