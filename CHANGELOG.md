@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.27] - 2026-11-27
+
 ### Added
 
 - **`readTable(file, { sums: true })` says which figures a sum printed on the
