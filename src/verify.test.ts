@@ -256,6 +256,47 @@ describe('verifyValues', () => {
 		expect(checked).toEqual({ standing: 'not-found', labelled: true, page: 1, row: 1 });
 	});
 
+	it('contradicts nothing a cell prints among the groups it glued', () => {
+		// This year beside the last in one cell, and a note before its figure:
+		// spaces group the thousands, and the same space parts two columns.
+		const glued = [
+			['Total equity', '253 238 258 024'],
+			['Accruals', '23 704', '2 814']
+		];
+		const table = reading(
+			glued,
+			[
+				[null, SURE],
+				[null, SURE, SURE]
+			],
+			undefined,
+			'1 234,50'
+		);
+		const standings = verifyValues(table, [
+			{ label: 'Total equity', value: '258 024' },
+			{ label: 'Total equity', value: '238 258' },
+			{ label: 'Total equity', value: '258 025' },
+			{ label: 'Accruals', value: '704' }
+		]).map((checked) => checked.standing);
+		expect(standings).toEqual(['not-found', 'not-found', 'contradicted', 'not-found']);
+	});
+
+	it('still contradicts a negative claimed without its brackets', () => {
+		// 12 345 is a run of the groups of ( 12 345 ), and not a figure of it.
+		const costs = [['Costs', '( 12 345 )', '( 170 )']];
+		const table = reading(costs, [[null, SURE, SURE]], undefined, '1 234,50');
+		const [checked] = verifyValues(table, [{ label: 'Costs', value: '12 345' }]);
+		expect(checked.standing).toBe('contradicted');
+	});
+
+	it('contradicts nothing from a row holding the tail of a figure', () => {
+		// 075 alone is the last group of 6 427 075: the cut lost its head.
+		const torn = [['Profit for the year', '826 331', '075']];
+		const table = reading(torn, [[null, SURE, SURE]], undefined, '1 234,50');
+		const [checked] = verifyValues(table, [{ label: 'Profit for the year', value: '6 427 075' }]);
+		expect(checked).toEqual({ standing: 'not-found', labelled: true, page: 1, row: 1 });
+	});
+
 	it('contradicts nothing from a negative the cut tore in two', () => {
 		// The page prints ( 1,384 ) ( 142 ): the closing bracket fell in the
 		// next cell, and the figure reads positive whatever its score says.

@@ -191,16 +191,23 @@ const count = (text: string, sign: string): number => text.split(sign).length - 
 const SPACED = /\d[ \t\u00a0\u2009\u202f]+\d/;
 const MARKED_GROUP = /\d[.,]\d{3}(?!\d)/;
 
+/** Three digits alone behind a zero: the tail of a figure, never a figure. */
+const ORPHAN_GROUP = /^\s*0\d{2}\s*$/;
+
 /**
  * Whether a cell was torn or glued by the cut, whatever score it was given.
  *
- * Two shapes, both met on real statements. A bracket open in one cell and
+ * Three shapes, all met on real statements. A bracket open in one cell and
  * closed in the next is a negative torn in two: `( 1,384` beside `) ( 142 )`.
- * And a figure grouped two ways at once is two things glued: `23 250,000` is
+ * A figure grouped two ways at once is two things glued: `23 250,000` is
  * the note 23 and the figure 250,000, read as one number of eight digits.
+ * And `075` alone in its cell is the last group of `6 427 075`, whose head
+ * the cut left somewhere else on the row.
  */
 const misread = (cell: string): boolean =>
-	count(cell, '(') !== count(cell, ')') || (SPACED.test(cell) && MARKED_GROUP.test(cell));
+	count(cell, '(') !== count(cell, ')') ||
+	(SPACED.test(cell) && MARKED_GROUP.test(cell)) ||
+	ORPHAN_GROUP.test(cell);
 
 /** The figures a row prints, and whether every cell holding one was read surely. */
 function figuresOf(line: Line, table: Table): { printed: string[]; allSure: boolean } {
@@ -245,6 +252,56 @@ function printedUnnamed(scope: Line[], sought: string, lookup: Lookup): boolean 
 	);
 }
 
+const GAP = /[ \t\u00a0\u2009\u202f]+/;
+
+/**
+ * Whether a cell prints the figure among others it was glued to.
+ *
+ * Where thousands are set apart by a space, the space between two columns is
+ * the same sign: `253 238 258 024` is one figure of twelve digits or this
+ * year beside the last, and `23 704` is twenty-three thousand or the note 23
+ * before 704. The text cannot tell and neither can a score. So a claim that
+ * is a run of whole groups of such a cell is not contradicted by it. It is
+ * not confirmed either: `238 258` is a run of the same cell and no figure of
+ * the page.
+ */
+function gluedIn(rows: Line[], sought: string, lookup: Lookup): boolean {
+	return rows.some((line) =>
+		line.cells.some((cell) => {
+			const groups = cell.trim().split(GAP);
+			return groups.some((_, from) =>
+				groups.some(
+					(_, to) =>
+						to >= from &&
+						to - from < groups.length - 1 &&
+						standsAlone(groups, from, to) &&
+						readDecimal(groups.slice(from, to + 1).join(' '), lookup.mark, lookup.brackets) ===
+							sought
+				)
+			);
+		})
+	);
+}
+
+const ENDS_A_FIGURE = /[\d)]$/;
+const OPENS_A_FIGURE = /^[\d(\-\u2212\u2013]/;
+
+/**
+ * Whether a run of groups carries its whole sign. `12 345` inside
+ * `( 12 345 )` is not a figure of the cell: it is the negative without its
+ * brackets, and a claim that lost the sign must still be contradicted.
+ */
+function standsAlone(groups: string[], from: number, to: number): boolean {
+	const run = groups.slice(from, to + 1).join('');
+	if (count(run, '(') !== count(run, ')')) return false;
+	const before = groups[from - 1];
+	const after = groups[to + 1];
+	return (
+		(before === undefined || ENDS_A_FIGURE.test(before)) &&
+		(after === undefined || OPENS_A_FIGURE.test(after))
+	);
+}
+
 /**
  * What the rows the label names say of a figure they do not print.
  *
@@ -258,7 +315,9 @@ function refusedBy(rows: Line[], scope: Line[], sought: string, lookup: Lookup):
 	const first = (printing[0] ?? read[0]).line;
 	const where = { labelled: true, page: first.page, row: first.number };
 	const unsure = printing.length === 0 || printing.some((row) => !row.allSure);
-	if (unsure || printedUnnamed(scope, sought, lookup)) return { standing: 'not-found', ...where };
+	if (unsure || gluedIn(rows, sought, lookup) || printedUnnamed(scope, sought, lookup)) {
+		return { standing: 'not-found', ...where };
+	}
 	return { standing: 'contradicted', ...where, printed: printing.flatMap((row) => row.printed) };
 }
 
