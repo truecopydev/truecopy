@@ -43,6 +43,21 @@ release PR is what stamps them.
   one cell that was scored as sure. Nothing past that is claimed: annual-report tables rendered
   to PDF, the default cut, labels as a model reads them.
 
+### Fixed
+
+- **`verify` no longer contradicts a figure a cell prints among others it was
+  glued to.** Where thousands are grouped by a space, the space between two
+  columns is the same sign: `253 238 258 024` is this year beside the last,
+  and `23 704` may be the note 23 before 704. A claim that is a run of whole
+  groups of such a cell is now `not-found`, never `contradicted` and never
+  `confirmed`; a negative claimed without its brackets is still contradicted;
+  and a row holding three digits alone behind a zero (`075`, the tail of a
+  figure the cut tore) contradicts nothing. The rule was written from the 20
+  right values contradicted above, so those tables do not measure it. On the
+  240 other tables read by the same two models, no right value was
+  contradicted before or after, and of the 30,730 deformed values contradicted
+  before, 30,697 still are.
+
 ## [2.0.25] - 2026-11-20
 
 ### Added
