@@ -9,6 +9,20 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+### Added
+
+- **`readTable(file, { figureEdges: true })` parts two columns of figures the
+  cut left in one cell.** A bracket printed apart from its figure fills the gap
+  between two columns set close together, and "( 7,604 ) 3,372" lands in one
+  cell on every row; a column of note references does the same to the figures
+  it sits next to. With the option, a void that comes back ahead of a figure,
+  after a value that was already complete, opens a column - never inside a
+  number printed in groups of three. Measured on 386 tables of annual reports
+  the rule was never tuned on: the cells read wrong and not served fall from
+  874 to 343, and the cells served or proven by a sum go from 92.00 % to
+  93.84 %, right 99.93 % of the time against 99.88 %. It moves cells, so it is
+  an option and the default cut is unchanged.
+
 ## [2.0.27] - 2026-11-27
 
 ### Added

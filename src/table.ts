@@ -21,8 +21,9 @@
  * failures of shape, not of meaning.
  */
 
-import type { Document, TextPage } from './document.js';
+import type { Document, Row, TextPage } from './document.js';
 import { openDocument, type OpenOptions } from './open.js';
+import { boundariesFromFigureEdges } from './figure-edges.js';
 import { boundariesFromRecurrence, cellsOf, gapFor, splitLeadingFigures } from './layout.js';
 import { columnCount, profileColumns } from './columns.js';
 import { decimalMarkOf, findNumbers, type DecimalMark } from './notation.js';
@@ -415,7 +416,20 @@ export interface TableOptions extends OpenOptions {
 	 * and a total under three digits, which adds up by chance too often.
 	 */
 	sums?: boolean;
+	/**
+	 * Part two columns of figures the cut left in one cell. Off unless asked for.
+	 *
+	 * A bracket printed apart from its figure fills the gap between two columns
+	 * set close together, and "( 7,604 ) 3,372" lands in one cell on every row.
+	 * With this on, a left edge that comes back on figures, after a value that
+	 * was already complete, opens a column. It moves cells, which is why it is
+	 * an option: a page it cuts has one column more than it had.
+	 */
+	figureEdges?: boolean;
 }
+
+const withFigureEdges = (rows: Row[], cut: number[]): number[] =>
+	[...cut, ...boundariesFromFigureEdges(rows, cut)].sort((a, b) => a - b);
 
 /**
  * Rows and cells out of a file, with no configuration at all.
@@ -443,12 +457,13 @@ export async function readTable(file: File, options: TableOptions = {}): Promise
 		 * the table never had. Measured by the page's own ruler - points on a page,
 		 * characters in a paste, the field's index in a delimited file.
 		 */
-		const cut = boundariesFromRecurrence(
+		const recurring = boundariesFromRecurrence(
 			page.rows,
 			undefined,
 			gapFor(page.unit),
 			options.rightEdges ?? true
 		);
+		const cut = options.figureEdges ? withFigureEdges(page.rows, recurring) : recurring;
 		const welded = cellsOf(
 			page,
 			cut,
