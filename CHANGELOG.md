@@ -9,6 +9,8 @@ release PR is what stamps them.
 
 ## [Unreleased]
 
+## [2.0.28] - 2026-11-28
+
 ### Added
 
 - **`readTable(file, { figureEdges: true })` parts two columns of figures the
