@@ -94,6 +94,12 @@ Three fields decide how you write the rest, and each has a wrong first instinct:
   page with no column, a merged column). It was measured on annual-report
   tables rendered to PDF with the default cut, and with `numberEdges` it is
   not computed.
+- **`figureEdges: true`, when two figures share a cell.** A bracket printed
+  apart from its figure, or a column of note references, welds two columns
+  of figures: "( 7,604 ) 3,372" in one cell on every row. The option parts
+  them where the rows agree on a void ahead of a figure. It adds a column to
+  the pages it cuts, so ask for it on accounts tables and keep the default
+  elsewhere.
 - **`sums: true`, on accounts tables.** A total printed under its terms, or to
   their right, checks the cells it adds up: misread one and the equality
   breaks. `readTable(file, { sums: true })` adds `sums`, the sums that hold

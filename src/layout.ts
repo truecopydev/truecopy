@@ -250,7 +250,7 @@ function agreedCut(
 
 /** How many rows print something ACROSS a position. Zero is a gutter, and a
  *  gutter is the only place a column may be cut. */
-function rowsAcross(perRow: PositionedItem[][], at: number): number {
+export function rowsAcross(perRow: PositionedItem[][], at: number): number {
 	return perRow.filter((items) => items.some((item) => item.x < at && item.x + item.width > at))
 		.length;
 }

@@ -62,6 +62,8 @@ Those doubts speak for a page or a column. For the figure itself, `readTable(fil
 
 A table of accounts also checks itself: a total is printed under its terms, or to their right, and a misread cell breaks the equality. `readTable(file, { sums: true })` adds `sums`, the sums that hold exactly, and `proven`, laid out like `pages`: true for a term or a total of one of them. On 386 tables from 87 annual reports that no tuning had seen, a sum holds 7,827 of the 21,818 figures and none of them is wrong; among the 2,050 figures the confidence does not serve, it proves 304, none wrong either. A sum does not answer for what it cannot see: a sign that only a detached dash carries, a figure whose leading group could be a glued note reference, a total under three digits. `false` is not a doubt, only a cell no sum vouches for.
 
+Two columns of figures set close together can land in one cell: a bracket printed apart from its figure fills the gap between them, and the row reads "( 7,604 ) 3,372". `readTable(file, { figureEdges: true })` parts them where a void comes back ahead of a figure, after a value that was already complete, and never inside a number printed in groups of three. On those 386 tables, the figures read wrong and not served fall from 874 to 343, and the figures served or proven go from 92.00 % to 93.84 %, right 99.93 % of the time. It moves cells, so it is an option: the default cut is unchanged.
+
 `findings` is that same list with a `code` on it, plus the page and the column it is about. A person reads the sentence; a program branches on the code, and never on English that could be reworded tomorrow.
 
 When the rows have to be **trusted** (when something downstream acts on them), the rest of this page is how.
